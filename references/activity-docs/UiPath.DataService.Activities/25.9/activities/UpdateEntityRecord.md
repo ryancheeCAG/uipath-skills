@@ -9,22 +9,49 @@ Updates an existing record in a Data Fabric entity. Category: **DataService.Enti
 | `x:TypeArguments` | — | Yes | — | — | Concrete entity type: `local:EntityName` |
 | `EntityId` | `InArgument<Guid>` | Yes | — | — | Entity GUID from `EntitiesStore.json` |
 | `RecordId` | `InArgument<Guid>` | Yes | — | Input | GUID of the record to update |
-| `InputEntity` | `InArgument<TEntity>` | Yes | — | Input | Object-initializer expression with updated field values |
-| `IsInRecordView` | `InArgument<bool>` | Yes | — | — | Must be `[True]` when using record-view field binding |
-| `State` | `RecordState` | Yes | — | — | Contains `SelectedFields` with field GUIDs and values |
-| `InputEntityInFieldView` | `InArgument<TEntity>` | No | `{x:Null}` | Input | Alternative input for field-view mode |
+| `InputEntityInFieldView` | `InArgument<TEntity>` | Yes | — | Input | Object-initializer expression with updated field values (runtime reads this) |
+| `IsInRecordView` | `InArgument<bool>` | Yes | — | — | Set to `[False]` — makes runtime read `InputEntityInFieldView` |
+| `State` | `RecordState` | Yes | — | — | Contains `SelectedFields` with field GUIDs and values (Studio card UI reads this) |
+| `InputEntity` | `InArgument<TEntity>` | No | — | Input | Not recommended — Studio never syncs `SelectedFields` to this property, causing desync |
 | `VisibleDynamicPropertiesInfo` | `InArgument<string>` | No | `{x:Null}` | — | Always set to `{x:Null}` |
 | `ExpansionDepth` | `InArgument<int>` | No | `2` | Options | Depth of relationship expansion in response (range: 1–3) |
 | `OutputEntity` | `OutArgument<TEntity>` | No | — | Output | Receives the updated record |
 | `ContinueOnError` | `InArgument<bool>` | No | `false` | Common | Continue workflow on error |
 | `TimeoutInMs` | `InArgument<int>` | No | `30000` | Common | Timeout in milliseconds |
 
+## Field Binding — Two Required Components
+
+For Create and Update activities, set `IsInRecordView="[False]"` and populate two things:
+
+1. **`InputEntityInFieldView`** — object-initializer expression with updated field values. The runtime evaluates this expression and sends it to the Data Service API.
+2. **`State` with `RecordState.SelectedFields`** — declares each field with its GUID from `EntitiesStore.json` and its value. Studio's card UI reads this to render per-field editors.
+
+Studio syncs `SelectedFields` → `InputEntityInFieldView` on file load, keeping them aligned. Do NOT use `InputEntity` — Studio never syncs `SelectedFields` to it, which causes the card UI to show one value while the runtime uses a stale one.
+
+## RecordState and DynamicEntityField
+
+`RecordState` properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `IsInRecordView` | `bool` | Set to `False` |
+| `RequiredFieldCount` | `int` | Count of `DynamicEntityField` entries where `IsRequired="True"` |
+| `SelectedFields` | `IList<DynamicEntityField>` | List of field declarations |
+
+`DynamicEntityField` properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Id` | `Guid` | Field GUID from `EntitiesStore.json` → `Fields[].Id` |
+| `Name` | `string` | Field name from `EntitiesStore.json` → `Fields[].Name` |
+| `IsRequired` | `bool` | Whether the field is required |
+| `ArgumentValue` | `Argument` | The value as `InArgument` with appropriate `x:TypeArguments` |
+
 ## XAML Example (VB.NET expression language)
 
 ```xml
 <uda:UpdateEntityRecord
     x:TypeArguments="local:ENTITY_NAME"
-    InputEntityInFieldView="{x:Null}"
     OutputEntity="{x:Null}"
     VisibleDynamicPropertiesInfo="{x:Null}"
     ContinueOnError="False"
@@ -32,11 +59,11 @@ Updates an existing record in a Data Fabric entity. Category: **DataService.Enti
     EntityId="ENTITY_GUID"
     ExpansionDepth="2"
     RecordId="[recordIdVariable]"
-    InputEntity="[New ENTITY_NAME() With {.FIELD_A = &quot;newValue&quot;}]"
-    IsInRecordView="[True]"
+    InputEntityInFieldView="[New ENTITY_NAME() With {.FIELD_A = &quot;newValue&quot;}]"
+    IsInRecordView="[False]"
     TimeoutInMs="30000">
   <uda:UpdateEntityRecord.State>
-    <udam:RecordState IsInRecordView="True" RequiredFieldCount="0">
+    <udam:RecordState IsInRecordView="False" RequiredFieldCount="0">
       <udam:RecordState.SelectedFields>
         <scg:List x:TypeArguments="udam:DynamicEntityField">
           <udam:DynamicEntityField Id="FIELD_A_GUID" IsRequired="False" Name="FIELD_A">
@@ -51,9 +78,13 @@ Updates an existing record in a Data Fabric entity. Category: **DataService.Enti
 </uda:UpdateEntityRecord>
 ```
 
+Replace: `ENTITY_NAME` (entity class), `ENTITY_GUID` (from `EntitiesStore.json` → `Entities[].Id`), `FIELD_A` (field name), `FIELD_A_GUID` (from `Fields[].Id`).
+
 ## Key Rules
 
-- Same three-component field binding as `CreateEntityRecord`: `IsInRecordView` + `InputEntity` + `RecordState.SelectedFields`
+- Set `IsInRecordView="[False]"` and populate both `InputEntityInFieldView` and `RecordState.SelectedFields` — do NOT use `InputEntity`
 - At least one field in `SelectedFields` must have an `ArgumentValue` set — otherwise validation fails with "No update fields specified"
-- If the `InputEntity` expression does not set `Id`, the activity copies `RecordId` into the entity automatically at runtime
-- Only include fields you want to update in `SelectedFields` — unchanged fields can be omitted
+- If the `InputEntityInFieldView` expression does not set `Id`, the activity copies `RecordId` into the entity automatically at runtime
+- Only include fields you want to update in `SelectedFields` and `InputEntityInFieldView` — unchanged fields can be omitted
+- `VisibleDynamicPropertiesInfo` must always be set to `{x:Null}` — the type `DynamicPropertiesInfo` is not public
+- Entity fields cannot be set as direct activity properties — `<uda:UpdateEntityRecord.FieldName>` produces `Cannot set unknown member`

@@ -47,7 +47,7 @@ REPEAT:
 
 **Target the specific file:** Use `--file-path` on `validate` to validate only the file you changed -- faster than validating the whole project. `build` is project-scoped (no `--file-path`); when it errors, identify the offending file from the build output and re-run `validate --file-path` on that file as part of the fix loop.
 
-**Cap at 5 fix attempts** across the combined `validate` + `build` loop. After 5 failed iterations, present the remaining errors to the user. They may require domain knowledge or environment-specific fixes.
+**Cap at 5 fix attempts per validation loop** across the combined `validate` + `build` loop. After 5 failed iterations within a single validation loop, present the remaining errors to the user. They may require domain knowledge or environment-specific fixes. The counter resets each time you start a new validation loop (e.g., new file, new user prompt, or resuming after user input).
 
 ### Rules
 

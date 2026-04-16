@@ -8,25 +8,24 @@ Creates a new record in a Data Fabric entity. Category: **DataService.Entity Rec
 |----------|------|----------|---------|----------|-------------|
 | `x:TypeArguments` | — | Yes | — | — | Concrete entity type: `local:EntityName` |
 | `EntityId` | `InArgument<Guid>` | Yes | — | — | Entity GUID from `EntitiesStore.json` |
-| `InputEntity` | `InArgument<TEntity>` | Yes | — | Input | Object-initializer expression constructing the entity |
-| `IsInRecordView` | `InArgument<bool>` | Yes | — | — | Must be `[True]` when using record-view field binding |
-| `State` | `RecordState` | Yes | — | — | Contains `SelectedFields` with field GUIDs and values |
-| `InputEntityInFieldView` | `InArgument<TEntity>` | No | `{x:Null}` | Input | Alternative input for field-view mode |
+| `InputEntityInFieldView` | `InArgument<TEntity>` | Yes | — | Input | Object-initializer expression constructing the entity (runtime reads this) |
+| `IsInRecordView` | `InArgument<bool>` | Yes | — | — | Set to `[False]` — makes runtime read `InputEntityInFieldView` |
+| `State` | `RecordState` | Yes | — | — | Contains `SelectedFields` with field GUIDs and values (Studio card UI reads this) |
+| `InputEntity` | `InArgument<TEntity>` | No | — | Input | Not recommended — Studio never syncs `SelectedFields` to this property, causing desync |
 | `VisibleDynamicPropertiesInfo` | `InArgument<string>` | No | `{x:Null}` | — | Always set to `{x:Null}` |
 | `ExpansionDepth` | `InArgument<int>` | No | `2` | Options | Depth of relationship expansion in response (range: 1–3) |
 | `OutputEntity` | `OutArgument<TEntity>` | No | — | Output | Receives the created record with server-assigned ID |
 | `ContinueOnError` | `InArgument<bool>` | No | `false` | Common | Continue workflow on error |
 | `TimeoutInMs` | `InArgument<int>` | No | `30000` | Common | Timeout in milliseconds |
 
-## Field Binding — Three Required Components
+## Field Binding — Two Required Components
 
-For Create and Update activities, **three things must be set together** or validation fails:
+For Create and Update activities, set `IsInRecordView="[False]"` and populate two things:
 
-1. **`IsInRecordView="[True]"`** — tells the activity to use record-view field binding
-2. **`InputEntity`** — an object-initializer expression that constructs the entity with field values
-3. **`State` with `RecordState.SelectedFields`** — declares each field with its GUID from `EntitiesStore.json`
+1. **`InputEntityInFieldView`** — object-initializer expression constructing the entity with field values. The runtime evaluates this expression and sends it to the Data Service API.
+2. **`State` with `RecordState.SelectedFields`** — declares each field with its GUID from `EntitiesStore.json` and its value. Studio's card UI reads this to render per-field editors.
 
-Omitting any one produces a clean parse but fails validation with "One or more required field is not set".
+Studio syncs `SelectedFields` → `InputEntityInFieldView` on file load, keeping them aligned. Do NOT use `InputEntity` — Studio never syncs `SelectedFields` to it, which causes the card UI to show one value while the runtime uses a stale one.
 
 ## RecordState and DynamicEntityField
 
@@ -34,7 +33,7 @@ Omitting any one produces a clean parse but fails validation with "One or more r
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `IsInRecordView` | `bool` | Must be `True` |
+| `IsInRecordView` | `bool` | Set to `False` |
 | `RequiredFieldCount` | `int` | Count of `DynamicEntityField` entries where `IsRequired="True"` |
 | `SelectedFields` | `IList<DynamicEntityField>` | List of field declarations |
 
@@ -52,18 +51,17 @@ Omitting any one produces a clean parse but fails validation with "One or more r
 ```xml
 <uda:CreateEntityRecord
     x:TypeArguments="local:ENTITY_NAME"
-    InputEntityInFieldView="{x:Null}"
     OutputEntity="{x:Null}"
     VisibleDynamicPropertiesInfo="{x:Null}"
     ContinueOnError="False"
     DisplayName="Create ENTITY_NAME Record"
     EntityId="ENTITY_GUID"
     ExpansionDepth="2"
-    InputEntity="[New ENTITY_NAME() With {.FIELD_A = &quot;valueA&quot;, .FIELD_B = 42}]"
-    IsInRecordView="[True]"
+    InputEntityInFieldView="[New ENTITY_NAME() With {.FIELD_A = &quot;valueA&quot;, .FIELD_B = 42}]"
+    IsInRecordView="[False]"
     TimeoutInMs="30000">
   <uda:CreateEntityRecord.State>
-    <udam:RecordState IsInRecordView="True" RequiredFieldCount="REQUIRED_COUNT">
+    <udam:RecordState IsInRecordView="False" RequiredFieldCount="REQUIRED_COUNT">
       <udam:RecordState.SelectedFields>
         <scg:List x:TypeArguments="udam:DynamicEntityField">
           <udam:DynamicEntityField Id="FIELD_A_GUID" IsRequired="True" Name="FIELD_A">
@@ -87,7 +85,8 @@ Replace: `ENTITY_NAME` (entity class), `ENTITY_GUID` (from `EntitiesStore.json` 
 
 ## Key Rules
 
-- Include every required non-system field (`IsRequired: true` AND `IsSystemField: false`) in `SelectedFields` — omitting one fails validation
+- Set `IsInRecordView="[False]"` and populate both `InputEntityInFieldView` and `RecordState.SelectedFields` — do NOT use `InputEntity`
+- Include every required non-system field (`IsRequired: true` AND `IsSystemField: false`) in both `SelectedFields` and the `InputEntityInFieldView` expression — omitting a required field fails validation
 - `RequiredFieldCount` must equal the count of `DynamicEntityField` entries with `IsRequired="True"`
 - `VisibleDynamicPropertiesInfo` must always be set to `{x:Null}` — the type `DynamicPropertiesInfo` is not public
 - Entity fields cannot be set as direct activity properties — `<uda:CreateEntityRecord.FieldName>` produces `Cannot set unknown member`

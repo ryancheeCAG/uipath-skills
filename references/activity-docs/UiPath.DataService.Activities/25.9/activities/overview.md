@@ -136,6 +136,9 @@ Using `udd:IEntity` produces: `Selected Entity type (UiPath.DataService.Definiti
 
 - `x:TypeArguments` must be a concrete entity type — `udd:IEntity` is rejected at validation
 - The `local` xmlns must include the full `assembly=DataService.<ProjectName>` qualifier
-- `EntitiesStore.json` contains all tenant entities, but only explicitly imported ones have CLR types in the generated DLL
-- For Create/Update activities: `InputEntity`, `IsInRecordView`, and `RecordState.SelectedFields` must all be set together — omitting any one fails validation (see individual activity docs)
-- Entity fields are NOT WF4 properties on the activity — they must be set via `InputEntity` expression and `RecordState.SelectedFields`, not as `<uda:CreateEntityRecord.FieldName>`
+- `EntitiesStore.json` contains all tenant entities, but only explicitly imported ones have CLR types in the generated DLL. If validation returns `Cannot create unknown type '{clr-namespace:...}EntityName'` — **stop and ask the user** to import the entity via Studio > Data Service tab > "Import Entities". Do not attempt to fix this by changing namespaces or assembly references.
+- For Create/Update activities, set `IsInRecordView="[False]"` and populate two things:
+  1. **`InputEntityInFieldView`** — object-initializer expression (runtime reads this)
+  2. **`RecordState.SelectedFields`** — field GUIDs and values (Studio card UI reads this)
+  - Do NOT use `InputEntity` — Studio syncs `SelectedFields` → `InputEntityInFieldView` on load but never syncs `SelectedFields` → `InputEntity`, causing desync bugs
+- Entity fields are NOT WF4 properties on the activity — they must be set via `InputEntityInFieldView` expression and `RecordState.SelectedFields`, not as `<uda:CreateEntityRecord.FieldName>`
