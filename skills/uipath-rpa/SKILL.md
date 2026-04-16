@@ -311,7 +311,7 @@ Check `expressionLanguage` in `project.json`. VB.NET uses `[brackets]` for expre
 | For Each | built-in | Iterate over a collection |
 | Invoke Workflow File | built-in | Call another workflow file |
 | Create Entity Record | `UiPath.DataService.Activities` | Create a Data Fabric entity record |
-| Query Entity Records | `UiPath.DataService.Activities` | Query Data Fabric records with filters |
+| Query Entity Records | `UiPath.DataService.Activities` | Query Data Fabric records with filters — see [filter builder guide](references/xaml/data-service-filter-builder-guide.md) |
 
 ### XAML File Anatomy
 
