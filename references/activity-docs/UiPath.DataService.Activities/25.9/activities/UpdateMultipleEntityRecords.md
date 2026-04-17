@@ -16,6 +16,8 @@ Updates multiple records in a Data Fabric entity in a single batch operation. Ca
 | `ContinueOnError` | `InArgument<bool>` | No | `false` | Common | Continue workflow on error |
 | `TimeoutInMs` | `InArgument<int>` | No | `30000` | Common | Timeout in milliseconds |
 
+> Additional shared properties (`ScopeValue`, `SolutionEntityKey`, `SolutionEntityName`) apply to all Data Service activities. See [overview — Shared Properties](overview.md#shared-properties-all-activities) and [Solution Context](overview.md#solution-context-folder-vs-tenant-scope).
+
 ## XAML Example
 
 ```xml

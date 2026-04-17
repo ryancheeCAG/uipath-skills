@@ -15,6 +15,8 @@ Downloads a file from a file-type field on an entity record. Category: **DataSer
 | `ContinueOnError` | `InArgument<bool>` | No | `false` | Common | Continue workflow on error |
 | `TimeoutInMs` | `InArgument<int>` | No | `30000` | Common | Timeout in milliseconds |
 
+> Additional shared properties (`ScopeValue`, `SolutionEntityKey`, `SolutionEntityName`) apply to all Data Service activities. See [overview — Shared Properties](overview.md#shared-properties-all-activities) and [Solution Context](overview.md#solution-context-folder-vs-tenant-scope).
+
 No `ExpansionDepth` — download returns a file, not an entity.
 
 ## XAML Example

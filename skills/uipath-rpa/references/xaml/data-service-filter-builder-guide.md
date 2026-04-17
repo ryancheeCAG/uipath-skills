@@ -1,6 +1,6 @@
 # Data Service Filter Builder — XAML Generation Guide
 
-Use this guide when generating or editing a `QueryEntityRecords` activity that needs filtering. This guide covers the exact XAML serialization format that Studio's filter builder produces.
+Use this guide when generating or editing a `QueryEntityRecords` activity that needs filtering. This guide covers the exact XAML serialization format for filter definitions.
 
 ## Filter Architecture
 

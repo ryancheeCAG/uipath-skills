@@ -76,6 +76,9 @@ Using `udd:IEntity` produces: `Selected Entity type (UiPath.DataService.Definiti
 | Property | Type | Default | Category | Description |
 |----------|------|---------|----------|-------------|
 | `EntityId` | `InArgument<Guid>` | — | — | Entity GUID from `EntitiesStore.json` → `Entities[].Id` |
+| `ScopeValue` | `InArgument<string>` | `"Tenant"` | — | `"Folder"` or `"Tenant"`. Use Folder when project has a SolutionId; Tenant for standalone. See [Solution Context](#solution-context-folder-vs-tenant-scope) |
+| `SolutionEntityKey` | `InArgument<string>` | `{x:Null}` | — | Solution resource key for the entity. Set only when ScopeValue is Folder |
+| `SolutionEntityName` | `InArgument<string>` | `{x:Null}` | — | Entity display name in the solution. Set only when ScopeValue is Folder |
 | `ContinueOnError` | `InArgument<bool>` | `false` | Common | Continue workflow on activity error |
 | `TimeoutInMs` | `InArgument<int>` | `30000` | Common | Timeout in milliseconds |
 
@@ -131,6 +134,36 @@ Using `udd:IEntity` produces: `Selected Entity type (UiPath.DataService.Definiti
 | `ChoiceSetSingle` | Single-select choice set |
 | `ChoiceSetMultiple` | Multi-select choice set |
 | `AutoNumber` | Auto-incrementing numeric field |
+
+## Solution Context (Folder vs Tenant Scope)
+
+Data Service activities support two scoping modes controlled by whether the project has a **Solution ID** (i.e., is part of a Data Service solution). This is determined by `IUserDesignerContext.SolutionId` — NOT by which Studio product (Desktop vs Web) is running.
+
+### When to use each scope
+
+| Condition | ScopeValue | Entity source |
+|-----------|-----------|---------------|
+| Project has a SolutionId (solution context) | `"Folder"` (default) or `"Tenant"` | Folder scope: entity resolved from solution resources. Tenant scope: entity resolved from tenant-level Data Service API |
+| Project has NO SolutionId (standalone) | `"Tenant"` (only option) | Entity resolved from tenant-level Data Service API |
+
+### XAML properties for solution context
+
+| Property | When to set | Value |
+|----------|-------------|-------|
+| `ScopeValue` | Always | `"Folder"` or `"Tenant"`. Standalone projects: always `"Tenant"` |
+| `SolutionEntityKey` | Folder scope only | Solution resource key identifying the entity (e.g., `"entity_key_abc"`) |
+| `SolutionEntityName` | Folder scope only | Display name of the entity in the solution |
+
+When scope is **Tenant** or the project is standalone, set `SolutionEntityKey` and `SolutionEntityName` to `{x:Null}`.
+
+### Runtime behavior difference
+
+- **Folder scope**: the activity injects an `X-UiPath-FolderPath` header in API requests, routing the operation to the correct solution folder
+- **Tenant scope**: no folder header — the operation targets the tenant-level Data Service directly
+
+### Key rule
+
+Do NOT check for Studio Desktop vs Studio Web to decide scope. The only factor is whether `SolutionId` exists in the project context. If the project is in a solution, default to Folder scope. If standalone, use Tenant scope.
 
 ## Common Pitfalls
 
