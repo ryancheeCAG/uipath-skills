@@ -374,13 +374,7 @@ Logical meaning: `(FIELD_1 OP VALUE_1) AND ((FIELD_2 OP VALUE_2) OR (FIELD_3 OP 
 6. **Assign ValueIndex** — assign sequential integers starting from 0 across ALL groups. Root group filters use 0, 1, 2...; nested group filters continue the sequence.
 7. **Build FilterValues** — create `InArgument` entries in order matching ValueIndex. Use the correct `x:TypeArguments` from the [type mapping table](#filtervalues--inargument-type-mapping). For value-less operators, insert `<x:Null />`.
 8. **Check namespace declarations** — if any FilterValues entry uses `s:DateTimeOffset`, `s:Guid`, or `s:String[]`, ensure `xmlns:s="clr-namespace:System;assembly=System.Private.CoreLib"` is on the root `<Activity>` element.
-9. **Add RequiredForReadFieldNames** — always include this empty list after FilterValues:
-   ```xml
-   <uda:QueryEntityRecords.RequiredForReadFieldNames>
-     <scg:List x:TypeArguments="x:String" Capacity="0" />
-   </uda:QueryEntityRecords.RequiredForReadFieldNames>
-   ```
-10. **XML-escape comparison operators** — replace `>` with `&gt;`, `>=` with `&gt;=`, `<` with `&lt;`, and `<=` with `&lt;=` in the `Operator` attribute.
+9. **XML-escape comparison operators** — replace `>` with `&gt;`, `>=` with `&gt;=`, `<` with `&lt;`, and `<=` with `&lt;=` in the `Operator` attribute.
 
 ## Complete Worked Example
 
@@ -390,9 +384,9 @@ Entity is VB project. EntityId from EntitiesStore.json: `cd543a02-3621-f111-9a48
 
 ```xml
 <uda:QueryEntityRecords x:TypeArguments="b:NumericEntity"
-    OutputRecords="{x:Null}" RequiredForReadInput="{x:Null}"
+    OutputRecords="{x:Null}"
     SolutionEntityKey="{x:Null}" SolutionEntityName="{x:Null}"
-    SortAscending="{x:Null}" SortByField="{x:Null}" TotalRecords="{x:Null}"
+    SortAscending="True" SortByField="{x:Null}" TotalRecords="{x:Null}"
     ContinueOnError="False" DisplayName="Query Entity Records"
     EntityId="cd543a02-3621-f111-9a48-000d3a354532"
     ExpansionDepth="2"
@@ -447,9 +441,6 @@ Entity is VB project. EntityId from EntitiesStore.json: `cd543a02-3621-f111-9a48
       <InArgument x:TypeArguments="s:Guid">[New Guid()]</InArgument>
     </scg:List>
   </uda:QueryEntityRecords.FilterValues>
-  <uda:QueryEntityRecords.RequiredForReadFieldNames>
-    <scg:List x:TypeArguments="x:String" Capacity="0" />
-  </uda:QueryEntityRecords.RequiredForReadFieldNames>
 </uda:QueryEntityRecords>
 ```
 
@@ -464,4 +455,3 @@ Entity is VB project. EntityId from EntitiesStore.json: `cd543a02-3621-f111-9a48
 7. **Do NOT omit `GroupFilter.Groups`.** Every GroupFilter must have both `Filters` and `Groups` child elements, even if empty (use `Capacity="0"` for empty lists).
 8. **Do NOT use separate FilterValues lists per group.** There is one flat `FilterValues` list shared across all groups. ValueIndex is globally sequential.
 9. **Do NOT set FilterActivityType.** Leave it as `{x:Null}`.
-10. **Do NOT omit `RequiredForReadFieldNames`.** Always include the empty list element after FilterValues.

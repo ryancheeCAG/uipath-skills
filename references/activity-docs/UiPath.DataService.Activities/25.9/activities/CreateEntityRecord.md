@@ -50,6 +50,8 @@ Studio syncs `SelectedFields` → `InputEntityInFieldView` on file load, keeping
 
 ## XAML Example (VB.NET expression language)
 
+> This snippet uses the `udam:` prefix (`RecordState`, `DynamicEntityField`). Ensure `xmlns:udam` is declared on the root `<Activity>` element — see [overview — XAML Namespace Declarations](overview.md#xaml-namespace-declarations).
+
 ```xml
 <uda:CreateEntityRecord
     x:TypeArguments="local:ENTITY_NAME"
