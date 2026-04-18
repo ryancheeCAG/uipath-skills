@@ -3,6 +3,20 @@
 **Package**: `UiPath.DataService.Activities` 25.9  
 **Org**: datafabric | **Tenant**: CodingAgentsEvals
 
+## Overview
+
+This document defines the complete evaluation scenario suite for the `UiPath.DataService.Activities` 25.9 activity pack in RPA workflows. The scenarios test an AI coding agent's ability to generate correct XAML workflows using all 11 Data Service activities — from basic CRUD operations through compound filtered queries to multi-activity composition workflows.
+
+The suite covers **71 scenarios** across 5 categories:
+
+- **Negative Skill Activation** (2 scenarios) — CI gate. Verifies the agent does NOT activate DataService for prompts that belong elsewhere.
+- **Positive Skill Activation** (3 scenarios) — CI gate. Verifies the agent correctly routes Data Service / Data Fabric prompts to the right skill.
+- **Smoke** (3 scenarios) — CI gate. Verifies correct activity selection across all 11 activities with no property-level checks.
+- **Integration** (57 scenarios) — Daily. Exhaustive per-activity configuration validation covering every property, field type, filter operator, anti-pattern, and error-path.
+- **Quality** (6 scenarios) — Daily. Realistic multi-activity workflows that test data flow, type consistency, and sequencing across activity categories.
+
+Every scenario specifies an agent prompt, expected XAML structure, and pass/fail criteria. Scenarios are designed for the `coder_eval` framework and will be implemented as YAML task files. Two fixed entities in the `CodingAgentsEvals` tenant (`CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity`) serve as the shared test fixtures across all scenarios — no dynamic entity creation or record writes occur as part of the eval.
+
 ## Activities in Scope
 
 | # | Activity | Category |
@@ -30,14 +44,19 @@ Each scenario evaluates two conditions after the agent generates a workflow:
 | **Build-time** | XAML compiles without errors — namespaces, type arguments, required arguments, RecordState structure | `uip rpa get-errors --file-path <xaml> --project-dir <dir> --output json` returns no errors |
 | **Output semantics** | Generated XAML matches the expected structural patterns for the given prompt — correct activity, EntityId, field bindings, namespace declarations, output wiring | Parse XAML and assert specific attributes and element structure |
 
+Assertion depth varies by tier:
+- **Smoke**: correct activity elements present in XAML + build passes — no property-level checks
+- **Integration**: comprehensive property validation on every attribute of the single activity under test
+- **Quality**: correct data flow between activities, type consistency across the workflow, correct sequencing — no per-activity property details
+
 Each task prompt passes entity and field names as context to the agent. Entities and fields are fixed, pre-existing resources in CodingAgentsEvals — no dynamic entity creation or record writes occur as part of the eval. The agent resolves GUIDs from `EntitiesStore.json`.
 
 Two entities are used across all scenarios:
 
 | Entity | Fields | Used In |
 |--------|--------|---------|
-| `CodingAgentsBuildTimeEntity` | `Title` (NVARCHAR, required), `Notes` (NVARCHAR), `Status` (NVARCHAR), `Score` (INT), `Price` (DECIMAL), `IsActive` (BIT), `EventDate` (DATE), `ScheduledAt` (DATETIMEOFFSET) | All CRUD, batch, filter, and sort scenarios |
-| `CodingAgentsBuildTimeFileEntity` | `Title` (NVARCHAR, required), `Attachment` (File), `Report` (File), `Contract` (File), `attachmentFile` (File) | All file activity scenarios (Upload, Download, DeleteFile) |
+| `CodingAgentsEvalEntity` | `Title` (NVARCHAR, required), `Notes` (NVARCHAR), `Status` (NVARCHAR), `Score` (INT), `Price` (DECIMAL), `IsActive` (BIT), `EventDate` (DATE), `ScheduledAt` (DATETIMEOFFSET), `Category` (ChoiceSetSingle), `Tags` (ChoiceSetMultiple) | All CRUD, batch, filter, sort, and ChoiceSet scenarios |
+| `CodingAgentsEvalFileEntity` | `Title` (NVARCHAR, required), `Attachment` (File), `Report` (File), `Contract` (File), `attachmentFile` (File), `Owner` (Relationship → CodingAgentsEvalEntity) | File activity and Relationship filter scenarios |
 
 ---
 
@@ -45,12 +64,22 @@ Two entities are used across all scenarios:
 
 | Category | Count | Cadence |
 |----------|-------|---------|
-| Negative Skill Activation | 5 | Every PR (CI) |
-| Positive Skill Activation | 5 | Every PR (CI) |
-| Smoke | 6 | Every PR (CI) |
-| Integration | 43 (I1–I43) | Daily / on request |
-| Quality | 10 | Daily / weekly |
-| **Total** | **69** | |
+| Negative Skill Activation | 2 | Every PR (CI) |
+| Positive Skill Activation | 3 | Every PR (CI) |
+| Smoke | 3 | Every PR (CI) |
+| Integration | 57 (I1–I57) | Daily / on request |
+| Quality | 6 | Daily / on request |
+| **Total** | **71** | |
+
+When implemented as coder_eval YAML task files, categories map to tags:
+
+| Category | coder_eval tag |
+|----------|---------------|
+| Negative Skill Activation | `smoke` |
+| Positive Skill Activation | `smoke` |
+| Smoke | `smoke` |
+| Integration | `integration` |
+| Quality | `integration` |
 
 ---
 
@@ -62,11 +91,8 @@ Two entities are used across all scenarios:
 
 | ID | Scenario | Agent Prompt | Eval Summary | Must NOT appear in output |
 |----|----------|-------------|--------------|--------------------------|
-| N1 | **Task queue — not entity storage** | "After processing each invoice, add it as a queue item to the Orchestrator queue named `InvoiceQueue` with the reference `INV-001` and a JSON transaction payload." | The agent must not conflate "persistent data store" with entity storage; the workflow must use queue activities with no DataService package or namespace present. | `uda:CreateEntityRecord` or any `xmlns:uda`; `UiPath.DataService.Activities` in `project.json` dependencies; `entitiesStores` block |
-| N2 | **CSV file — not entity query** | "Read the file `'C:\data\employees.csv'` and load its rows into a DataTable variable named `employeeTable`." | A file-read task must stay within file and DataTable activities; no DataService dependency or namespace must appear. | Any `uda:` activity; `entitiesStores` in `project.json`; DataService namespace declarations |
-| N3 | **External REST API — not Data Fabric** | "Call the external HR system REST API at the provided base URL with a GET request to `/api/v1/users/{userId}` and deserialise the JSON response into a `JObject` variable." | An external HTTP call must remain in the web/REST activity domain and must not introduce any DataService dependency. | `uda:GetEntityRecordById` or any DataService activity; `UiPath.DataService.Activities` dependency; `entitiesStores` block |
-| N4 | **Orchestrator Storage Bucket — not file field** | "Upload the report file at `'C:\reports\monthly.pdf'` to the Orchestrator Storage Bucket named `ReportsBucket` under the path `2026/april/monthly.pdf`." | File upload to an Orchestrator Storage Bucket is distinct from DataService file fields; no DataService activity or namespace must appear. | `uda:UploadFileToRecordField`; any `xmlns:uda`; `UiPath.DataService.Activities` in dependencies |
-| N5 | **In-memory DataTable — not entity records** | "Build an in-memory lookup table with two columns — `ProductCode` (String) and `UnitPrice` (Double) — and populate it with 3 rows of test data." | In-memory data structures must use native .NET collections; the agent must not activate the DataService skill for a task with no entity or tenant context. | Any `uda:` activity; `entitiesStores` in `project.json`; DataService namespace or assembly references |
+| N1 | **CSV file — not entity query** | "Read the file `'C:\data\employees.csv'` and load its rows into a DataTable variable named `employeeTable`." | "Data" + "Table" + "rows" overlap with entity record terminology; the agent must stay within file and DataTable activities with no DataService dependency. | Any `uda:` activity; `entitiesStores` in `project.json`; DataService namespace declarations |
+| N2 | **Orchestrator Storage Bucket — not file field** | "Upload the report file at `'C:\reports\monthly.pdf'` to the Orchestrator Storage Bucket named `ReportsBucket` under the path `2026/april/monthly.pdf`." | "Upload file" action overlaps with `UploadFileToRecordField`; the agent must use Storage Bucket activities with no DataService dependency. | `uda:UploadFileToRecordField`; any `xmlns:uda`; `UiPath.DataService.Activities` in dependencies |
 
 ---
 
@@ -78,455 +104,404 @@ Two entities are used across all scenarios:
 
 | ID | Scenario | Agent Prompt | Eval Summary | Expected Activation Signal |
 |----|----------|-------------|--------------|---------------------------|
-| P1 | **"Data Service" terminology** | "Create an RPA automation that creates a record in the Data Service entity `CodingAgentsBuildTimeEntity` with field `Title` set to `'Hello'`." | Explicit "Data Service" phrasing must route the agent to the RPA skill and load the DataService activity reference files — not resolve to a generic or integration skill. | `uipath-rpa` skill loaded; `references/UiPath.DataService.Activities` reference files read |
-| P2 | **"Data Fabric" terminology** | "Create an RPA automation that stores a new order in the Data Fabric entity `CodingAgentsBuildTimeEntity` with field `Title` set to `'ORD-001'`." | "Data Fabric" phrasing — without naming the package — must still resolve to the RPA skill and load the DataService reference files. | `uipath-rpa` skill loaded; `references/UiPath.DataService.Activities` reference files read |
-| P3 | **Retrieve by name** | "Create an RPA automation that fetches a record from the Data Service entity `CodingAgentsBuildTimeEntity` and stores it in a variable." | A record-retrieval prompt on a named entity must activate the RPA skill with DataService references — not a REST or generic HTTP skill. | `uipath-rpa` skill loaded; `references/UiPath.DataService.Activities` reference files read |
-| P4 | **Search/filter phrasing** | "Create an RPA automation that finds all records in the Data Fabric entity `CodingAgentsBuildTimeEntity` where `Status` equals `'Active'`." | Filter/search phrasing on a Data Fabric entity must activate the RPA skill with DataService references — not a LINQ, DataTable, or external API skill. | `uipath-rpa` skill loaded; `references/UiPath.DataService.Activities` reference files read |
-| P5 | **File attachment phrasing** | "Create an RPA automation that attaches the file `'C:\docs\contract.pdf'` to the `Contract` field of a record in Data Service entity `CodingAgentsBuildTimeFileEntity`." | File-attach phrasing on a named entity field must activate the RPA skill with DataService references — not a Storage Bucket or file system skill. | `uipath-rpa` skill loaded; `references/UiPath.DataService.Activities` reference files read |
+| P1 | **"Data Service" terminology** | "Create an RPA automation that creates a record in the Data Service entity `CodingAgentsEvalEntity` with field `Title` set to `'Hello'`." | Explicit "Data Service" phrasing must route the agent to the RPA skill and load the DataService activity reference files — not resolve to a generic or integration skill. | `uipath-rpa` skill loaded; `references/UiPath.DataService.Activities` reference files read |
+| P2 | **"Data Fabric" terminology** | "Create an RPA automation that stores a new order in the Data Fabric entity `CodingAgentsEvalEntity` with field `Title` set to `'ORD-001'`." | "Data Fabric" phrasing — without naming the package — must still resolve to the RPA skill and load the DataService reference files. | `uipath-rpa` skill loaded; `references/UiPath.DataService.Activities` reference files read |
+| P3 | **Implicit — entity name only** | "Create an RPA automation that stores a record in entity `CodingAgentsEvalEntity` with `Title` set to `'Hello'`." | No "Data Service" or "Data Fabric" keyword — only the entity name. The agent must infer from the entity name and the store-a-record intent that this is a DataService task. | `uipath-rpa` skill loaded; `references/UiPath.DataService.Activities` reference files read |
 
 ---
 
 ## 3. Smoke
 
-**Purpose**: Verify basic plumbing is correct across all 11 activities — namespaces, EntityId, TypeArguments, RecordState, output wiring. Activities are grouped by natural pairing so each scenario exercises the minimal set of plumbing needed to confirm the structural baseline is correct.
+**Purpose**: Verify the agent selects the correct activities for a given set of intents. Each test packs multiple independent tasks into a single prompt — no data flow between activities, no complex wiring. The only question: did the agent add the right activity for each task?
 
-Entity context passed in every prompt: entity name and field names only. Scope is always Tenant for smoke. The agent resolves GUIDs from `EntitiesStore.json`.
+Three tests cover all 11 activities.
 
----
-
-### S1 — Create + Read *(CreateEntityRecord, GetEntityRecordById)*
-
-**Prompt**:
-> Create a record in Data Service entity `CodingAgentsBuildTimeEntity` with field `Title` set to `"Smoke Test Record"`, then read the record back and return it as a workflow output.
-
-**Eval summary**: Verifies complete project boilerplate — all four namespaces, `entitiesStores`, assembly references — and that `CreateEntityRecord` correctly sets `IsInRecordView`, `InputEntityInFieldView`, and `RecordState`, while `GetEntityRecordById` chains off the created record's ID with no write-mode properties.
-
-| Check | Condition |
-|-------|-----------|
-| `project.json` dependencies | `UiPath.DataService.Activities` present |
-| `project.json` entitiesStores | Entry with `serviceDocument: ".entities/EntitiesStore.json"`, `namespace: "<ProjectName>"` |
-| XAML namespaces | All four present: `xmlns:uda`, `xmlns:udam`, `xmlns:udd`, `xmlns:local="clr-namespace:<ProjectName>;assembly=DataService.<ProjectName>"` |
-| TextExpression namespaces | `UiPath.DataService.Activities`, `UiPath.DataService.Activities.Models`, `UiPath.DataService.Definition`, `<ProjectName>` |
-| TextExpression references | `UiPath.DataService.Activities.Core`, `UiPath.DataService.Definition`, `DataService.<ProjectName>` |
-| CreateEntityRecord — type | `x:TypeArguments="local:CodingAgentsBuildTimeEntity"` (not `udd:IEntity`) |
-| CreateEntityRecord — EntityId | `"<EntityGuid>"` |
-| CreateEntityRecord — scope | `ScopeValue="Tenant"`, `SolutionEntityKey="{x:Null}"`, `SolutionEntityName="{x:Null}"` |
-| CreateEntityRecord — record view | `IsInRecordView="[False]"` |
-| CreateEntityRecord — field view | `InputEntityInFieldView` constructs entity with `Title = "Smoke Test Record"` |
-| CreateEntityRecord — RecordState | One `DynamicEntityField`: `FieldId="<TitleFieldGuid>"`, `IsRequired="True"`, `ArgumentValue` set |
-| CreateEntityRecord — output | `OutputEntity` bound to `createdRecord`; `VisibleDynamicPropertiesInfo="{x:Null}"` |
-| GetEntityRecordById — type | `x:TypeArguments="local:CodingAgentsBuildTimeEntity"` |
-| GetEntityRecordById — RecordId | Bound to `createdRecord.Id` |
-| GetEntityRecordById — output | `OutputEntity` bound to out-argument `RetrievedRecord` |
-| GetEntityRecordById — absent | No `RecordState`, no `IsInRecordView`, no `InputEntityInFieldView` |
-| Build | `uip rpa get-errors` returns no errors |
+**Evaluation**: Every expected `uda:` activity element is present in the XAML with the correct `x:TypeArguments`, and `uip rpa get-errors` returns no errors. No property-level assertions.
 
 ---
 
-### S2 — Create + Update *(CreateEntityRecord, UpdateEntityRecord)*
+### S1 — Entity Record Activities
 
 **Prompt**:
-> Create a record in Data Service entity `CodingAgentsBuildTimeEntity` with `Title` `"Original"` and `Score` `10`, then update the same record setting `Title` to `"Updated"` and `Score` to `99`.
+> Build a workflow that performs these independent tasks on Data Service entity `CodingAgentsEvalEntity`:
+> 1. Create a new record with `Title` set to `'New Record'`
+> 2. Fetch an existing record by its ID
+> 3. Update an existing record, setting `Title` to `'Modified'`
+> 4. Delete an existing record
+> 5. Query all records in the entity
 
-**Eval summary**: Verifies that both `CreateEntityRecord` and `UpdateEntityRecord` correctly populate `InputEntityInFieldView` and `RecordState.SelectedFields` for a multi-field entity, and that the update chains off the created record's ID.
-
-| Check | Condition |
-|-------|-----------|
-| CreateEntityRecord — field view | `InputEntityInFieldView` sets `Title = "Original"`, `Score = 10` |
-| CreateEntityRecord — RecordState | Two `DynamicEntityField` entries: `<TitleFieldGuid>` (required) and `<ScoreFieldGuid>` (not required), both with `ArgumentValue` set |
-| UpdateEntityRecord — type | `x:TypeArguments="local:CodingAgentsBuildTimeEntity"` |
-| UpdateEntityRecord — RecordId | Bound to `createdRecord.Id` |
-| UpdateEntityRecord — record view | `IsInRecordView="[False]"` |
-| UpdateEntityRecord — field view | `InputEntityInFieldView` sets `Title = "Updated"`, `Score = 99` |
-| UpdateEntityRecord — RecordState | Two `DynamicEntityField` entries with updated `ArgumentValue` values |
-| UpdateEntityRecord — output | `OutputEntity` wired; `VisibleDynamicPropertiesInfo="{x:Null}"` |
-| Build | `uip rpa get-errors` returns no errors |
+**Pass condition**: All five activity elements present — `uda:CreateEntityRecord`, `uda:GetEntityRecordById`, `uda:UpdateEntityRecord`, `uda:DeleteEntityRecord`, `uda:QueryEntityRecords` — each with `x:TypeArguments="local:CodingAgentsEvalEntity"`; no other `uda:` activity elements present; build passes.
 
 ---
 
-### S3 — Create + Delete *(CreateEntityRecord, DeleteEntityRecord)*
+### S2 — Batch Activities
 
 **Prompt**:
-> Create a record in Data Service entity `CodingAgentsBuildTimeEntity` with `Title` `"To Be Deleted"`, then delete it.
+> Build a workflow that performs these independent batch operations on Data Service entity `CodingAgentsEvalEntity`:
+> 1. Create 3 records in batch with Titles `'A'`, `'B'`, `'C'`
+> 2. Update 3 existing records in batch, setting `Title` to `'X'`
+> 3. Delete 3 existing records in batch
 
-**Eval summary**: Verifies that `DeleteEntityRecord` carries no write-mode properties (`RecordState`, `IsInRecordView`, `OutputEntity`) and correctly receives the record ID from the preceding create.
-
-| Check | Condition |
-|-------|-----------|
-| DeleteEntityRecord — type | `x:TypeArguments="local:CodingAgentsBuildTimeEntity"` |
-| DeleteEntityRecord — EntityId | `"<EntityGuid>"` |
-| DeleteEntityRecord — RecordId | Bound to `createdRecord.Id` |
-| DeleteEntityRecord — absent | No `RecordState`, no `IsInRecordView`, no `InputEntityInFieldView`, no `OutputEntity` |
-| DeleteEntityRecord — scope | `ScopeValue="Tenant"`, Solution properties nulled |
-| Build | `uip rpa get-errors` returns no errors |
+**Pass condition**: All three activity elements present — `uda:CreateMultipleEntityRecords`, `uda:UpdateMultipleEntityRecords`, `uda:DeleteMultipleEntityRecords` — each with `x:TypeArguments="local:CodingAgentsEvalEntity"`; no other `uda:` activity elements present; build passes.
 
 ---
 
-### S4 — Create + Query *(CreateEntityRecord, QueryEntityRecords)*
+### S3 — File Activities
 
 **Prompt**:
-> Create a record in Data Service entity `CodingAgentsBuildTimeEntity` with `Title` `"Query Target"`, then query all records in the entity (no filter, top 100) and return the list and total count as workflow outputs.
+> Build a workflow that performs these independent file operations on Data Service entity `CodingAgentsEvalFileEntity`:
+> 1. Upload `'C:\temp\test.txt'` to the `Attachment` field of an existing record
+> 2. Download the file from the `Report` field of another existing record
+> 3. Delete the file from the `Contract` field of another existing record
 
-**Eval summary**: Verifies that `QueryEntityRecords` uses the correct output arguments (`OutputRecords`, `TotalRecords`) and produces no filter or write-mode properties for an unfiltered query.
-
-| Check | Condition |
-|-------|-----------|
-| QueryEntityRecords — type | `x:TypeArguments="local:CodingAgentsBuildTimeEntity"` |
-| QueryEntityRecords — EntityId | `"<EntityGuid>"` |
-| QueryEntityRecords — Top | `Top="[100]"` |
-| QueryEntityRecords — output | `OutputRecords` bound to `Records`; `TotalRecords` bound to `Total` |
-| QueryEntityRecords — filter | `FilterArguments="{x:Null}"` or absent |
-| QueryEntityRecords — absent | No `RecordState`, no `IsInRecordView`, no `InputEntityInFieldView` |
-| Build | `uip rpa get-errors` returns no errors |
-
----
-
-### S5 — Batch Create + Batch Delete *(CreateMultipleEntityRecords, DeleteMultipleEntityRecords)*
-
-**Prompt**:
-> Create 3 records in Data Service entity `CodingAgentsBuildTimeEntity` with Titles `"Batch1"`, `"Batch2"`, `"Batch3"`, then delete all 3.
-
-**Eval summary**: Verifies that batch create uses `ICollection<CodingAgentsBuildTimeEntity>` and batch delete correctly switches to `ICollection<Guid>` — the most common type-confusion error — and that `FailedRecords` outputs are wired on both activities.
-
-| Check | Condition |
-|-------|-----------|
-| CreateMultiple — InputRecords type | `ICollection<CodingAgentsBuildTimeEntity>` — list of 3 constructed entity objects |
-| CreateMultiple — OutputRecords | Bound to `createdRecords` (`IList<CodingAgentsBuildTimeEntity>`) |
-| CreateMultiple — FailedRecords | Bound to `failedCreate` (`IList(Of Tuple(Of String, CodingAgentsBuildTimeEntity))`) |
-| CreateMultiple — absent | No `RecordState`, no `IsInRecordView` |
-| DeleteMultiple — InputRecords type | `ICollection<Guid>` — **not** entity objects; extracted from `createdRecords` |
-| DeleteMultiple — FailedRecords | Bound to `failedDelete` (`IList(Of Guid)`) |
-| Build | `uip rpa get-errors` returns no errors |
-
----
-
-### S6 — File Lifecycle *(CreateEntityRecord, UploadFileToRecordField, DownloadFileFromRecordField, DeleteFileFromRecordField)*
-
-**Prompt**:
-> Create a record in Data Service entity `CodingAgentsBuildTimeFileEntity` with `Title` `"File Test"`, upload `"C:\temp\test.txt"` to the `Attachment` field, download it to `"C:\temp\downloaded.txt"`, then delete the file from the field.
-
-**Eval summary**: Verifies that all three file activities set `Field` by name (not by ID), that the file field is excluded from `RecordState`, and that `DownloadedFileResource` is correctly wired as an output.
-
-| Check | Condition |
-|-------|-----------|
-| All activities — type | `x:TypeArguments="local:CodingAgentsBuildTimeFileEntity"` on all four activities |
-| All activities — EntityId | `"<FileEntityGuid>"` on all four activities |
-| CreateEntityRecord — RecordState | `Attachment` field excluded from `RecordState` and `InputEntityInFieldView` (file fields not set via field view) |
-| Upload — Field | `Field="Attachment"` |
-| Upload — RecordId | Bound to `createdRecord.Id` |
-| Upload — FilePath | `"C:\temp\test.txt"` |
-| Upload — OutputEntity | Bound to `recordAfterUpload` |
-| Upload — absent | No `RecordState`, no `IsInRecordView` |
-| Download — Field | `Field="Attachment"` |
-| Download — FilePath | `"C:\temp\downloaded.txt"` |
-| Download — DownloadedFileResource | Bound to `downloadedFile` |
-| Delete file — Field | `Field="Attachment"` |
-| Delete file — RecordId | Bound to `createdRecord.Id` |
-| Delete file — OutputEntity | Bound to `recordAfterDelete` |
-| Build | `uip rpa get-errors` returns no errors |
+**Pass condition**: All three activity elements present — `uda:UploadFileToRecordField`, `uda:DownloadFileFromRecordField`, `uda:DeleteFileFromRecordField` — each with `x:TypeArguments="local:CodingAgentsEvalFileEntity"`; no other `uda:` activity elements present; build passes.
 
 ---
 
 ## 4. Integration
 
-**Purpose**: Validate correct output across diverse scenarios, error paths, optional parameters, and anti-patterns.
+**Purpose**: Verify that each activity is configured perfectly — every property, every attribute, every edge case — one activity at a time. Scenarios are organized per-activity, with exhaustive coverage of each activity's configuration space. Each scenario gates against regressions in both the agent and the activity reference documentation.
 
-**Baseline inheritance**: Every integration scenario inherits the full check set of its referenced smoke scenario — project structure, all four XAML namespaces, TextExpression declarations, EntityId, TypeArguments, scope properties, RecordState shape, output wiring, and `uip rpa get-errors` returning no errors. The **Key Semantic Checks** column captures only the assertions that go beyond that baseline.
+**Anti-pattern scenarios** (marked with "Anti-pattern:" prefix) are a key sub-category: they use adversarial or misleading prompts to verify the agent avoids known mistakes that compile but fail at runtime or cause Studio desync.
 
-Integration prompts pass entity and field names only — no GUIDs. Scenarios that reference pre-existing records use permanently resident records in CodingAgentsEvals — no dynamic data writes occur.
+**Error-path scenarios** (section 4.12) verify the agent handles activity failures correctly — not just setting `ContinueOnError`, but guarding against null outputs downstream and consuming `FailedRecords` for logging or retry.
 
----
+**Evaluation**: Full property validation on every attribute of the activity under test. Each activity subsection defines a **configuration baseline** — the set of properties checked on every scenario for that activity. Individual scenarios' **Key Semantic Checks** capture what is unique to that prompt.
 
-### 4.1 Entity Record Activities
-
-#### CreateEntityRecord
-
-> **Baseline**: [S1 — Create + Read](#s1--create--read) — complete project boilerplate, all four namespaces, `IsInRecordView="[False]"`, `InputEntityInFieldView`, `RecordState.SelectedFields`, `OutputEntity`, `VisibleDynamicPropertiesInfo="{x:Null}"`.
-
-| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
-|----|----------|--------|--------------|---------------------|
-| I1 | **Multi-type scalar fields** | "Create a record in Data Service entity `CodingAgentsBuildTimeEntity` with `Title` `'TypeTest'`, `Score` `42`, `Price` `9.99`, and `IsActive` `true`." | Verifies the agent maps each field to its correct XAML type in `InputEntityInFieldView` and `RecordState` — INT → `x:Int32`, DECIMAL → `x:Decimal`, BIT → `x:Boolean`. | `InputEntityInFieldView` constructs entity with correct typed literals; `RecordState` has four `DynamicEntityField` entries with matching types |
-| I2 | **Date and datetime fields** | "Create a record in Data Service entity `CodingAgentsBuildTimeEntity` with `EventDate` set to `'2026-04-18'` and `ScheduledAt` set to `'2026-04-18T09:00:00+05:30'`." | Verifies that DATE and DATETIMEOFFSET fields are passed as ISO 8601 strings (x:String), not as .NET DateTime objects. | Both fields use `x:String` in RecordState ArgumentValue; values match the ISO 8601 strings in the prompt |
-| I3 | **Required vs optional — omit optional** | "Create a record in Data Service entity `CodingAgentsBuildTimeEntity` with only the required field `Title` set to `'RequiredOnly'`. The entity also has an optional field `Notes`." | Verifies the agent includes only required fields in `RecordState` when optional fields are not specified, avoiding unnecessary null entries. | `RecordState` contains exactly one `DynamicEntityField` for `Title` with `IsRequired="True"`; `Notes` field absent from `RecordState` and `InputEntityInFieldView` |
-| I4 | **ContinueOnError=True** | "Create a record in Data Service entity `CodingAgentsBuildTimeEntity` with `Title` `'ErrorTest'`. The workflow should continue even if the activity fails." | Verifies `ContinueOnError` is set to True — a common requirement for resilient production workflows. | `ContinueOnError="[True]"` on the activity |
-
-#### GetEntityRecordById
-
-> **Baseline**: [S1 — Create + Read](#s1--create--read) — `x:TypeArguments`, `EntityId`, `RecordId` binding, `OutputEntity` wiring, no `RecordState` or `IsInRecordView`.
-
-| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
-|----|----------|--------|--------------|---------------------|
-| I5 | **ExpansionDepth override** | "Fetch a record from Data Service entity `CodingAgentsBuildTimeEntity` and expand related entities to depth 1 only." | Verifies the agent correctly sets `ExpansionDepth` to a non-default value when the prompt specifies shallow expansion. | `ExpansionDepth="[1]"` on the activity (default is 2) |
-| I6 | **OutputEntity used downstream** | "Fetch a record from Data Service entity `CodingAgentsBuildTimeEntity` and log its `Title` field value to the output." | Verifies that `OutputEntity` is bound to a typed variable whose fields are accessed in a subsequent activity — confirming the agent correctly models the entity type as accessible after retrieval. | `OutputEntity` bound to a typed variable (e.g. `retrievedRecord`); subsequent activity references `retrievedRecord.Title` |
-| I7 | **Anti-pattern: IEntity type argument** | "Fetch a record from Data Service entity `CodingAgentsBuildTimeEntity` using the generic entity interface type." | Verifies the agent does not use `udd:IEntity` as the type argument even when prompted with "generic" or "interface" language — a runtime-fatal mistake. | `x:TypeArguments="local:CodingAgentsBuildTimeEntity"` — NOT `x:TypeArguments="udd:IEntity"`; `uip rpa get-errors` returns no errors |
-
-#### UpdateEntityRecord
-
-> **Baseline**: [S2 — Create + Update](#s2--create--update) — `IsInRecordView="[False]"`, `InputEntityInFieldView`, `RecordState.SelectedFields` with `DynamicEntityField` entries, `RecordId` binding, `OutputEntity`, `VisibleDynamicPropertiesInfo="{x:Null}"`.
-
-| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
-|----|----------|--------|--------------|---------------------|
-| I8 | **Partial field update** | "Update only the `Title` field of a pre-existing record in Data Service entity `CodingAgentsBuildTimeEntity`, setting it to `'Revised'`. The entity also has a `Score` field — leave it unchanged." | Verifies the agent includes only the fields being updated in `RecordState.SelectedFields` — not all entity fields. | `RecordState` contains exactly one `DynamicEntityField` for `Title`; `Score` field absent from `RecordState` and `InputEntityInFieldView` |
-| I9 | **Update to empty string** | "Update the `Title` field of a pre-existing record in Data Service entity `CodingAgentsBuildTimeEntity` to an empty string." | Verifies the agent correctly represents an intentional empty-string update in `InputEntityInFieldView` and `RecordState`, rather than omitting the field. | `InputEntityInFieldView` sets `Title = ""`; `DynamicEntityField` for Title has `ArgumentValue` set to empty string (not null or absent) |
-| I10 | **Anti-pattern: InputEntity property** | "Update the `Score` field of a pre-existing record in Data Service entity `CodingAgentsBuildTimeEntity` to `100`." | Verifies the agent uses `InputEntityInFieldView` and `RecordState`, not the `InputEntity` property — which causes Studio desync bugs. | `InputEntityInFieldView` present and set; `InputEntity` property absent from the activity |
-| I11 | **ContinueOnError=True** | "Update the `Title` of a pre-existing record in Data Service entity `CodingAgentsBuildTimeEntity` to `'SafeUpdate'`. The workflow should continue even if the update fails." | Verifies `ContinueOnError` is correctly applied to an update activity. | `ContinueOnError="[True]"` on `UpdateEntityRecord` |
-
-#### DeleteEntityRecord
-
-> **Baseline**: [S3 — Create + Delete](#s3--create--delete) — `x:TypeArguments`, `EntityId`, `RecordId` binding, no `RecordState`, no `IsInRecordView`, no `InputEntityInFieldView`, no `OutputEntity`, Solution properties nulled.
-
-| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
-|----|----------|--------|--------------|---------------------|
-| I12 | **ContinueOnError=True** | "Delete a pre-existing record from Data Service entity `CodingAgentsBuildTimeEntity`. The workflow should not abort if the deletion fails." | Verifies `ContinueOnError` is set without introducing any write-mode properties that delete does not support. | `ContinueOnError="[True]"`; still no `RecordState`, `IsInRecordView`, or `OutputEntity` |
-| I13 | **Sequential delete of two records** | "Delete two pre-existing records from Data Service entity `CodingAgentsBuildTimeEntity` one after the other." | Verifies the agent generates two independent `DeleteEntityRecord` activities rather than attempting a batch approach. | Two separate `uda:DeleteEntityRecord` activities in sequence; each with its own `RecordId` binding |
-
-#### QueryEntityRecords
-
-> **Baseline**: [S4 — Create + Query](#s4--create--query) — `x:TypeArguments`, `EntityId`, `OutputRecords` and `TotalRecords` wired, no `RecordState`, no `IsInRecordView`, no `InputEntityInFieldView`.
-
-| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
-|----|----------|--------|--------------|---------------------|
-| I14 | **Equality filter** | "Query all records in Data Service entity `CodingAgentsBuildTimeEntity` where `Status` equals `'Active'`." | Verifies the agent generates a correct `FilterArguments` equality expression, not a post-fetch LINQ filter. | `FilterArguments` set with `Equals` operator on `Status` field; `FilterValues` contains `'Active'`; `OutputRecords` wired |
-| I15 | **Contains filter** | "Query all records in Data Service entity `CodingAgentsBuildTimeEntity` where `Title` contains `'Invoice'`." | Verifies the `Contains` filter operator is used (not `StartsWith` or `Equals`). | `FilterArguments` set with `Contains` operator on `Title`; `FilterValues` contains `'Invoice'` |
-| I16 | **GreaterThan filter** | "Query all records in Data Service entity `CodingAgentsBuildTimeEntity` where `Score` is greater than `50`." | Verifies the `MoreThan` operator is correctly applied to a numeric field. | `FilterArguments` uses `MoreThan` operator on `Score`; `FilterValues` contains `50` |
-| I17 | **Compound AND filter** | "Query records in Data Service entity `CodingAgentsBuildTimeEntity` where `Status` equals `'Active'` and `Score` is greater than `10`." | Verifies the agent generates a filter group combining two conditions rather than two separate queries. | `FilterArguments` contains two filter conditions in a single group; both `Status` (Equals) and `Score` (MoreThan) present |
-| I18 | **Sort descending** | "Query all records in Data Service entity `CodingAgentsBuildTimeEntity`, sorted by `Score` from highest to lowest." | Verifies `SortByField` and `SortAscending=False` are set — the agent must not default to ascending or omit the sort. | `SortByField="Score"` (or equivalent); `SortAscending="[False]"` |
-| I19 | **Pagination — Top + Skip** | "Query records in Data Service entity `CodingAgentsBuildTimeEntity`, returning the second page of 10 records." | Verifies the agent correctly sets both `Top` and `Skip` for offset-based pagination rather than using cursor or fetching all records. | `Top="[10]"`; `Skip="[10]"` |
-| I20 | **TotalRecords output** | "Query all records in Data Service entity `CodingAgentsBuildTimeEntity` and return both the list and the total count of matching records as workflow outputs." | Verifies `TotalRecords` is wired as a workflow output, not just `OutputRecords` — required for pagination UI patterns. | `TotalRecords` bound to a workflow out-argument; `OutputRecords` also wired |
-| I21 | **Date equality filter** | "Query all records in Data Service entity `CodingAgentsBuildTimeEntity` where `EventDate` equals `'2026-04-18'`." | Verifies the agent treats a DATE field filter value as an ISO 8601 string, not a .NET DateTime — the field type does not change the operator, only the value representation. | `FilterArguments` uses `Equals` on `EventDate`; `FilterValues` contains the string `'2026-04-18'` (not a DateTime literal) |
-| I22 | **DateTime range — after a timestamp** | "Query all records in Data Service entity `CodingAgentsBuildTimeEntity` where `ScheduledAt` is after `'2026-04-01T00:00:00Z'`." | Verifies `MoreThan` is applied to a DATETIMEOFFSET field with an ISO 8601 timestamp string — the agent must not convert it to a DateTime object or use a numeric comparison. | `FilterArguments` uses `MoreThan` on `ScheduledAt`; `FilterValues` contains the ISO 8601 string `'2026-04-01T00:00:00Z'` |
-| I23 | **Date range — between two dates** | "Query all records in Data Service entity `CodingAgentsBuildTimeEntity` where `EventDate` falls between `'2026-01-01'` and `'2026-12-31'` inclusive." | Verifies the agent generates a compound filter using `NoLessThan` and `NoMoreThan` on a DATE field — not a single-operator approximation or LINQ post-filter. | `FilterArguments` contains two conditions on `EventDate`: `NoLessThan '2026-01-01'` and `NoMoreThan '2026-12-31'`; both values as ISO 8601 date strings |
-| I24 | **Boolean IsTrue filter** | "Query all records in Data Service entity `CodingAgentsBuildTimeEntity` where `IsActive` is true." | Verifies the agent uses the `IsTrue` operator for a BIT field rather than `Equals` with a boolean literal — `IsTrue` requires no `FilterValues` entry. | `FilterArguments` uses `IsTrue` operator on `IsActive`; no corresponding `FilterValues` entry for this condition |
-| I25 | **IsNull filter on optional field** | "Query all records in Data Service entity `CodingAgentsBuildTimeEntity` where the optional field `Notes` has no value set." | Verifies the agent uses the `IsNull` operator rather than an equality check against empty string or null literal. | `FilterArguments` uses `IsNull` operator on `Notes`; no `FilterValues` entry for this condition |
+Integration prompts pass entity and field names only — no GUIDs. Scenarios that reference pre-existing records use permanently resident records in CodingAgentsEvals.
 
 ---
 
-### 4.2 Batch Activities
+### 4.1 CreateEntityRecord
 
-#### CreateMultipleEntityRecords
-
-> **Baseline**: [S5 — Batch Create + Batch Delete](#s5--batch-create--batch-delete) — `InputRecords` as `ICollection<CodingAgentsBuildTimeEntity>`, `OutputRecords` wired, `FailedRecords` wired, no `RecordState`, no `IsInRecordView`.
+> **Configuration baseline** (checked on every scenario): `x:TypeArguments="local:CodingAgentsEvalEntity"`, `EntityId` matches EntitiesStore.json, `ScopeValue="Tenant"`, `IsInRecordView="[False]"`, `InputEntityInFieldView` present (not `InputEntity`), `RecordState.SelectedFields` present with correct `DynamicEntityField` entries, `OutputEntity` bound, `VisibleDynamicPropertiesInfo="{x:Null}"`, build passes.
 
 | ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
 |----|----------|--------|--------------|---------------------|
-| I26 | **Large batch** | "Create 10 records in Data Service entity `CodingAgentsBuildTimeEntity` with Titles `'R01'` through `'R10'`." | Verifies the agent constructs a `List(Of CodingAgentsBuildTimeEntity)` with 10 items rather than falling back to 10 individual `CreateEntityRecord` calls. | Single `uda:CreateMultipleEntityRecords` activity; `InputRecords` expression constructs a list of 10 entity objects |
-| I27 | **ContinueBatchOnFailure=False** | "Create 3 records in Data Service entity `CodingAgentsBuildTimeEntity`. Stop the entire batch immediately if any record fails." | Verifies `ContinueBatchOnFailure` is set to False — the agent must not leave it at the default True. | `ContinueBatchOnFailure="[False]"` on the activity |
-| I28 | **FailedRecords type correctness** | "Create 3 records in Data Service entity `CodingAgentsBuildTimeEntity` and capture any failed records with their error messages." | Verifies `FailedRecords` is typed as `IList(Of Tuple(Of String, CodingAgentsBuildTimeEntity))` — a common type-confusion point. | `FailedRecords` bound to a variable typed `IList(Of Tuple(Of String, CodingAgentsBuildTimeEntity))`; `Item1` is the error string, `Item2` is the failed entity |
-
-#### UpdateMultipleEntityRecords
-
-> **Baseline**: [S5 — Batch Create + Batch Delete](#s5--batch-create--batch-delete) (closest batch smoke scenario). Additional fixed checks: `InputRecords` as `ICollection<CodingAgentsBuildTimeEntity>` (entity objects, each with `Id` set), `OutputRecords` wired, `FailedRecords` typed as `IList(Of Tuple(Of String, CodingAgentsBuildTimeEntity))`.
-
-| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
-|----|----------|--------|--------------|---------------------|
-| I29 | **Id required on each entity** | "Update the `Title` field of 3 pre-existing records in Data Service entity `CodingAgentsBuildTimeEntity` to `'Updated1'`, `'Updated2'`, `'Updated3'` respectively." | Verifies each entity object in `InputRecords` carries its `Id` property — missing `Id` causes the batch to fail, as the activity cannot determine which record to update. | `InputRecords` expression constructs entities with both `.Id` and `.Title` set on each object |
-| I30 | **ContinueBatchOnFailure=False** | "Update 3 records in Data Service entity `CodingAgentsBuildTimeEntity`. Abort the batch if any update fails." | Verifies `ContinueBatchOnFailure` is set to False. | `ContinueBatchOnFailure="[False]"` |
-| I31 | **FailedRecords type correctness** | "Update 3 records in Data Service entity `CodingAgentsBuildTimeEntity` and capture failed updates with their error messages." | Verifies `FailedRecords` for update is correctly typed as `IList(Of Tuple(Of String, CodingAgentsBuildTimeEntity))` — same type as batch create. | `FailedRecords` variable typed `IList(Of Tuple(Of String, CodingAgentsBuildTimeEntity))` |
-
-#### DeleteMultipleEntityRecords
-
-> **Baseline**: [S5 — Batch Create + Batch Delete](#s5--batch-create--batch-delete) — `InputRecords` as `ICollection<Guid>`, `FailedRecords` typed as `IList(Of Guid)`, no `RecordState`, no `IsInRecordView`.
-
-| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
-|----|----------|--------|--------------|---------------------|
-| I32 | **Input must be Guid collection** | "Delete 3 pre-existing records from Data Service entity `CodingAgentsBuildTimeEntity` in a single batch operation." | Verifies `InputRecords` is `ICollection<Guid>` — not entity objects — the most common type error in batch delete. | `InputRecords` expression produces `ICollection(Of Guid)` or `List(Of Guid)`; entity objects not used |
-| I33 | **ContinueBatchOnFailure=False** | "Delete 3 records from Data Service entity `CodingAgentsBuildTimeEntity`. Stop immediately if any deletion fails." | Verifies `ContinueBatchOnFailure` is set to False. | `ContinueBatchOnFailure="[False]"` |
-| I34 | **FailedRecords type correctness** | "Delete 3 records from Data Service entity `CodingAgentsBuildTimeEntity` and capture the IDs of any that could not be deleted." | Verifies `FailedRecords` for batch delete is typed as `IList(Of Guid)` — not a Tuple type as in create/update. | `FailedRecords` variable typed `IList(Of Guid)` |
+| I1 | **Single required field** | "Create a record in Data Service entity `CodingAgentsEvalEntity` with `Title` set to `'OnlyRequired'`." | Verifies the minimal valid Create — only the required field in RecordState, no extraneous optional field entries. | `RecordState` has exactly one `DynamicEntityField` for `Title` with `IsRequired="True"` and `ArgumentValue` set; optional fields absent from both `RecordState` and `InputEntityInFieldView` |
+| I2 | **All scalar field types** | "Create a record in Data Service entity `CodingAgentsEvalEntity` with `Title` `'TypeTest'`, `Score` `42`, `Price` `9.99`, `IsActive` `true`, `EventDate` `'2026-04-18'`, and `ScheduledAt` `'2026-04-18T09:00:00+05:30'`." | Verifies the agent maps each SqlType to its correct XAML type — INT → `x:Int32`, DECIMAL → `x:Decimal`, BIT → `x:Boolean`, DATE and DATETIMEOFFSET → `x:String` (ISO 8601). | `InputEntityInFieldView` constructs entity with all 6 fields using correct typed literals; `RecordState` has 6 `DynamicEntityField` entries with matching types; date fields use `x:String` not .NET DateTime |
+| I3 | **Required + optional fields** | "Create a record in Data Service entity `CodingAgentsEvalEntity` with `Title` `'WithOptional'` and `Notes` `'Some notes'`." | Verifies the agent correctly distinguishes required vs optional fields in RecordState — both present, with correct `IsRequired` flags. | `RecordState` has two `DynamicEntityField` entries: `Title` with `IsRequired="True"`, `Notes` with `IsRequired="False"`; both have `ArgumentValue` set |
+| I4 | **ContinueOnError=True** | "Create a record in Data Service entity `CodingAgentsEvalEntity` with `Title` `'ErrorTest'`. The workflow should continue even if the activity fails." | Verifies `ContinueOnError` is set as a bracketed Boolean expression. | `ContinueOnError="[True]"` on the activity |
+| I5 | **Anti-pattern: InputEntity property** | "Create a record in Data Service entity `CodingAgentsEvalEntity` with `Title` `'SafeCreate'` by setting the entity object directly." | Verifies the agent uses `InputEntityInFieldView` + `RecordState` even when the prompt implies direct entity object assignment — `InputEntity` causes Studio desync. | `InputEntityInFieldView` present and set; `InputEntity` property absent from activity element |
+| I6 | **Anti-pattern: file field in RecordState** | "Create a record in Data Service entity `CodingAgentsEvalFileEntity` with `Title` `'DocRecord'` and attach a file to the `Attachment` field." | Verifies the agent excludes File-typed fields from `RecordState` — file fields must only be manipulated via file activities. Uses `x:TypeArguments="local:CodingAgentsEvalFileEntity"` (exception to baseline). | `RecordState` contains only `Title` DynamicEntityField; `Attachment` absent from both `RecordState` and `InputEntityInFieldView`; agent either omits the file instruction from CreateEntityRecord or sequences a separate `UploadFileToRecordField` |
 
 ---
 
-### 4.3 File Activities
+### 4.2 GetEntityRecordById
 
-#### UploadFileToRecordField
-
-> **Baseline**: [S6 — File Lifecycle](#s6--file-lifecycle) — `Field` set by name, `RecordId` binding, `OutputEntity` wired, no `RecordState`, no `IsInRecordView`.
+> **Configuration baseline**: `x:TypeArguments="local:CodingAgentsEvalEntity"`, `EntityId` matches EntitiesStore.json, `RecordId` bound, `OutputEntity` bound, no `RecordState`, no `IsInRecordView`, no `InputEntityInFieldView`, `ExpansionDepth` at default or as specified, build passes.
 
 | ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
 |----|----------|--------|--------------|---------------------|
-| I35 | **Upload via FileResource** | "Upload a file resource to the `Attachment` field of a pre-existing record in Data Service entity `CodingAgentsBuildTimeFileEntity`. The file is available as a resource object in variable `fileRes`." | Verifies the agent uses `FileResource` (`InArgument<IResource>`) instead of `FilePath` when the input is a resource object. | `FileResource` property bound to `fileRes`; `FilePath` absent or null |
-| I36 | **OutputEntity after upload** | "Upload `'C:\docs\report.pdf'` to the `Report` field of a pre-existing record in Data Service entity `CodingAgentsBuildTimeFileEntity` and return the updated entity as a workflow output." | Verifies `OutputEntity` is wired to capture the entity state post-upload, not discarded. | `OutputEntity` bound to a workflow out-argument or variable; `Field="Report"` |
-| I37 | **Field name case sensitivity** | "Upload `'C:\temp\file.txt'` to the field named `attachmentFile` (camelCase) on a pre-existing record in Data Service entity `CodingAgentsBuildTimeFileEntity`." | Verifies the agent sets `Field` to the exact name as given — field names are case-sensitive at runtime. | `Field="attachmentFile"` exactly (not `AttachmentFile` or `attachment_file`) |
-
-#### DownloadFileFromRecordField
-
-> **Baseline**: [S6 — File Lifecycle](#s6--file-lifecycle) — `Field` set by name, `RecordId` binding, `DownloadedFileResource` wired, no `RecordState`, no `IsInRecordView`.
-
-| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
-|----|----------|--------|--------------|---------------------|
-| I38 | **Download without specifying destination** | "Download the file from the `Attachment` field of a pre-existing record in Data Service entity `CodingAgentsBuildTimeFileEntity` and make it available for further processing." | Verifies the agent wires `DownloadedFileResource` as the output when no explicit file path is specified — not omitting the output entirely. | `DownloadedFileResource` bound to a variable; `FilePath` absent or null |
-| I39 | **DownloadedFileResource used downstream** | "Download the file from the `Report` field of a pre-existing record in Data Service entity `CodingAgentsBuildTimeFileEntity` and log its local path." | Verifies `DownloadedFileResource.LocalPath` is correctly referenced in a downstream activity — confirming the agent models the `ILocalResource` type. | `DownloadedFileResource` bound to a typed variable; downstream activity references `.LocalPath` on that variable |
-| I40 | **No ExpansionDepth property** | "Download the file from the `Attachment` field of a pre-existing record in Data Service entity `CodingAgentsBuildTimeFileEntity`." | Verifies the agent does not set `ExpansionDepth` on a download activity — it is not a supported property for file operations. | `ExpansionDepth` absent from `DownloadFileFromRecordField` activity |
-
-#### DeleteFileFromRecordField
-
-> **Baseline**: [S6 — File Lifecycle](#s6--file-lifecycle) — `Field` set by name, `RecordId` binding, `OutputEntity` wired, no `RecordState`, no `IsInRecordView`.
-
-| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
-|----|----------|--------|--------------|---------------------|
-| I41 | **OutputEntity after file delete** | "Delete the file from the `Attachment` field of a pre-existing record in Data Service entity `CodingAgentsBuildTimeFileEntity` and return the updated entity state." | Verifies `OutputEntity` is wired on `DeleteFileFromRecordField` — confirming the agent knows this activity returns the entity post-deletion, unlike `DeleteEntityRecord`. | `OutputEntity` bound to a variable or out-argument |
-| I42 | **ContinueOnError=True** | "Delete the file from the `Report` field of a pre-existing record in Data Service entity `CodingAgentsBuildTimeFileEntity`. The workflow should proceed even if no file is attached." | Verifies `ContinueOnError` is applied, appropriate for the case where a file may or may not exist. | `ContinueOnError="[True]"` on the activity |
-| I43 | **Field name matches upload** | "Upload `'C:\temp\doc.pdf'` to the `Contract` field of a record in Data Service entity `CodingAgentsBuildTimeFileEntity`, then delete the file from the same field." | Verifies the agent uses identical `Field` values on both upload and delete — a round-trip field-name consistency check. | `Field="Contract"` on both `UploadFileToRecordField` and `DeleteFileFromRecordField` |
+| I7 | **Basic fetch** | "Fetch a record from Data Service entity `CodingAgentsEvalEntity` by its ID and return it as a workflow output." | Verifies the full default configuration of a read-only activity — no write-mode properties present. | `OutputEntity` bound to out-argument; `ExpansionDepth` absent or at default `"[2]"`; no `RecordState`, `IsInRecordView`, or `InputEntityInFieldView` |
+| I8 | **ExpansionDepth override** | "Fetch a record from Data Service entity `CodingAgentsEvalEntity` and expand related entities to depth 1 only." | Verifies the agent sets `ExpansionDepth` to a non-default value. | `ExpansionDepth="[1]"` |
+| I9 | **OutputEntity used downstream** | "Fetch a record from Data Service entity `CodingAgentsEvalEntity` by its ID and log its `Title` field value to the output." | Verifies `OutputEntity` is bound to a typed variable whose fields are accessed in a subsequent activity. | `OutputEntity` bound to a typed variable (e.g. `retrievedRecord`); subsequent activity references `retrievedRecord.Title` |
+| I10 | **Anti-pattern: IEntity type argument** | "Fetch a record from Data Service entity `CodingAgentsEvalEntity` using the generic entity interface type." | Verifies the agent uses the concrete entity type even when the prompt suggests a generic interface — `udd:IEntity` compiles but fails at runtime. | `x:TypeArguments="local:CodingAgentsEvalEntity"` — NOT `udd:IEntity` |
 
 ---
 
-## 5. Quality (~10 scenarios)
+### 4.3 UpdateEntityRecord
 
-**Quality gate concept**: Smoke and integration tests evaluate depth — they verify that each individual activity is configured correctly in isolation. Quality tests evaluate breadth — they verify that the agent can compose multiple activities into a coherent workflow without losing correctness at the seams. The question being answered here is not "did the agent set the right property on this activity?" but "did the agent build a workflow that hangs together end-to-end?". Assertions focus on data flow between steps (output variables correctly chained as inputs to the next activity), type consistency across all activities in the workflow, and structural decisions that span activity boundaries (e.g. file fields excluded from RecordState in both create and update steps). Per-activity configuration details are intentionally left to smoke and integration coverage.
+> **Configuration baseline**: `x:TypeArguments="local:CodingAgentsEvalEntity"`, `EntityId` matches EntitiesStore.json, `RecordId` bound, `IsInRecordView="[False]"`, `InputEntityInFieldView` present (not `InputEntity`), `RecordState.SelectedFields` present, `OutputEntity` bound, `VisibleDynamicPropertiesInfo="{x:Null}"`, build passes.
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I11 | **Partial field update** | "Update only the `Title` field of a pre-existing record in Data Service entity `CodingAgentsEvalEntity`, setting it to `'Revised'`. The entity also has `Score`, `Notes`, and `Price` fields — leave them unchanged." | Verifies the agent includes only the field being updated in `RecordState.SelectedFields`. | `RecordState` has exactly one `DynamicEntityField` for `Title`; `Score`, `Notes`, `Price` absent from both `RecordState` and `InputEntityInFieldView` |
+| I12 | **Multi-type field update** | "Update a pre-existing record in Data Service entity `CodingAgentsEvalEntity`: set `Title` to `'Updated'`, `Score` to `99`, `Price` to `19.99`, and `IsActive` to `false`." | Verifies correct XAML types across multiple field updates in a single activity. | `InputEntityInFieldView` sets all 4 fields with correct typed literals; `RecordState` has 4 `DynamicEntityField` entries with matching types |
+| I13 | **Empty-string update** | "Update the `Title` field of a pre-existing record in Data Service entity `CodingAgentsEvalEntity` to an empty string." | Verifies the agent represents an intentional empty-string update rather than omitting the field. | `InputEntityInFieldView` sets `Title = ""`; `DynamicEntityField` for Title has `ArgumentValue` set to empty string (not null or absent) |
+| I14 | **ContinueOnError=True** | "Update the `Title` of a pre-existing record in Data Service entity `CodingAgentsEvalEntity` to `'SafeUpdate'`. The workflow should continue even if the update fails." | Verifies `ContinueOnError` on an update activity. | `ContinueOnError="[True]"` |
+| I15 | **Anti-pattern: InputEntity property** | "Update the `Score` field of a pre-existing record in Data Service entity `CodingAgentsEvalEntity` to `100`." | Verifies the agent uses `InputEntityInFieldView` + `RecordState` by default — `InputEntity` causes Studio desync. | `InputEntityInFieldView` present and set; `InputEntity` property absent from activity element |
 
 ---
 
-### E1 — Basic CRUD Lifecycle
+### 4.4 DeleteEntityRecord
 
-> "Create a record in Data Service entity `CodingAgentsBuildTimeEntity` with a `Title` field set to `"CRUD Test"`. Read the record back by its ID. Update the record, changing `Title` to `"Updated"`. Then delete the record."
+> **Configuration baseline**: `x:TypeArguments="local:CodingAgentsEvalEntity"`, `EntityId` matches EntitiesStore.json, `RecordId` bound, `ScopeValue="Tenant"`, Solution properties nulled, no `RecordState`, no `IsInRecordView`, no `InputEntityInFieldView`, no `OutputEntity`, build passes.
 
-**Eval summary:** Verifies the full single-record lifecycle — that the agent chains `OutputEntity.Id` correctly across all four activities and applies the correct structural pattern (IsInRecordView, RecordState, TypeArguments) per activity type.
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I16 | **Basic delete** | "Delete a pre-existing record from Data Service entity `CodingAgentsEvalEntity`." | Verifies the full default configuration — no write-mode or read-mode properties present. | All baseline properties verified; no extraneous properties |
+| I17 | **ContinueOnError=True** | "Delete a pre-existing record from Data Service entity `CodingAgentsEvalEntity`. The workflow should not abort if the deletion fails." | Verifies `ContinueOnError` without introducing any write-mode properties. | `ContinueOnError="[True]"`; still no `RecordState`, `IsInRecordView`, or `OutputEntity` |
 
-| Step | Activity | Key XAML Assertions |
+---
+
+### 4.5 QueryEntityRecords
+
+> **Configuration baseline** (checked on every scenario): `x:TypeArguments="local:CodingAgentsEvalEntity"` (or `local:CodingAgentsEvalFileEntity` for I35), `EntityId` matches EntitiesStore.json, `OutputRecords` bound, no `RecordState`, no `IsInRecordView`, no `InputEntityInFieldView`, build passes.
+>
+> Filter scenarios additionally verify: `FilterArguments` contains correct `GroupFilter` / `SimpleFilter` structure, `FilterValues` has correctly typed `InArgument` entries at the right `ValueIndex`, operator strings are XML-escaped where needed.
+
+#### Standard Value Operators
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I18 | **Equals on string** | "Query all records in Data Service entity `CodingAgentsEvalEntity` where `Status` equals `'Active'`." | Baseline equality filter on NVARCHAR. | `FilterArguments`: `Equals` on `Status`; `FilterValues`: `x:String` = `'Active'` |
+| I19 | **Contains on string** | "Query all records in Data Service entity `CodingAgentsEvalEntity` where `Title` contains `'Invoice'`." | Verifies `Contains` operator (not `Equals` or `StartsWith`). | `FilterArguments`: `Contains` on `Title`; `FilterValues`: `x:String` = `'Invoice'` |
+| I20 | **MoreThan + LessThan on numeric (combined)** | "Query all records in Data Service entity `CodingAgentsEvalEntity` where `Score` is greater than `50` and `Price` is less than `20`." | Verifies both XML-escaped comparison operators in a single AND filter — `MoreThan` (`&gt;`) and `LessThan` (`&lt;`). | `FilterArguments`: AND group with `MoreThan` on `Score` (Operator: `&gt;`) and `LessThan` on `Price` (Operator: `&lt;`); `FilterValues`: `x:Int32` = `50` and `x:Decimal` = `20`; `ValueIndex` globally sequential |
+
+#### Value-less Operators
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I21 | **IsEmpty + IsNull (combined)** | "Query all records in Data Service entity `CodingAgentsEvalEntity` where the `Notes` field is empty and the `Status` field has no value set (is null)." | Verifies both positive value-less operators in a single AND filter — forces the agent to demonstrate it knows empty ≠ null. Both require `<x:Null />` slots in `FilterValues`. | `FilterArguments`: AND group with `is empty` on `Notes` and `is null` on `Status`; `FilterValues` has `<x:Null />` at both corresponding `ValueIndex` slots |
+| I22 | **IsNotEmpty + IsNotNull (combined)** | "Query all records in Data Service entity `CodingAgentsEvalEntity` where the `Notes` field is not empty and the `Status` field has a value set (is not null)." | Verifies both negative value-less operators. | `FilterArguments`: AND group with `not empty` on `Notes` and `is not null` on `Status`; `FilterValues` has `<x:Null />` at both corresponding `ValueIndex` slots |
+
+#### Boolean Operators
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I23 | **IsTrue on BIT** | "Query all records in Data Service entity `CodingAgentsEvalEntity` where `IsActive` is true." | Verifies `IsTrue` — requires an `x:Boolean` InArgument with value `True` in `FilterValues` (NOT value-less). | `FilterArguments`: `Equals true` on `IsActive`; `FilterValues`: `x:Boolean` = `True` |
+| I24 | **IsFalse on BIT** | "Query all records in Data Service entity `CodingAgentsEvalEntity` where `IsActive` is false." | Verifies `IsFalse`. | `FilterArguments`: `Equals false` on `IsActive`; `FilterValues`: `x:Boolean` = `False` |
+
+#### Array Operators
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I25 | **In + NotIn (combined)** | "Query all records in Data Service entity `CodingAgentsEvalEntity` where `Status` is one of `'Active'`, `'Pending'`, or `'Review'` and `Title` is not one of `'Draft'`, `'Test'`." | Verifies both array operators in a single AND filter — both require `s:String[]` regardless of field SqlType. | `FilterArguments`: AND group with `in` on `Status` and `not in` on `Title`; `FilterValues`: two `s:String[]` entries (3 values and 2 values respectively); `ValueIndex` globally sequential |
+
+#### Date and DateTime
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I26 | **Equals on DATE** | "Query all records in Data Service entity `CodingAgentsEvalEntity` where `EventDate` equals `'2026-04-18'`." | Verifies DATE equality uses `x:String` with ISO 8601, not a .NET DateTime literal. | `FilterArguments`: `Equals` on `EventDate`; `FilterValues`: `x:String` = `'2026-04-18'` |
+| I27 | **MoreThan on DATETIMEOFFSET** | "Query all records in Data Service entity `CodingAgentsEvalEntity` where `ScheduledAt` is after `'2026-04-01T00:00:00Z'`." | Verifies DATETIMEOFFSET comparison with XML-escaped `>` and ISO 8601 string value. | `FilterArguments`: `MoreThan` on `ScheduledAt` (Operator: `&gt;`); `FilterValues`: `x:String` = `'2026-04-01T00:00:00Z'` |
+| I28 | **Date range (NoLessThan + NoMoreThan)** | "Query all records in Data Service entity `CodingAgentsEvalEntity` where `EventDate` falls between `'2026-01-01'` and `'2026-12-31'` inclusive." | Verifies compound range filter using `NoLessThan` (`&gt;=`) and `NoMoreThan` (`&lt;=`) on a DATE field. | `FilterArguments` has two conditions on `EventDate`: `NoLessThan` and `NoMoreThan`; both `FilterValues` entries are `x:String` with ISO 8601 dates |
+
+#### Compound Filters
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I29 | **AND group** | "Query records in Data Service entity `CodingAgentsEvalEntity` where `Status` equals `'Active'` and `Score` is greater than `10`." | Verifies two conditions in a single AND group with globally sequential `ValueIndex`. | `GroupFilter` with `Operator="AND"`; two `SimpleFilter` entries; `ValueIndex` values are 0 and 1 |
+| I30 | **OR group** | "Query records in Data Service entity `CodingAgentsEvalEntity` where `Status` equals `'Active'` or `Status` equals `'Pending'`." | Verifies OR group — the agent must not default to AND. | `GroupFilter` with `Operator="OR"`; two `SimpleFilter` entries on `Status` |
+| I31 | **Nested groups (AND root with OR child)** | "Query records in Data Service entity `CodingAgentsEvalEntity` where `IsActive` is true and either `Score` is greater than `50` or `Status` equals `'Priority'`." | Verifies nested group structure: root AND group containing a leaf filter and a child OR group. | Root `GroupFilter` `Operator="AND"` with one `SimpleFilter` (IsActive) and one child `GroupFilter` `Operator="OR"` with two `SimpleFilter` entries; `ValueIndex` globally sequential across all filters |
+
+#### Sort and Pagination
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I32 | **Sort descending + Top + Skip + TotalRecords** | "Query records in Data Service entity `CodingAgentsEvalEntity`, sorted by `Score` from highest to lowest, returning the second page of 10 records. Include the total record count." | Verifies sort, pagination, and TotalRecords output wiring together. | `SortByField="Score"`; `SortAscending="[False]"`; `Top="[10]"`; `Skip="[10]"`; `TotalRecords` bound to a variable or out-argument |
+
+#### ChoiceSet and Relationship
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I33 | **Equals on ChoiceSetSingle** | "Query all records in Data Service entity `CodingAgentsEvalEntity` where `Category` equals `'Urgent'`." | Verifies filter on a ChoiceSetSingle field — same `Equals` operator but on a non-Basic FieldDisplayType. | `FilterArguments`: `Equals` on `Category`; `FilterValues`: `x:String` = `'Urgent'` |
+| I34 | **In on ChoiceSetMultiple** | "Query all records in Data Service entity `CodingAgentsEvalEntity` where `Tags` includes any of `'frontend'`, `'backend'`." | Verifies `In` on a multi-value choice field — uses `s:String[]`. | `FilterArguments`: `in` on `Tags`; `FilterValues`: `s:String[]` containing `'frontend'`, `'backend'` |
+| I35 | **Relationship dot-notation** | "Query all records in Data Service entity `CodingAgentsEvalFileEntity` where the related `Owner` entity's `Title` contains `'Admin'`." | Verifies the agent uses dot notation (`Owner.Title`) in the filter FieldName for relationship traversal. | `FilterArguments`: `Contains` on `Owner.Title`; `FilterValues`: `x:String` = `'Admin'` |
+
+#### Remaining Operators
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I36 | **StartsWith + EndsWith (combined)** | "Query all records in Data Service entity `CodingAgentsEvalEntity` where `Title` starts with `'INV'` and `Status` ends with `'ed'`." | Verifies `StartsWith` and `EndsWith` in a single AND filter — both are string-match direction operators, aggregated because they are structurally identical. | `FilterArguments`: AND group with `StartsWith` on `Title` and `EndsWith` on `Status`; `FilterValues`: two `x:String` entries; `ValueIndex` globally sequential |
+| I37 | **NotEquals + NotContains (combined)** | "Query all records in Data Service entity `CodingAgentsEvalEntity` where `Status` does not equal `'Closed'` and `Title` does not contain `'DRAFT'`." | Verifies `NotEquals` and `NotContains` — negation operators that agents frequently confuse with their positive counterparts, aggregated because they are structurally identical. | `FilterArguments`: AND group with `NotEquals` on `Status` and `NotContains` on `Title`; `FilterValues`: two `x:String` entries; `ValueIndex` globally sequential |
+
+---
+
+### 4.6 CreateMultipleEntityRecords
+
+> **Configuration baseline**: `x:TypeArguments="local:CodingAgentsEvalEntity"`, `EntityId` matches EntitiesStore.json, `InputRecords` as `ICollection<CodingAgentsEvalEntity>` (fully constructed entity objects), `OutputRecords` bound, `FailedRecords` bound and typed `IList(Of Tuple(Of String, CodingAgentsEvalEntity))`, no `RecordState`, no `IsInRecordView`, build passes.
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I38 | **Large batch** | "Create 10 records in Data Service entity `CodingAgentsEvalEntity` with Titles `'R01'` through `'R10'`." | Verifies the agent uses a single batch activity (not 10 individual Creates) and constructs a list of 10 entity objects. | Single `uda:CreateMultipleEntityRecords`; `InputRecords` constructs 10 `CodingAgentsEvalEntity` objects |
+| I39 | **ContinueBatchOnFailure=False** | "Create 3 records in Data Service entity `CodingAgentsEvalEntity`. Stop the entire batch immediately if any record fails." | Verifies `ContinueBatchOnFailure` is explicitly set to False (default is True). | `ContinueBatchOnFailure="[False]"` |
+| I40 | **FailedRecords Tuple type** | "Create 3 records in Data Service entity `CodingAgentsEvalEntity` and capture any failed records with their error messages." | Verifies `FailedRecords` is correctly typed — `Item1` is the error string, `Item2` is the failed entity. | `FailedRecords` bound to variable typed `IList(Of Tuple(Of String, CodingAgentsEvalEntity))` |
+
+---
+
+### 4.7 UpdateMultipleEntityRecords
+
+> **Configuration baseline**: `x:TypeArguments="local:CodingAgentsEvalEntity"`, `EntityId` matches EntitiesStore.json, `InputRecords` as `ICollection<CodingAgentsEvalEntity>` (each entity must have `Id` set), `OutputRecords` bound, `FailedRecords` bound and typed `IList(Of Tuple(Of String, CodingAgentsEvalEntity))`, build passes.
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I41 | **Id required on each entity** | "Update the `Title` field of 3 pre-existing records in Data Service entity `CodingAgentsEvalEntity` to `'Updated1'`, `'Updated2'`, `'Updated3'` respectively." | Verifies each entity in `InputRecords` carries its `Id` property — missing `Id` causes silent failure. | `InputRecords` expression constructs entities with both `.Id` and `.Title` set on each object |
+| I42 | **ContinueBatchOnFailure=False** | "Update 3 records in Data Service entity `CodingAgentsEvalEntity`. Abort the batch if any update fails." | Verifies `ContinueBatchOnFailure` is set to False. | `ContinueBatchOnFailure="[False]"` |
+| I43 | **FailedRecords Tuple type** | "Update 3 records in Data Service entity `CodingAgentsEvalEntity` and capture failed updates with their error messages." | Verifies `FailedRecords` for batch update uses the same Tuple type as batch create. | `FailedRecords` typed `IList(Of Tuple(Of String, CodingAgentsEvalEntity))` |
+
+---
+
+### 4.8 DeleteMultipleEntityRecords
+
+> **Configuration baseline**: `x:TypeArguments="local:CodingAgentsEvalEntity"`, `EntityId` matches EntitiesStore.json, `InputRecords` as `ICollection<Guid>` (**not** entity objects), `FailedRecords` bound and typed `IList(Of Guid)` (**not** Tuple), no `RecordState`, no `IsInRecordView`, build passes.
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I44 | **Guid input (not entity objects)** | "Delete 3 pre-existing records from Data Service entity `CodingAgentsEvalEntity` in a single batch operation." | Verifies `InputRecords` is a Guid collection — the most common batch delete type error. | `InputRecords` produces `ICollection(Of Guid)` or `List(Of Guid)`; entity objects not used |
+| I45 | **ContinueBatchOnFailure=False** | "Delete 3 records from Data Service entity `CodingAgentsEvalEntity`. Stop immediately if any deletion fails." | Verifies `ContinueBatchOnFailure` is set to False. | `ContinueBatchOnFailure="[False]"` |
+| I46 | **FailedRecords Guid type (not Tuple)** | "Delete 3 records from Data Service entity `CodingAgentsEvalEntity` and capture the IDs of any that could not be deleted." | Verifies `FailedRecords` for batch delete is `IList(Of Guid)` — not the Tuple type used by create/update. | `FailedRecords` typed `IList(Of Guid)` |
+
+---
+
+### 4.9 UploadFileToRecordField
+
+> **Configuration baseline**: `x:TypeArguments="local:CodingAgentsEvalFileEntity"`, `EntityId` matches EntitiesStore.json, `RecordId` bound, `Field` set by name (matching a `FieldDisplayType: "File"` entry), `OutputEntity` bound, no `RecordState`, no `IsInRecordView`, build passes.
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I47 | **FilePath input** | "Upload `'C:\docs\report.pdf'` to the `Report` field of a pre-existing record in Data Service entity `CodingAgentsEvalFileEntity`." | Verifies the `FilePath` input mode with the correct file field. | `FilePath` set to `"C:\docs\report.pdf"`; `FileResource` absent or null; `Field="Report"` |
+| I48 | **FileResource input** | "Upload a file resource to the `Attachment` field of a pre-existing record in Data Service entity `CodingAgentsEvalFileEntity`. The file is available as a resource object in variable `fileRes`." | Verifies the `FileResource` input mode (InArgument<IResource>) — mutually exclusive with `FilePath`. | `FileResource` bound to `fileRes`; `FilePath` absent or null |
+| I49 | **Field name case sensitivity** | "Upload `'C:\temp\file.txt'` to the field named `attachmentFile` (camelCase) on a pre-existing record in Data Service entity `CodingAgentsEvalFileEntity`." | Verifies the agent preserves exact field name casing — field names are case-sensitive at runtime. | `Field="attachmentFile"` exactly (not `AttachmentFile` or `attachment_file`) |
+
+---
+
+### 4.10 DownloadFileFromRecordField
+
+> **Configuration baseline**: `x:TypeArguments="local:CodingAgentsEvalFileEntity"`, `EntityId` matches EntitiesStore.json, `RecordId` bound, `Field` set by name, no `RecordState`, no `IsInRecordView`, no `ExpansionDepth`, build passes.
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I50 | **With explicit FilePath** | "Download the file from the `Attachment` field of a pre-existing record in Data Service entity `CodingAgentsEvalFileEntity` and save it to `'C:\temp\downloaded.txt'`." | Verifies `FilePath` and `DownloadedFileResource` are both set when a destination path is given. | `FilePath` set; `DownloadedFileResource` bound; `Field="Attachment"` |
+| I51 | **Without FilePath (resource only)** | "Download the file from the `Attachment` field of a pre-existing record in Data Service entity `CodingAgentsEvalFileEntity` and make it available for further processing." | Verifies `DownloadedFileResource` is wired when no path is specified. | `DownloadedFileResource` bound to variable; `FilePath` absent or null |
+| I52 | **DownloadedFileResource.LocalPath downstream** | "Download the file from the `Report` field of a pre-existing record in Data Service entity `CodingAgentsEvalFileEntity` and log its local file path." | Verifies the agent correctly models the `ILocalResource` type returned by the download. | `DownloadedFileResource` bound to typed variable; subsequent activity references `.LocalPath` on that variable |
+
+---
+
+### 4.11 DeleteFileFromRecordField
+
+> **Configuration baseline**: `x:TypeArguments="local:CodingAgentsEvalFileEntity"`, `EntityId` matches EntitiesStore.json, `RecordId` bound, `Field` set by name, `OutputEntity` bound, no `RecordState`, no `IsInRecordView`, build passes.
+
+| ID | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|--------|--------------|---------------------|
+| I53 | **Basic file delete + OutputEntity** | "Delete the file from the `Attachment` field of a pre-existing record in Data Service entity `CodingAgentsEvalFileEntity` and return the updated entity state." | Verifies `OutputEntity` is wired — unlike `DeleteEntityRecord`, this activity returns the entity post-deletion. | `OutputEntity` bound to a variable or out-argument |
+| I54 | **ContinueOnError=True** | "Delete the file from the `Report` field of a pre-existing record in Data Service entity `CodingAgentsEvalFileEntity`. The workflow should proceed even if no file is attached." | Verifies `ContinueOnError` on a file delete activity. | `ContinueOnError="[True]"` |
+
+---
+
+### 4.12 Error-Path Scenarios
+
+> These scenarios verify the agent handles activity failures correctly — not just setting `ContinueOnError`, but acting on the failure downstream. Each tests a single activity's error surface.
+
+| ID | Activity | Scenario | Prompt | Eval Summary | Key Semantic Checks |
+|----|----------|----------|--------|--------------|---------------------|
+| I55 | `CreateEntityRecord` | **ContinueOnError + downstream null guard** | "Create a record in Data Service entity `CodingAgentsEvalEntity` with `Title` `'MayFail'`. The activity should continue on error. After the create, log the record's `Title` — but only if the record was actually created." | Verifies the agent adds a conditional check on `OutputEntity` before accessing its properties downstream when `ContinueOnError` is True — without the guard, a failed create causes a NullReferenceException on the next step. | `ContinueOnError="[True]"`; conditional (`If` or `FlowDecision`) checks `OutputEntity IsNot Nothing` before the downstream activity that accesses `OutputEntity.Title` |
+| I56 | `CreateMultipleEntityRecords` | **FailedRecords iteration and logging** | "Create 5 records in Data Service entity `CodingAgentsEvalEntity` with Titles `'F01'` through `'F05'`. After the batch, iterate over any failed records and log each error message alongside the failed record's `Title`." | Verifies the agent consumes `FailedRecords` — iterates the `Tuple(Of String, Entity)` list and accesses both `.Item1` (error string) and `.Item2` (failed entity). | `FailedRecords` bound to typed variable; `ForEach` or equivalent iterates `FailedRecords`; loop body accesses `.Item1` (error message) and `.Item2.Title` (failed entity field) |
+| I57 | `UpdateMultipleEntityRecords` | **FailedRecords retry** | "Update 3 pre-existing records in Data Service entity `CodingAgentsEvalEntity`, setting `Status` to `'Processed'`. If any updates fail, retry only the failed records once more." | Verifies the agent extracts failed entities from `FailedRecords`, reconstructs an input collection from `.Item2`, and calls a second `UpdateMultipleEntityRecords` — gated by a count check to avoid an empty retry. | First `UpdateMultipleEntityRecords` has `FailedRecords` bound; conditional checks `FailedRecords.Count > 0`; second `UpdateMultipleEntityRecords` with `InputRecords` sourced from first batch's `FailedRecords` `.Item2` values |
+
+---
+
+## 5. Quality
+
+**Purpose**: Verify the agent can compose multiple activities into a coherent, realistic workflow that resembles what a real customer would ask. Quality scenarios span activity categories — record CRUD, batch operations, file operations, filtered queries — in a single workflow. They test the plumbing between steps, not the configuration of individual activities.
+
+**Evaluation**: Assertions focus on workflow-level correctness:
+- Correct activities present in the right sequence
+- Output-to-input data flow (variable chaining between steps)
+- Type consistency (`x:TypeArguments` shared across all activities for the same entity)
+- Structural decisions at activity boundaries (e.g. file fields excluded from RecordState, Guid collection for batch delete)
+- Build passes
+
+Per-activity property details (RecordState shape, filter operator encoding, field-level bindings) are intentionally NOT asserted — that is Integration's job.
+
+---
+
+### E1 — Ingest, Filter, and Clean
+
+> "Create 5 records in Data Service entity `CodingAgentsEvalEntity` with Titles `'ORD-001'` through `'ORD-005'` and `Score` values `10`, `20`, `60`, `80`, `30`. Query all records where `Score` is greater than `50`, sorted by `Score` descending. Update the matching records to set `Status` to `'Priority'`. Then delete those same records in batch."
+
+**Eval summary:** Tests the full batch lifecycle with a filter-driven pivot. The key composition challenge is the type switch between batch update (`ICollection<Entity>` with `.Id`) and batch delete (`ICollection<Guid>`) operating on the same result set.
+
+| Step | Activity | Plumbing Assertions |
 |------|----------|---------------------|
-| 1 | `CreateEntityRecord` | `InputEntityInFieldView` sets Title; `OutputEntity` → `createdRecord` |
-| 2 | `GetEntityRecordById` | `RecordId` bound to `createdRecord.Id`; `OutputEntity` → `fetchedRecord` |
-| 3 | `UpdateEntityRecord` | `RecordId` bound to `createdRecord.Id`; `InputEntityInFieldView` sets Title to `"Updated"`; `RecordState` updated; `OutputEntity` wired |
-| 4 | `DeleteEntityRecord` | `RecordId` bound to `createdRecord.Id`; no `RecordState`, no `OutputEntity` |
+| 1 | `CreateMultipleEntityRecords` | `OutputRecords` → `createdRecords`; 5 entity objects in `InputRecords` |
+| 2 | `QueryEntityRecords` | `OutputRecords` → `highScoreRecords`; filter present on `Score` |
+| 3 | `UpdateMultipleEntityRecords` | `InputRecords` sourced from `highScoreRecords` (entity objects with `.Id`); `OutputRecords` or `FailedRecords` wired |
+| 4 | `DeleteMultipleEntityRecords` | `InputRecords` is `ICollection<Guid>` — IDs extracted from step 2 or 3 output; NOT entity objects |
 
-**Build condition:** `uip rpa get-errors` exits 0, no type errors, four-namespace block present.
-
----
-
-### E2 — Batch Create + Query + Batch Delete
-
-> "Create 5 records in Data Service entity `CodingAgentsBuildTimeEntity`, each with a `Title` field set to `"Batch Item 1"` through `"Batch Item 5"`. Query all records in the entity. Then delete all 5 created records."
-
-**Eval summary:** Verifies that `CreateMultipleEntityRecords` outputs are correctly piped into a LINQ ID-extraction expression for `DeleteMultipleEntityRecords`, and that `QueryEntityRecords` uses the same typed `x:TypeArguments`.
-
-| Step | Activity | Key XAML Assertions |
-|------|----------|---------------------|
-| 1 | `CreateMultipleEntityRecords` | `InputRecords` is `ICollection<CodingAgentsBuildTimeEntity>` (5 items); `OutputRecords` → `createdRecords` |
-| 2 | `QueryEntityRecords` | `Top="[100]"`; `OutputRecords` → `queryResult`; `FilterArguments` absent or null |
-| 3 | `DeleteMultipleEntityRecords` | `InputRecords` is `ICollection<Guid>` — expression extracts IDs from `createdRecords`; `FailedRecords` wired |
-
-**Build condition:** `uip rpa get-errors` exits 0; all three activities share the same `local:CodingAgentsBuildTimeEntity` type argument.
+**Build condition:** `uip rpa get-errors` exits 0; all activities share `x:TypeArguments="local:CodingAgentsEvalEntity"`.
 
 ---
 
-### E3 — Batch Create + Batch Update + Filter Query
+### E2 — Document Lifecycle Across Multiple Records
 
-> "Create 3 records in Data Service entity `CodingAgentsBuildTimeEntity` with `Title` values `"Alpha"`, `"Beta"`, `"Gamma"` and a numeric `Score` field set to `1`, `2`, `3` respectively. Update all 3 records to set `Score` to `10`. Then query records where `Score` equals `10` and capture the results."
+> "Create 3 records in Data Service entity `CodingAgentsEvalFileEntity` with Titles `'Contract-A'`, `'Contract-B'`, `'Contract-C'`. Upload `'C:\docs\a.pdf'` to the `Contract` field of the first record, `'C:\docs\b.pdf'` to the second, and `'C:\docs\c.pdf'` to the third. Download the file from each record's `Contract` field. Then delete the file attachment from all 3 records."
 
-**Eval summary:** Verifies batch update correctly uses entity-typed `InputRecords` (not Guids), and that the filter query correctly encodes an equality predicate on a numeric field.
+**Eval summary:** Tests file operations across multiple records. The key plumbing challenge is iterating over batch-created records and maintaining correct `RecordId` binding for each file operation, with consistent `Field` value across upload, download, and delete.
 
-| Step | Activity | Key XAML Assertions |
+| Step | Activity | Plumbing Assertions |
 |------|----------|---------------------|
-| 1 | `CreateMultipleEntityRecords` | `InputRecords` constructs 3 `CodingAgentsBuildTimeEntity` objects with `Title` and `Score`; `OutputRecords` → `createdRecords` |
-| 2 | `UpdateMultipleEntityRecords` | `InputRecords` is `ICollection<CodingAgentsBuildTimeEntity>` with `.Id` wired from `createdRecords` and `Score = 10`; `FailedRecords` wired |
-| 3 | `QueryEntityRecords` | `FilterArguments` encodes `Score Equals 10`; `OutputRecords` → `filtered` |
+| 1 | `CreateMultipleEntityRecords` | `OutputRecords` → `createdRecords`; 3 entity objects |
+| 2 | `UploadFileToRecordField` (×3) | Each `RecordId` bound to a distinct `createdRecords` item; `Field="Contract"` on all |
+| 3 | `DownloadFileFromRecordField` (×3) | Each `RecordId` matches the upload target; `Field="Contract"` on all; `DownloadedFileResource` wired |
+| 4 | `DeleteFileFromRecordField` (×3) | Each `RecordId` matches; `Field="Contract"` on all; `OutputEntity` wired |
 
-**Build condition:** `uip rpa get-errors` exits 0; `UpdateMultipleEntityRecords` uses entity objects (not Guids) in `InputRecords`.
+**Build condition:** `uip rpa get-errors` exits 0; all activities share `x:TypeArguments="local:CodingAgentsEvalFileEntity"`; `Contract` field absent from any `RecordState`.
 
 ---
 
-### E4 — Full File Lifecycle
+### E3 — Single-Record Full Lifecycle
 
-> "Create a record in Data Service entity `CodingAgentsBuildTimeFileEntity` with a `Title` field set to `"File Test"`. Attach the file at `'C:\temp\source.txt'` to the `Attachment` field. Download the file to `'C:\temp\copy.txt'`. Then remove the attachment from the record."
+> "Create a record in Data Service entity `CodingAgentsEvalEntity` with `Title` `'Lifecycle Test'` and `Score` `42`. Read the record back by its ID. Update `Score` to `100`. Read it again to verify the update. Then delete the record."
 
-**Eval summary:** Verifies the complete file attach/detach cycle — correct field-name binding across all three file activities, no RecordState on file activities, and proper output wiring for `DownloadedFileResource` and `OutputEntity`.
+**Eval summary:** Exercises all 5 individual record activities in a single workflow. The primary plumbing test is consistent `createdRecord.Id` chaining across all steps, and that Read activities carry no write-mode properties while Create/Update do.
 
-| Step | Activity | Key XAML Assertions |
+| Step | Activity | Plumbing Assertions |
 |------|----------|---------------------|
-| 1 | `CreateEntityRecord` | `Title` in `InputEntityInFieldView`; `Attachment` field **not** in `RecordState`; `OutputEntity` → `createdRecord` |
-| 2 | `UploadFileToRecordField` | `RecordId` = `createdRecord.Id`; `Field="Attachment"`; `FilePath="C:\temp\source.txt"`; `OutputEntity` → `recordAfterUpload` |
-| 3 | `DownloadFileFromRecordField` | `RecordId` = `createdRecord.Id`; `Field="Attachment"`; `FilePath="C:\temp\copy.txt"`; `DownloadedFileResource` wired |
-| 4 | `DeleteFileFromRecordField` | `RecordId` = `createdRecord.Id`; `Field="Attachment"`; `OutputEntity` wired |
+| 1 | `CreateEntityRecord` | `OutputEntity` → `createdRecord` |
+| 2 | `GetEntityRecordById` | `RecordId` = `createdRecord.Id`; `OutputEntity` → `fetchedRecord` |
+| 3 | `UpdateEntityRecord` | `RecordId` = `createdRecord.Id`; `OutputEntity` wired |
+| 4 | `GetEntityRecordById` | `RecordId` = `createdRecord.Id`; `OutputEntity` → `verifiedRecord` |
+| 5 | `DeleteEntityRecord` | `RecordId` = `createdRecord.Id`; no `OutputEntity` |
 
-**Build condition:** `uip rpa get-errors` exits 0; no `RecordState` on file activities; `Field` value identical across steps 2, 3, 4.
+**Build condition:** `uip rpa get-errors` exits 0; all activities share `x:TypeArguments="local:CodingAgentsEvalEntity"`; Get and Delete carry no `RecordState` or `IsInRecordView`.
 
 ---
 
-### E5 — Paginated Query Across Two Pages
+### E4 — Compound Filter with Batch Update and Verification
 
-> "Create 15 records in Data Service entity `CodingAgentsBuildTimeEntity`, each with a `Title` field. Query the first 10 records. Then query the next 5 using the appropriate skip offset. Capture both result sets and the total record count."
+> "Create 3 records in Data Service entity `CodingAgentsEvalEntity`: (`Title`=`'Alpha'`, `Score`=`5`, `IsActive`=`true`), (`Title`=`'Beta'`, `Score`=`15`, `IsActive`=`true`), (`Title`=`'Gamma'`, `Score`=`25`, `IsActive`=`false`). Query records where `IsActive` is true and `Score` is greater than `10`. Update the matching records to set `Score` to `0`. Then query again where `Score` equals `0` to verify, and return the total count of verified records as a workflow output."
 
-**Eval summary:** Verifies that `Top` and `Skip` are correctly encoded as integer expressions on two separate `QueryEntityRecords` activities, and that `TotalRecords` is wired on at least one call.
+**Eval summary:** Tests compound filter → batch update → verification query. The plumbing challenges are: compound AND filter on two different field types (BIT + INT), ID propagation from query to batch update, and `TotalRecords` wired as a workflow output on the verification query.
 
-| Step | Activity | Key XAML Assertions |
+| Step | Activity | Plumbing Assertions |
 |------|----------|---------------------|
-| 1 | `CreateMultipleEntityRecords` | 15 entity objects in `InputRecords`; `OutputRecords` wired |
-| 2 | `QueryEntityRecords` (page 1) | `Top="[10]"`; `Skip="[0]"` or absent; `OutputRecords` → `page1`; `TotalRecords` → `total` |
-| 3 | `QueryEntityRecords` (page 2) | `Top="[10]"` or `"[5]"`; `Skip="[10]"`; `OutputRecords` → `page2` |
+| 1 | `CreateMultipleEntityRecords` | `OutputRecords` → `createdRecords`; 3 entity objects |
+| 2 | `QueryEntityRecords` | Compound filter present (2 conditions); `OutputRecords` → `matches` |
+| 3 | `UpdateMultipleEntityRecords` | `InputRecords` sourced from `matches` with `.Id` set; `OutputRecords` or `FailedRecords` wired |
+| 4 | `QueryEntityRecords` | Verification filter on `Score`; `OutputRecords` wired; `TotalRecords` → workflow out-argument |
 
-**Build condition:** `uip rpa get-errors` exits 0; `Skip` uses an integer expression, not a string literal.
+**Build condition:** `uip rpa get-errors` exits 0; all activities share `x:TypeArguments="local:CodingAgentsEvalEntity"`; `TotalRecords` bound to a workflow-level out-argument.
 
 ---
 
-### E6 — All Scalar Field Types
+### E5 — CRUD + File Mixed Workflow
 
-> "Create a record in Data Service entity `CodingAgentsBuildTimeEntity` that has fields of each scalar type: a text field `Title`, an integer field `Score`, a decimal field `Price`, a boolean field `IsActive`, a date field `EventDate`, and a datetime field `ScheduledAt`. Then read the record back by its ID."
+> "Create a record in Data Service entity `CodingAgentsEvalFileEntity` with `Title` set to `'Contract Doc'`. Upload `'C:\contracts\final.pdf'` to the `Contract` field. Update the record's `Title` to `'Signed Contract'`. Read the record back by its ID. Download the `Contract` file. Then delete the file from the `Contract` field."
 
-**Eval summary:** Verifies the agent produces correct VB.NET literal syntax for every scalar SqlType — string, integer, decimal, Boolean, Date, and DateTimeOffset — all encoded in `InputEntityInFieldView` with matching `RecordState` entries.
+**Eval summary:** Exercises all three activity categories (record CRUD, file upload/download, file delete) in a single workflow on a file entity. The key plumbing tests are: `Contract` field never appears in any `RecordState` (not on Create, not on Update), consistent `RecordId` chaining across 6 activities, and correct `Field` value on all file operations.
 
-| Step | Activity | Key XAML Assertions |
+| Step | Activity | Plumbing Assertions |
 |------|----------|---------------------|
-| 1 | `CreateEntityRecord` | `InputEntityInFieldView` includes all 6 fields with correct VB literals (e.g. `New Date(...)`, `True`/`False`, `Decimal` literal, integer literal); `RecordState` has one `DynamicEntityField` per field |
-| 2 | `GetEntityRecordById` | `RecordId` = `createdRecord.Id`; `OutputEntity` → out-argument; no `RecordState` |
+| 1 | `CreateEntityRecord` | `OutputEntity` → `createdRecord`; `Contract` absent from `RecordState` |
+| 2 | `UploadFileToRecordField` | `RecordId` = `createdRecord.Id`; `Field="Contract"` |
+| 3 | `UpdateEntityRecord` | `RecordId` = `createdRecord.Id`; `Contract` absent from `RecordState` |
+| 4 | `GetEntityRecordById` | `RecordId` = `createdRecord.Id`; `OutputEntity` wired |
+| 5 | `DownloadFileFromRecordField` | `RecordId` = `createdRecord.Id`; `Field="Contract"`; `DownloadedFileResource` wired |
+| 6 | `DeleteFileFromRecordField` | `RecordId` = `createdRecord.Id`; `Field="Contract"`; `OutputEntity` wired |
 
-**Build condition:** `uip rpa get-errors` exits 0; no type argument errors; all 6 field types compile cleanly.
+**Build condition:** `uip rpa get-errors` exits 0; all 6 activities share `x:TypeArguments="local:CodingAgentsEvalFileEntity"`; `Contract` absent from `RecordState` on steps 1 and 3.
 
 ---
 
-### E7 — ContinueOnError Recovery
+### E6 — Error Recovery in Multi-Step Pipeline
 
-> "Attempt to create a record in Data Service entity `CodingAgentsBuildTimeEntity` with `Title` set to `"Primary"`. If the step fails, the workflow should continue and create a fallback record with `Title` set to `"Fallback"`."
+> "Create a record in Data Service entity `CodingAgentsEvalEntity` with `Title` `'Risky Op'` and `Score` `50`. Attempt to update the record's `Score` to `999` — wrap this update in error handling so the workflow continues if it fails. If the update succeeded, query all records where `Score` equals `999`. If the update failed, log the error and delete the original record as cleanup."
 
-**Eval summary:** Verifies `ContinueOnError="[True]"` is set on the first `CreateEntityRecord` and a second create activity follows it unconditionally — demonstrating the agent correctly models the ContinueOnError recovery pattern.
+**Eval summary:** Tests TryCatch-based error handling across a multi-step workflow. The agent must wrap the Update in a `TryCatch`, branch on success vs failure, and execute different activity paths in each branch — while maintaining consistent `RecordId` chaining. This is the only scenario that tests branching control flow around DataService activities.
 
-| Step | Activity | Key XAML Assertions |
+| Step | Activity | Plumbing Assertions |
 |------|----------|---------------------|
-| 1 | `CreateEntityRecord` | `ContinueOnError="[True]"`; `InputEntityInFieldView` sets Title to `"Primary"` |
-| 2 | `CreateEntityRecord` | `ContinueOnError` absent or `"[False]"`; `InputEntityInFieldView` sets Title to `"Fallback"` |
+| 1 | `CreateEntityRecord` | `OutputEntity` → `createdRecord` |
+| 2 | `UpdateEntityRecord` (inside TryCatch Try block) | `RecordId` = `createdRecord.Id`; wrapped in `TryCatch` activity |
+| 3a | `QueryEntityRecords` (Try block, after Update) | Filter on `Score`; only executes if update succeeded |
+| 3b | `DeleteEntityRecord` (Catch block) | `RecordId` = `createdRecord.Id`; inside a `Catch` block; error logged |
 
-**Build condition:** `uip rpa get-errors` exits 0; `ContinueOnError` is a bracketed Boolean expression `[True]`, not a string literal.
+**Build condition:** `uip rpa get-errors` exits 0; `TryCatch` activity present with at least one typed `Catch` entry (e.g., `Catch(Of Exception)`); all DataService activities share `x:TypeArguments="local:CodingAgentsEvalEntity"`.
 
 ---
 
-### E8 — Partial Batch Failure Handling
+## Action Items
 
-> "Create 3 records in Data Service entity `CodingAgentsBuildTimeEntity` — two with valid `Title` values and one intentionally missing a required field. Wire both the successfully created records and the failed ones to separate workflow outputs."
-
-**Eval summary:** Verifies `OutputRecords` and `FailedRecords` are both wired on `CreateMultipleEntityRecords`, and that the agent correctly types `FailedRecords` as `IList(Of Tuple(Of String, CodingAgentsBuildTimeEntity))`.
-
-| Step | Activity | Key XAML Assertions |
-|------|----------|---------------------|
-| 1 | `CreateMultipleEntityRecords` | `InputRecords` has 3 objects (2 with Title, 1 without required field); `OutputRecords` → out-argument `SucceededRecords`; `FailedRecords` → out-argument `FailedItems` |
-
-**Build condition:** `uip rpa get-errors` exits 0; `FailedRecords` typed as `IList(Of Tuple(Of String, CodingAgentsBuildTimeEntity))`; `OutputRecords` typed as `IList<CodingAgentsBuildTimeEntity>`.
-
----
-
-### E9 — Filter with Sort
-
-> "Query all records in Data Service entity `CodingAgentsBuildTimeEntity` where the `Score` field is greater than `5`. Sort the results by `Score` descending. Capture the first result's ID and delete that record."
-
-**Eval summary:** Verifies that `FilterArguments` encodes a `MoreThan` predicate, an `OrderBy` or sort expression is present, and the ID extracted from `OutputRecords` is correctly fed into `DeleteEntityRecord`.
-
-| Step | Activity | Key XAML Assertions |
-|------|----------|---------------------|
-| 1 | `QueryEntityRecords` | `FilterArguments` encodes `Score MoreThan 5`; sort property set descending; `OutputRecords` → `results` |
-| 2 | `DeleteEntityRecord` | `RecordId` bound to `results(0).Id` or equivalent first-item expression |
-
-**Build condition:** `uip rpa get-errors` exits 0; no `RecordState` on `QueryEntityRecords`; `DeleteEntityRecord` has no `RecordState` or `InputEntityInFieldView`.
-
----
-
-### E10 — File + CRUD Combined
-
-> "Create a record in Data Service entity `CodingAgentsBuildTimeFileEntity` with `Title` set to `"Doc Record"`. Attach the file `'C:\docs\contract.pdf'` to the `Contract` field. Update the record's `Title` to `"Signed Doc"`. Then read the record back."
-
-**Eval summary:** Verifies the agent correctly interleaves a file activity between record mutation steps — particularly that `UpdateEntityRecord` does not include the `Contract` file field in its `RecordState`, and that all activities share the same typed `x:TypeArguments`.
-
-| Step | Activity | Key XAML Assertions |
-|------|----------|---------------------|
-| 1 | `CreateEntityRecord` | Title in `RecordState`; `Contract` file field absent from `RecordState`; `OutputEntity` → `createdRecord` |
-| 2 | `UploadFileToRecordField` | `RecordId` = `createdRecord.Id`; `Field="Contract"`; `OutputEntity` → `recordAfterUpload` |
-| 3 | `UpdateEntityRecord` | `RecordId` = `createdRecord.Id`; `RecordState` includes only `Title`; `Contract` absent from `RecordState` |
-| 4 | `GetEntityRecordById` | `RecordId` = `createdRecord.Id`; `OutputEntity` → out-argument |
-
-**Build condition:** `uip rpa get-errors` exits 0; `Contract` field absent from `RecordState` on all non-file activities.
+1. **Implement as coder_eval YAML task files**: Translate all 71 scenarios into YAML task definitions in `tests/tasks/uipath-rpa/data-service/`. Follow the format in [tests/README.md](https://github.com/UiPath/skills/blob/main/tests/README.md) and [TASK_DEFINITION_GUIDE.md](https://github.com/UiPath/coder_eval/blob/main/docs/TASK_DEFINITION_GUIDE.md).
+2. **Investigate brownfield support**: Determine whether coder_eval supports pre-seeded projects (existing `Main.xaml` with non-DataService activities). If supported, add a brownfield Smoke test (S4) where the agent adds DataService activities to an existing workflow.
