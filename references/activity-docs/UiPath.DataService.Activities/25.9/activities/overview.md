@@ -40,16 +40,19 @@ Only entities explicitly imported via Studio are available as CLR types in the g
 xmlns:uda="clr-namespace:UiPath.DataService.Activities;assembly=UiPath.DataService.Activities.Core"
 xmlns:udam="clr-namespace:UiPath.DataService.Activities.Models;assembly=UiPath.DataService.Activities.Core"
 xmlns:udd="clr-namespace:UiPath.DataService.Definition;assembly=UiPath.DataService.Definition"
+xmlns:upr="clr-namespace:UiPath.Platform.ResourceHandling;assembly=UiPath.Platform"
 xmlns:local="clr-namespace:<ProjectName>;assembly=DataService.<ProjectName>"
 ```
 
-The `local` namespace **must** include `assembly=DataService.<ProjectName>`. Without the assembly qualifier, the XAML parser cannot locate entity types: `Cannot create unknown type '{clr-namespace:<ProjectName>}EntityName'`.
+- The `local` namespace **must** include `assembly=DataService.<ProjectName>`. Without the assembly qualifier, the XAML parser cannot locate entity types: `Cannot create unknown type '{clr-namespace:<ProjectName>}EntityName'`.
+- The `upr` namespace is required for file activity variables — `DownloadFileFromRecordField.DownloadedFileResource` outputs `upr:ILocalResource`. See [DownloadFileFromRecordField](DownloadFileFromRecordField.md).
 
 Namespace imports for `TextExpression.NamespacesForImplementation`:
 ```xml
 <x:String>UiPath.DataService.Activities</x:String>
 <x:String>UiPath.DataService.Activities.Models</x:String>
 <x:String>UiPath.DataService.Definition</x:String>
+<x:String>UiPath.Platform.ResourceHandling</x:String>
 <x:String><ProjectName></x:String>
 ```
 
@@ -57,6 +60,7 @@ Assembly references for `TextExpression.ReferencesForImplementation`:
 ```xml
 <AssemblyReference>UiPath.DataService.Activities.Core</AssemblyReference>
 <AssemblyReference>UiPath.DataService.Definition</AssemblyReference>
+<AssemblyReference>UiPath.Platform</AssemblyReference>
 <AssemblyReference>DataService.<ProjectName></AssemblyReference>
 ```
 

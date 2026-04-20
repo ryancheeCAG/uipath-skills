@@ -17,56 +17,73 @@ Uploads a file to a file-type field on an entity record. Category: **DataService
 | `ContinueOnError` | `InArgument<bool>` | No | `false` | Common | Continue workflow on error |
 | `TimeoutInMs` | `InArgument<int>` | No | `30000` | Common | Timeout in milliseconds |
 
-> **Solution scope properties** (`ScopeValue`, `SolutionEntityKey`, `SolutionEntityName`) only apply when the project has a SolutionId. For standalone projects, omit them. See [overview — Solution Scope Properties](overview.md#solution-scope-properties-conditional) and [Solution Context](overview.md#solution-context-folder-vs-tenant-scope).
+> **Solution scope properties** (`ScopeValue`, `SolutionEntityKey`, `SolutionEntityName`) only apply when the project has a SolutionId. For standalone projects, set `ScopeValue="Tenant"` and `SolutionEntityKey`/`SolutionEntityName` to `{x:Null}`. See [overview — Solution Scope Properties](overview.md#solution-scope-properties-conditional) and [Solution Context](overview.md#solution-context-folder-vs-tenant-scope).
 
-## XAML Example
+## XAML Example — Upload from FilePath
 
 ```xml
 <uda:UploadFileToRecordField
     x:TypeArguments="local:ENTITY_NAME"
+    FileResource="{x:Null}"
+    InputEntity="{x:Null}"
+    OutputEntity="{x:Null}"
+    SolutionEntityKey="{x:Null}"
+    SolutionEntityName="{x:Null}"
     ContinueOnError="False"
     DisplayName="Upload File to ENTITY_NAME"
     EntityId="ENTITY_GUID"
-    RecordId="[recordIdVariable]"
-    Field="[&quot;FileFieldName&quot;]"
-    FilePath="[&quot;C:\\path\\to\\file.pdf&quot;]"
     ExpansionDepth="2"
-    OutputEntity="[updatedEntity]"
+    Field="FILE_FIELD_NAME"
+    FilePath="C:\path\to\file.pdf"
+    RecordId="[recordIdVariable]"
+    ScopeValue="Tenant"
     TimeoutInMs="30000" />
 ```
 
-## Round-Trip Pattern (Download → Upload)
+- `Field` — bare string, not expression-wrapped. Use the field name exactly as it appears in `EntitiesStore.json`
+- `FilePath` — bare string for literal paths. Use expression syntax (`[variableName]`) only when the path comes from a variable
+- When using `FilePath`, set `FileResource="{x:Null}"`
+- Studio explicitly serializes unused nullable properties as `{x:Null}` — include them
 
-When copying a file from one record to another, use `FileResource` — not `FilePath` — to chain the download output directly:
+## XAML Example — Upload from FileResource (Round-Trip)
 
 ```xml
-<!-- Download captures DownloadedFileResource (ILocalResource) -->
-<uda:DownloadFileFromRecordField
-    x:TypeArguments="local:SOURCE_ENTITY"
-    DisplayName="Download File"
-    EntityId="SOURCE_ENTITY_GUID"
-    RecordId="[sourceRecordId]"
-    Field="[&quot;FileFieldName&quot;]"
-    DownloadedFileResource="[downloadedFile]"
-    TimeoutInMs="30000" />
-
-<!-- Upload consumes it via FileResource (IResource) — preserves original filename -->
 <uda:UploadFileToRecordField
-    x:TypeArguments="local:TARGET_ENTITY"
-    DisplayName="Upload File"
-    EntityId="TARGET_ENTITY_GUID"
-    RecordId="[targetRecordId]"
-    Field="[&quot;FileFieldName&quot;]"
-    FileResource="[downloadedFile]"
+    x:TypeArguments="local:ENTITY_NAME"
+    FilePath="{x:Null}"
+    InputEntity="{x:Null}"
+    OutputEntity="{x:Null}"
+    SolutionEntityKey="{x:Null}"
+    SolutionEntityName="{x:Null}"
+    ContinueOnError="False"
+    DisplayName="Upload File to ENTITY_NAME"
+    EntityId="ENTITY_GUID"
     ExpansionDepth="2"
+    Field="FILE_FIELD_NAME"
+    FileResource="[downloadedFileResource]"
+    RecordId="[recordIdVariable]"
+    ScopeValue="Tenant"
     TimeoutInMs="30000" />
 ```
 
-> **Prefer `FileResource` over `FilePath`** when the source is another activity's output. `ILocalResource` (from `DownloadFileFromRecordField`) is assignment-compatible with `IResource`. Using `FilePath` with a fabricated temp path loses the original filename metadata.
+- When using `FileResource`, set `FilePath="{x:Null}"`
+- `downloadedFileResource` is typed as `upr:ILocalResource` (`UiPath.Platform.ResourceHandling.ILocalResource`) — the output of `DownloadFileFromRecordField.DownloadedFileResource`
+- `ILocalResource` is assignment-compatible with `IResource` (the `FileResource` input type) — no cast needed
+- **This is the preferred pattern for round-trip file copies** — it preserves the original filename. See [DownloadFileFromRecordField — Round-Trip Pattern](DownloadFileFromRecordField.md#round-trip-pattern-download--upload)
+
+## When to Use FilePath vs FileResource
+
+| Scenario | Use | Set the other to |
+|----------|-----|-----------------|
+| File comes from another activity in the same workflow (e.g., `DownloadFileFromRecordField`) | `FileResource="[downloadedFileResource]"` | `FilePath="{x:Null}"` |
+| File is at a known path on disk (user-specified or hardcoded) | `FilePath="C:\path\to\file.pdf"` | `FileResource="{x:Null}"` |
+
+**Never fabricate a temp file path** to bridge two activities. If the file originates from `DownloadFileFromRecordField`, chain via `FileResource` — it preserves the original filename. Fabricated paths (e.g., `"C:\temp\file_" & guid & ".pdf"`) lose the filename and create cleanup obligations.
 
 ## Key Rules
 
-- Either `FilePath` or `FileResource` must be provided — if both are null, validation fails
+- Either `FilePath` or `FileResource` must be provided — if both are `{x:Null}`, validation fails
 - **Prefer `FileResource` for round-trip file copies** — pass the `ILocalResource` from download directly; this preserves the original filename
 - If `FileResource` is provided, it is resolved to a local path at runtime via `ToLocalResource().ResolveAsync()`
 - The `Field` property must match a field with `FieldDisplayType: "File"` in `EntitiesStore.json`
+- `Field` and `FilePath` accept bare strings for literal values — do not wrap in expression brackets (`[...]`) unless the value comes from a variable

@@ -15,7 +15,7 @@ Downloads a file from a file-type field on an entity record. Category: **DataSer
 | `ContinueOnError` | `InArgument<bool>` | No | `false` | Common | Continue workflow on error |
 | `TimeoutInMs` | `InArgument<int>` | No | `30000` | Common | Timeout in milliseconds |
 
-> **Solution scope properties** (`ScopeValue`, `SolutionEntityKey`, `SolutionEntityName`) only apply when the project has a SolutionId. For standalone projects, omit them. See [overview — Solution Scope Properties](overview.md#solution-scope-properties-conditional) and [Solution Context](overview.md#solution-context-folder-vs-tenant-scope).
+> **Solution scope properties** (`ScopeValue`, `SolutionEntityKey`, `SolutionEntityName`) only apply when the project has a SolutionId. For standalone projects, set `ScopeValue="Tenant"` and `SolutionEntityKey`/`SolutionEntityName` to `{x:Null}`. See [overview — Solution Scope Properties](overview.md#solution-scope-properties-conditional) and [Solution Context](overview.md#solution-context-folder-vs-tenant-scope).
 
 No `ExpansionDepth` — download returns a file, not an entity.
 
@@ -24,51 +24,85 @@ No `ExpansionDepth` — download returns a file, not an entity.
 ```xml
 <uda:DownloadFileFromRecordField
     x:TypeArguments="local:ENTITY_NAME"
+    FilePath="{x:Null}"
+    SolutionEntityKey="{x:Null}"
+    SolutionEntityName="{x:Null}"
     ContinueOnError="False"
     DisplayName="Download File from ENTITY_NAME"
+    DownloadedFileResource="[downloadedFileResource]"
     EntityId="ENTITY_GUID"
+    Field="FILE_FIELD_NAME"
     RecordId="[recordIdVariable]"
-    Field="[&quot;FileFieldName&quot;]"
-    FilePath="[&quot;C:\\downloads\\output.pdf&quot;]"
-    DownloadedFileResource="[fileResource]"
+    ScopeValue="Tenant"
     TimeoutInMs="30000" />
 ```
+
+- `Field` — bare string, not expression-wrapped. Use the field name exactly as it appears in `EntitiesStore.json`
+- `FilePath` — set to `{x:Null}` when using `DownloadedFileResource` (preferred). If saving to a specific path, use a bare string: `FilePath="C:\downloads\output.pdf"`
+- Studio explicitly serializes unused nullable properties as `{x:Null}` — include them
+
+### Variable Declaration
+
+```xml
+<Variable x:TypeArguments="upr:ILocalResource" Name="downloadedFileResource" />
+```
+
+Requires `xmlns:upr="clr-namespace:UiPath.Platform.ResourceHandling;assembly=UiPath.Platform"` on the root `<Activity>` element. See [overview — XAML Namespace Declarations](overview.md#xaml-namespace-declarations).
 
 ## Round-Trip Pattern (Download → Upload)
 
 When copying a file between records, chain `DownloadedFileResource` directly into `UploadFileToRecordField.FileResource`. This preserves the original filename and avoids fabricating temp paths.
 
 ```xml
-<!-- Step 1: Download — capture DownloadedFileResource, omit FilePath -->
+<!-- Step 1: Download — capture DownloadedFileResource, set FilePath to {x:Null} -->
 <uda:DownloadFileFromRecordField
-    x:TypeArguments="local:SOURCE_ENTITY"
-    DisplayName="Download File from Source"
-    EntityId="SOURCE_ENTITY_GUID"
+    x:TypeArguments="local:ENTITY_NAME"
+    FilePath="{x:Null}"
+    SolutionEntityKey="{x:Null}"
+    SolutionEntityName="{x:Null}"
+    ContinueOnError="False"
+    DisplayName="Download File"
+    DownloadedFileResource="[downloadedFileResource]"
+    EntityId="ENTITY_GUID"
+    Field="FILE_FIELD_NAME"
     RecordId="[sourceRecordId]"
-    Field="[&quot;FileFieldName&quot;]"
-    DownloadedFileResource="[downloadedFile]"
+    ScopeValue="Tenant"
     TimeoutInMs="30000" />
 
-<!-- Step 2: Upload — pass downloadedFile as FileResource, not FilePath -->
+<!-- Step 2: Upload — pass downloadedFileResource as FileResource, set FilePath to {x:Null} -->
 <uda:UploadFileToRecordField
-    x:TypeArguments="local:TARGET_ENTITY"
-    DisplayName="Upload File to Target"
-    EntityId="TARGET_ENTITY_GUID"
-    RecordId="[targetRecordId]"
-    Field="[&quot;FileFieldName&quot;]"
-    FileResource="[downloadedFile]"
+    x:TypeArguments="local:ENTITY_NAME"
+    FilePath="{x:Null}"
+    InputEntity="{x:Null}"
+    OutputEntity="{x:Null}"
+    SolutionEntityKey="{x:Null}"
+    SolutionEntityName="{x:Null}"
+    ContinueOnError="False"
+    DisplayName="Upload File"
+    EntityId="ENTITY_GUID"
     ExpansionDepth="2"
+    Field="FILE_FIELD_NAME"
+    FileResource="[downloadedFileResource]"
+    RecordId="[targetRecordId]"
+    ScopeValue="Tenant"
     TimeoutInMs="30000" />
 ```
 
-> **Prefer `FileResource` over `FilePath`** when the file originates from another activity. `ILocalResource` (from download) is assignment-compatible with `IResource` (upload input). Using `FilePath` with a fabricated temp path loses the original filename metadata.
+> **Prefer `FileResource` over `FilePath`** when the file originates from another activity. `ILocalResource` (from download, `UiPath.Platform.ResourceHandling`) is assignment-compatible with `IResource` (upload input) — no cast needed. Using `FilePath` with a fabricated temp path loses the original filename. The round-trip preserves it.
 
-Variable declarations needed:
-- `downloadedFile` — type `UiPath.DataService.Activities.Resources.ILocalResource` (from download `OutArgument`)
-- The upload accepts `IResource` — `ILocalResource` satisfies this interface
+## When to Use FilePath vs DownloadedFileResource
+
+| Scenario | Use | FilePath value |
+|----------|-----|----------------|
+| File will be consumed by another activity in the same workflow (e.g., upload to another record) | `DownloadedFileResource` | `{x:Null}` |
+| File needs to be saved to a specific user-provided location | `FilePath` | Bare string path (e.g., `C:\downloads\output.pdf`) |
+| Both — save to disk AND pass to another activity | Both | Set `FilePath` to the desired path; also capture `DownloadedFileResource` |
+
+**Never fabricate a temp file path.** If you need a temporary location, omit `FilePath` (set `{x:Null}`) and use `DownloadedFileResource` — the runtime handles temp storage. Fabricated paths (e.g., `"C:\temp\file_" & guid & ".pdf"`) lose the original filename and create cleanup obligations.
 
 ## Key Rules
 
-- `DownloadedFileResource` returns an `ILocalResource` with the local file path — use `.LocalPath` to get the path
+- `DownloadedFileResource` returns a `UiPath.Platform.ResourceHandling.ILocalResource` — use `.LocalPath` to get the file path
 - If `FilePath` is specified, the file is saved to that location; otherwise a temporary location is used
-- **For round-trip file copies, omit `FilePath` and use `DownloadedFileResource` → `FileResource` chaining** — see pattern above
+- **For round-trip file copies, omit `FilePath` (set `{x:Null}`) and use `DownloadedFileResource` → `FileResource` chaining** — see pattern above
+- `Field` and `FilePath` accept bare strings for literal values — do not wrap in expression brackets (`[...]`) unless the value comes from a variable
