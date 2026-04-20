@@ -366,7 +366,7 @@ Logical meaning: `(FIELD_1 OP VALUE_1) AND ((FIELD_2 OP VALUE_2) OR (FIELD_3 OP 
 
 ## Step-by-Step: Generate Filter XAML
 
-1. **Read `EntitiesStore.json`** — find the target entity by name under `Entities[]`. Note the entity `Id`.
+1. **Read `EntitiesStore.json`** — find the target entity by name under `Entities[]`. Note the entity `Id`. See [overview.md § Entity Metadata](../../../../references/activity-docs/UiPath.DataService.Activities/25.9/activities/overview.md#entity-metadata--entitiesstoresjson) for the JSON schema.
 2. **Identify filter fields** — for each condition, find the field in `Entities[].Fields[]`. Note:
    - `Field.Name` — used as `SimpleFilter.FieldName`
    - `Field.SqlType.Name` — determines valid operators and `InArgument` type

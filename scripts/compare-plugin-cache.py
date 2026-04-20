@@ -12,8 +12,27 @@ Exit code 0 if identical, 1 if any differences.
 import argparse
 import difflib
 import hashlib
+import json
 import sys
 from pathlib import Path
+
+
+def resolve_cache_from_plugin(plugin: str) -> Path:
+    """Look up the installPath for `plugin` (e.g. 'uipath@uipath-marketplace') in
+    ~/.claude/plugins/installed_plugins.json. If multiple entries exist, pick the
+    highest version."""
+    manifest = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+    if not manifest.is_file():
+        sys.exit(f"error: {manifest} not found")
+    entries = json.loads(manifest.read_text(encoding="utf-8")).get("plugins", {}).get(plugin)
+    if not entries:
+        sys.exit(f"error: plugin {plugin!r} not found in {manifest}")
+
+    def version_key(e: dict) -> tuple:
+        parts = str(e.get("version", "0")).split(".")
+        return tuple(int(p) if p.isdigit() else 0 for p in parts)
+
+    return Path(max(entries, key=version_key)["installPath"])
 
 
 def walk_files(root: Path) -> dict[str, Path]:
@@ -47,15 +66,20 @@ def unified_diff(a: Path, b: Path, rel: str) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("repo", type=Path, help="repo root (source of truth)")
-    ap.add_argument("cache", type=Path, help="installed plugin cache root")
+    ap.add_argument("cache", type=Path, nargs="?", help="installed plugin cache root (omit if using --plugin)")
+    ap.add_argument("--plugin", help="resolve cache path from installed_plugins.json (e.g. 'uipath@uipath-marketplace')")
     ap.add_argument("--subpath", default="", help="narrow comparison to this relative subpath (e.g. 'skills/uipath-rpa/references')")
     ap.add_argument("--diff", action="store_true", help="print unified diff for each content mismatch")
     ap.add_argument("--raw", action="store_true", help="hash raw bytes (default: normalize CRLF/CR to LF before hashing)")
     args = ap.parse_args()
     normalize = not args.raw
 
+    if args.cache is None and args.plugin is None:
+        ap.error("provide either a cache path or --plugin")
+    cache_root = args.cache if args.cache is not None else resolve_cache_from_plugin(args.plugin)
+
     repo_base = (args.repo / args.subpath).resolve()
-    cache_base = (args.cache / args.subpath).resolve()
+    cache_base = (cache_root / args.subpath).resolve()
 
     for label, base in [("repo", repo_base), ("cache", cache_base)]:
         if not base.is_dir():
