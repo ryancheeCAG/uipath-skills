@@ -74,8 +74,6 @@ Unregister a project from the `.uipx` manifest. Does NOT delete files from disk.
 uip solution project remove ./InvoiceAutomation/OldProject --output json
 ```
 
-> **`project remove` leaves orphan package resources.** It removes the entry from `.uipx` Projects and deletes `resources/solution_folder/process/<kind>/<name>.json`, but leaves `resources/solution_folder/package/<name>.json` behind. The orphan blocks any future `project add` of a project with the same name. **If you plan to re-add with the same name, manually delete `resources/solution_folder/package/<name>.json` before re-adding.**
-
 ## Step 5: List Projects
 
 Enumerate the projects registered in the local `.uipx` manifest. Reads only on-disk metadata — no backend call, so safe to use offline or in CI checks.
