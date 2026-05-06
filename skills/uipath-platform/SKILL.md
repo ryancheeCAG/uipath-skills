@@ -16,6 +16,7 @@ Comprehensive guide for setting up and managing UiPath development environments,
 - User wants to **manage resources** (assets, queues, queue items, storage buckets, bucket files)
 - User wants to **work with solutions** (create, pack, publish, deploy, activate)
 - User asks about **UiPath platform concepts** (tenants, folders, robots, queues, packages)
+- User wants to **view or allocate tenant licenses** (platform-level licensing operations)
 - User wants to **install or manage CLI tools** (search, install, update)
 - User wants to set up a **CI/CD pipeline** for UiPath automation projects
 - User asks **how to deploy** an automation to Orchestrator
@@ -89,6 +90,7 @@ Choose the appropriate operation from the Task Navigation table below.
 | **Run and monitor jobs** | [references/orchestrator/run-jobs.md](references/orchestrator/run-jobs.md) |
 | **Manage sessions and runtimes** | [references/orchestrator/manage-sessions.md](references/orchestrator/manage-sessions.md) |
 | **Tenant settings, calendars, audit logs** | [references/orchestrator/tenant-admin.md](references/orchestrator/tenant-admin.md) |
+| **Manage tenant licensing (view, allocate)** | [references/platform/licensing.md](references/platform/licensing.md) |
 | **Understand Orchestrator concepts** | [references/orchestrator/orchestrator.md](references/orchestrator/orchestrator.md) |
 | **Manage assets** | [references/resources/manage-assets.md](references/resources/manage-assets.md) |
 | **Work with queues and queue items** | [references/resources/process-queues.md](references/resources/process-queues.md) |
@@ -188,6 +190,7 @@ The UiPath CLI (`uip`) is a unified command-line tool for interacting with the U
 | **Orchestrator** | `or` | Folders, jobs, processes, releases | Available |
 | **Resource** | `resource` | Assets, queues, queue items, storage buckets, bucket files | Available |
 | **Solutions** | `solution` | Create, pack, publish, deploy solutions | Available |
+| **Platform** | `platform` | Tenant-level licensing (view, allocate) | Available |
 | **Integration Service** | `is` | Connectors, connections, activities, resources | Available |
 | **Test Manager** | `tm` | Test projects, test sets, test cases, executions, reports | Available |
 | **Tools** | `tools` | CLI tool extension management | Available |

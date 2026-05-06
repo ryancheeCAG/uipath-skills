@@ -84,6 +84,16 @@ Create, pack, publish, and deploy solutions. See [solution/](solution/solution.m
 
 ---
 
+## Platform (`uip platform`)
+
+Manage platform-level resources such as tenant licensing. See [platform/licensing.md](platform/licensing.md).
+
+| Group | Key Commands | Workflow Guide |
+|---|---|---|
+| **Tenant Licensing** | `tenants show-licenses`, `tenants allocate-licenses` | [Tenant Licensing](platform/licensing.md) |
+
+---
+
 ## Traces (`uip traces`)
 
 LLM execution trace observability. See [traces.md](traces.md).
