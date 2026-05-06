@@ -50,11 +50,8 @@ Studio Web upload lets the user inspect and edit the BPMN project in the browser
 uip solution upload <SolutionDir> --output json
 ```
 
-If the solution has resource declarations, refresh them first:
-
-```bash
-uip solution resource refresh <SolutionDir> --output json
-```
+If the solution has resource declarations, refresh them with the supported solution tooling in the local CLI.
+Do not invent a `solution resource` command path; verify the installed CLI help before documenting a refresh step.
 
 Report the Studio Web URL or solution ID when the CLI returns one.
 If the upload succeeds but returns no URL, say `<not returned by CLI>` instead of omitting the field.
