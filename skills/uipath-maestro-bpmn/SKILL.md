@@ -1,6 +1,6 @@
 ---
 name: uipath-maestro-bpmn
-description: "TRIGGER for UiPath Maestro BPMN / Process Orchestration projects using `.bpmn`, `project.uiproj`, `entry-points.json`, `operate.json`, `bindings_v2.json`, or `package-descriptor.json`: author, inspect, validate, package, operate, and diagnose. Model writes BPMN skeleton + documented non-IS UiPath XML; CLI owns/enriches Integration Service nodes/templates and generated package files. DO NOT TRIGGER for `.flow` JSON, Case plans, RPA `.xaml`/`.cs`, coded apps, or agent projects."
+description: "UiPath Maestro BPMN / Process Orchestration skill. Activates on `.bpmn`, `project.uiproj`, `entry-points.json`, `operate.json`, `bindings_v2.json`, `package-descriptor.json`. Author, inspect, validate, package, operate, diagnose. Model writes BPMN skeleton + non-IS UiPath XML; CLI owns Integration Service nodes/templates and generated package files. For .flow JSON→uipath-maestro-flow. For XAML/coded workflows→uipath-rpa. For Python agents→uipath-agents. For Case plans→uipath-maestro-case."
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion
 ---
 
