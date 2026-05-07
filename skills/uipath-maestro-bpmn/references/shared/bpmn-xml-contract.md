@@ -36,6 +36,17 @@ Conservative defaults:
 - Give event subprocesses exactly one start event.
 - Avoid sequence flows that cross subprocess scope or pool boundaries.
 
+## Two-pass authoring boundary
+
+For non-trivial authoring, split generation into two passes:
+
+- **Pass 1: BPMN skeleton** - author standard BPMN process structure, event definitions, gateway conditions, subprocess scopes, sequence/message flows, annotations, and BPMN DI. Use placeholder labels or annotations for resource intent. Preserve existing extension XML in brownfield files.
+- **Operator confirmation** - confirm the process shape before filling execution-specific XML.
+- **Pass 2: model-owned UiPath XML** - add root variables, entry point IDs, mappings, documented bindings, script metadata, retry/error metadata, loop metadata, and documented non-Integration-Service service shells.
+- **CLI enrichment** - generate or enrich Integration Service activity/trigger payloads, connector bindings, dynamic schemas, and generated package files.
+
+Do not combine connector selection, connection binding, dynamic schema generation, and topology rewrites in one opaque edit.
+
 ## UiPath extensions the model may write
 
 Use lower-case XML aliases in examples and authoring guidance:

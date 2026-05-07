@@ -6,6 +6,7 @@ Run validation after the local BPMN edit is coherent. Do not chase every interme
 
 Validate these before Operate:
 
+- The pass 1 skeleton has been confirmed or the edit is small and explicitly summarized.
 - BPMN XML parses with the UiPath extension descriptor.
 - At least one valid diagram and plane exists.
 - Diagram plane references an existing root process, collaboration, or subprocess.
@@ -39,3 +40,4 @@ When generated package files exist, verify that:
 - Blocking errors must be fixed before upload, publish, debug, or run.
 - Warnings may be acceptable for local drafts, but warnings about CLI-owned executable elements are blockers for real runs.
 - If validation tooling is missing, report the exact checks that could not run and keep the project in Author state.
+- If Integration Service enrichment is unavailable, validation can pass only for source shape review; do not report the project as ready for Operate.

@@ -21,6 +21,8 @@ Entry point inputs use `elementId` to scope an input variable to the correspondi
 
 Subprocesses can carry scoped `uipath:variables` in subprocess extension elements. Do not silently move variables across scopes.
 
+Author variables in pass 2 after the BPMN skeleton and entry points are stable. If an entry point changes during pass 1, update every variable whose `elementId` points at the old start event.
+
 ## Bindings
 
 Use root `uipath:bindings version="v1"` for resources that become `bindings_v2.json` entries.
@@ -41,17 +43,23 @@ Node context inputs refer to bindings as expressions in the `=bindings.<binding 
 
 Never paste real tenant folder keys, connection IDs, release keys, queue IDs, URLs, or private names into skill examples.
 
+Integration Service connection bindings, trigger property bindings, connector resource metadata, and generated schemas are CLI-owned. Model-authored bindings are limited to documented non-Integration-Service resource shells or placeholder-safe draft intent.
+
 ## Mappings
 
 Use `uipath:mapping version="v1"` for `BPMN.Variables` input/output mapping on tasks, start/end events, script tasks, and subprocesses.
 
 Output mappings should target declared root or scoped variables. Missing variables should be fixed in the BPMN source before package generation.
 
+When changing a task ID, subprocess ID, or entry start event, recheck every mapping and variable `elementId` that may reference it.
+
 ## Expressions
 
 Conditions, scripts, variable mappings, and skip conditions are expression-normalized during import. Author expressions in the frontend-compatible form and avoid assignment operators where canvas validation forbids assignment.
 
 Use a leading `=` for expressions where the frontend/runtime expects expression content. Treat plain strings as literals.
+
+Gateway conditions belong on outgoing sequence flows. Service skip conditions belong on the documented `uipath:activity` attribute. Script source belongs in BPMN `script` CDATA, not in an extension text field.
 
 ## Script tasks
 
