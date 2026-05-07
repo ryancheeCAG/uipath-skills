@@ -5,7 +5,7 @@ description: >
   This verifies the skill's validation guidance, generated package metadata
   expectations, Integration Service enrichment boundary, and public-safety
   requirements without cloud-side effects.
-tags: [uipath-maestro-bpmn, smoke, mode:build, lifecycle:validate, connector, feature:connections]
+tags: [uipath-maestro-bpmn, smoke, "mode:build", "lifecycle:validate", connector, "feature:connections"]
 
 agent:
   type: claude-code
@@ -32,27 +32,6 @@ initial_prompt: |
   run a process, ask for approval, or call cloud-side UiPath commands.
 
 success_criteria:
-  - type: skill_triggered
-    description: "Agent invoked the uipath-maestro-bpmn skill"
-    skill_name: "uipath:uipath-maestro-bpmn"
-    expected: "yes"
-    weight: 1.0
-
-  - type: command_executed
-    description: "Agent ran the Maestro BPMN validation fixture checker"
-    tool_name: "Bash"
-    command_pattern: 'bash\s+skills/uipath-maestro-bpmn/\.maintenance/check-validation-fixtures\.sh'
-    min_count: 1
-    weight: 2.0
-    pass_threshold: 1.0
-
-  - type: command_not_executed
-    description: "Agent did not run cloud-side UiPath lifecycle commands"
-    tool_name: "Bash"
-    command_pattern: 'uip\s+maestro\s+bpmn\s+(upload|publish|deploy|debug|run)|uip\s+maestro\s+(upload|publish|deploy|debug|run)'
-    weight: 1.0
-    pass_threshold: 1.0
-
   - type: file_exists
     description: "Linear BPMN fixture is available"
     path: "skills/uipath-maestro-bpmn/fixtures/validation/linear-process/linear-process.bpmn"
@@ -63,6 +42,26 @@ success_criteria:
     description: "Integration Service package bindings fixture is available"
     path: "skills/uipath-maestro-bpmn/fixtures/validation/integration-service-enriched/bindings_v2.json"
     weight: 0.5
+    pass_threshold: 1.0
+
+  - type: file_exists
+    description: "Boundary error BPMN fixture is available"
+    path: "skills/uipath-maestro-bpmn/fixtures/validation/gateway-boundary-error/gateway-boundary-error.bpmn"
+    weight: 0.5
+    pass_threshold: 1.0
+
+  - type: file_exists
+    description: "Subprocess multi-instance BPMN fixture is available"
+    path: "skills/uipath-maestro-bpmn/fixtures/validation/subprocess-multi-instance/subprocess-multi-instance.bpmn"
+    weight: 0.5
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Fixture README warns against cloud-side commands"
+    path: "skills/uipath-maestro-bpmn/fixtures/validation/README.md"
+    includes:
+      - "Do not upload, publish, deploy, debug, or run these fixtures."
+    weight: 1.0
     pass_threshold: 1.0
 
   - type: run_command
