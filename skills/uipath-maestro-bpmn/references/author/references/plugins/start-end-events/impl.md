@@ -13,6 +13,12 @@ The model may edit:
 - `uipath:mapping` entries for event input/output movement.
 - Documented non-Integration-Service `uipath:event` shells such as Maestro message events.
 
+Message event boundaries:
+
+- Use `Maestro.ReceiveMessageEvent` for model-owned message starts, intermediate catches, and boundary waits when the message name and payload contract are known.
+- Use `Maestro.SendMessageEvent` for model-owned message throws and message end events when the message name and payload contract are known.
+- Use `Intsvc.EventTrigger` and `Intsvc.WaitForEvent` only through CLI enrichment because connector event metadata, bindings, trigger properties, and schemas are registry-backed.
+
 ## CLI-owned or externally resolved implementation
 
 The CLI or operator must resolve:

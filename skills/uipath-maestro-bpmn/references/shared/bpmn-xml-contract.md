@@ -17,6 +17,8 @@ Generated BPMN must be valid BPMN 2.0 with the UiPath extension namespace.
 
 ## Supported model-authored BPMN
 
+For the source-backed element map and UiPath extension wrapper table, see [author/supported-elements.md](../author/references/supported-elements.md).
+
 The model may directly author standard BPMN structure when user intent is clear:
 
 - Events: start, end, boundary, intermediate catch, and intermediate throw events.
@@ -63,22 +65,19 @@ Use lower-case XML aliases in examples and authoring guidance:
 
 Do not invent `uipath:caseManagement` payloads without a dedicated case-management contract.
 
-## Non-Integration-Service service shells
+## Non-Integration-Service task shells
 
-The model may author placeholder-safe shells for documented non-Integration-Service service types when it has enough user intent and no private identifiers are embedded:
+The model may author placeholder-safe shells for documented non-Integration-Service task types when it has enough user intent and no private identifiers are embedded. Choose the BPMN wrapper first:
 
 - `BPMN.Variables`
-- `BPMN.ScriptTask`
-- `Actions.HITL`
-- `Orchestrator.StartJob`
-- `Orchestrator.StartAgentJob`
-- `Orchestrator.ExecuteApiWorkflowAsync`
-- `Orchestrator.BusinessRules`
-- `Orchestrator.CreateQueueItem`
-- `Maestro.ReceiveMessageEvent`
-- `Maestro.SendMessageEvent`
-- `Maestro.CasePlanScheduler`
-- `A2A.AgentExecution`
+- `BPMN.ScriptTask` as `bpmn:scriptTask` with script CDATA, `uipath:scriptVersion`, and mapping metadata.
+- `Actions.HITL` as `bpmn:userTask`.
+- `Orchestrator.StartJob`, `Orchestrator.StartAgentJob`, `Orchestrator.ExecuteApiWorkflowAsync`, `Orchestrator.CreateAndWaitForQueueItem`, and `A2A.AgentExecution` as `bpmn:serviceTask`.
+- `Orchestrator.CreateQueueItem` as `bpmn:sendTask`.
+- `Orchestrator.BusinessRules` as `bpmn:businessRuleTask`.
+- `Orchestrator.StartAgenticProcess`, `Orchestrator.StartAgenticProcessAsync`, `Orchestrator.StartCaseMgmtProcess`, and `Orchestrator.StartCaseMgmtProcessAsync` as `bpmn:callActivity`.
+- `Maestro.ReceiveMessageEvent` and `Maestro.SendMessageEvent` as message event wrappers.
+- `Maestro.CasePlanScheduler` only when a dedicated case-management contract is available; otherwise preserve imported XML.
 
 Keep resource identity fields synthetic or placeholder-based until CLI or user-provided public-safe data resolves them.
 

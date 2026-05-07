@@ -1,6 +1,6 @@
 # RPA Job Planning
 
-Use this reference when planning Orchestrator RPA process execution from BPMN.
+Use this reference when planning Orchestrator RPA process execution from BPMN. RPA jobs are resource recipes for `bpmn:serviceTask`, not peer BPMN element types. See [task-recipes/rpa-job.md](../../task-recipes/rpa-job.md).
 
 ## When to use
 
@@ -20,7 +20,7 @@ Use this reference when planning Orchestrator RPA process execution from BPMN.
 
 ## Model may draft
 
-- Service task wrapper with documented `Orchestrator.StartJob` shell.
+- `bpmn:serviceTask` wrapper with documented `Orchestrator.StartJob` shell.
 - Input/output mappings and error paths.
 - Public-safe binding placeholders and diagram geometry.
 

@@ -1,6 +1,6 @@
 # API Workflow Implementation
 
-This document defines the implementation boundary for API workflow tasks.
+This document defines the implementation boundary for API workflow task recipes. API workflows are implemented as `bpmn:serviceTask`; see [task-recipes/api-workflow.md](../../task-recipes/api-workflow.md).
 
 ## Model-owned implementation
 

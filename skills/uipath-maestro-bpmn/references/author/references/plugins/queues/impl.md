@@ -1,13 +1,14 @@
 # Queue Implementation
 
-This document defines the implementation boundary for queue tasks.
+This document defines the implementation boundary for queue task recipes. See [task-recipes/queue.md](../../task-recipes/queue.md).
 
 ## Model-owned implementation
 
 The model may edit:
 
-- Service task wrapper for queue item creation.
-- Documented `Orchestrator.CreateQueueItem` `uipath:activity` shell.
+- `bpmn:sendTask` wrapper for `Orchestrator.CreateQueueItem`.
+- `bpmn:serviceTask` wrapper for `Orchestrator.CreateAndWaitForQueueItem`.
+- Documented queue `uipath:activity` shell.
 - Input CDATA for item payload, reference, priority, deadline, and transaction data.
 - Output mappings for queue item ID, status, or correlation fields.
 - Boundary error handling.

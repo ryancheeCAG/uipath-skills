@@ -33,15 +33,15 @@
       </bpmn:startEvent>
       <bpmn:scriptTask id="Task_NormalizeItem" name="Normalize Item" scriptFormat="JavaScript">
         <bpmn:extensionElements>
-          <uipath:scriptVersion value="1.0" />
-          <uipath:activity version="v1">
-            <uipath:type value="BPMN.ScriptTask" version="v1" />
+          <uipath:scriptVersion value="v3" />
+          <uipath:mapping version="v1">
+            <uipath:type value="BPMN.Variables" version="v1" />
             <uipath:context>
               <uipath:inputSchema><![CDATA[{"type":"object","properties":{"currentItem":{"type":"object"}}}]]></uipath:inputSchema>
             </uipath:context>
             <uipath:input name="args" type="json" target="bodyField"><![CDATA[{"currentItem":"=currentItem"}]]></uipath:input>
             <uipath:output name="outcome" type="string" var="subprocessOutcome" source="result" />
-          </uipath:activity>
+          </uipath:mapping>
         </bpmn:extensionElements>
         <bpmn:incoming>Flow_Sub_Start_To_Script</bpmn:incoming>
         <bpmn:outgoing>Flow_Script_To_Sub_End</bpmn:outgoing>

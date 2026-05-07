@@ -1,12 +1,12 @@
 # Business Rule Implementation
 
-This document defines the implementation boundary for business rule tasks.
+This document defines the implementation boundary for business rule task recipes. Business rules are implemented as `bpmn:businessRuleTask`; see [task-recipes/business-rule.md](../../task-recipes/business-rule.md).
 
 ## Model-owned implementation
 
 The model may edit:
 
-- `bpmn:businessRuleTask` or service task wrapper when that is the local pattern.
+- `bpmn:businessRuleTask` wrapper.
 - Documented `Orchestrator.BusinessRules` `uipath:activity` shell.
 - Input CDATA for facts using declared variables.
 - Output mappings for rule result, matched rule, diagnostics, and outcome.

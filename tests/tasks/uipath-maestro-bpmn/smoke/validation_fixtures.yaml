@@ -24,6 +24,10 @@ initial_prompt: |
   Inspect the validation fixtures under:
   fixtures/validation
 
+  Inspect the supported element map and task recipes under:
+  references/author/references/supported-elements.md
+  references/author/references/task-recipes
+
   Run the local fixture validation command:
   bash .maintenance/check-validation-fixtures.sh
 
@@ -31,6 +35,44 @@ initial_prompt: |
   run a process, ask for approval, or call cloud-side UiPath commands.
 
 success_criteria:
+  - type: file_exists
+    description: "Supported element map is available"
+    path: "references/author/references/supported-elements.md"
+    weight: 0.5
+    pass_threshold: 1.0
+
+  - type: file_exists
+    description: "Task recipe index is available"
+    path: "references/author/references/task-recipes/README.md"
+    weight: 0.5
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Supported element map captures BPMN-first resource wrappers"
+    path: "references/author/references/supported-elements.md"
+    includes:
+      - "Orchestrator.StartJob"
+      - "bpmn:serviceTask"
+      - "Orchestrator.CreateQueueItem"
+      - "bpmn:sendTask"
+      - "Actions.HITL"
+      - "bpmn:userTask"
+      - "Jint"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Task recipes distinguish service, send, user, business rule, and call activity wrappers"
+    path: "references/author/references/task-recipes/README.md"
+    includes:
+      - "bpmn:serviceTask"
+      - "bpmn:sendTask"
+      - "bpmn:userTask"
+      - "bpmn:businessRuleTask"
+      - "bpmn:callActivity"
+    weight: 1.0
+    pass_threshold: 1.0
+
   - type: file_exists
     description: "Linear BPMN fixture is available"
     path: "fixtures/validation/linear-process/linear-process.bpmn"

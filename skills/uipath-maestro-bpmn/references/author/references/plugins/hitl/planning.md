@@ -1,6 +1,6 @@
 # HITL Planning
 
-Use this reference when planning human-in-the-loop Action Center tasks in BPMN.
+Use this reference when planning human-in-the-loop Action Center tasks in BPMN. HITL is `bpmn:userTask`, not a generic service task. See [task-recipes/hitl.md](../../task-recipes/hitl.md).
 
 ## When to use
 
@@ -20,7 +20,7 @@ Use this reference when planning human-in-the-loop Action Center tasks in BPMN.
 
 ## Model may draft
 
-- Service task wrapper and `Actions.HITL` shell when the contract is documented.
+- `bpmn:userTask` wrapper and `Actions.HITL` shell when the contract is documented.
 - Input/output mappings and outcome routes.
 - Boundary timeout/error paths.
 - Public-safe labels and diagram geometry.

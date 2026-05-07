@@ -1,6 +1,6 @@
 # Agent Planning
 
-Use this reference when planning agent execution from BPMN.
+Use this reference when planning agent execution from BPMN. Agents are resource recipes for `bpmn:serviceTask`, not peer BPMN element types. See [task-recipes/agent-job.md](../../task-recipes/agent-job.md).
 
 ## When to use
 
@@ -20,7 +20,7 @@ Use this reference when planning agent execution from BPMN.
 
 ## Model may draft
 
-- Service task wrapper with documented `Orchestrator.StartAgentJob` or `A2A.AgentExecution` shell.
+- `bpmn:serviceTask` wrapper with documented `Orchestrator.StartAgentJob` or `A2A.AgentExecution` shell.
 - Input/output mappings, boundary timeout/error paths, and gateways.
 - Public-safe resource placeholders.
 

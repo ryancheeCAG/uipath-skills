@@ -1,6 +1,6 @@
 # Maestro BPMN Validation Fixtures
 
-Public-safe fixture corpus for the `uipath-maestro-bpmn` skill maintenance checks. These files are synthetic, but they intentionally cover the same structural families summarized from PO.Frontend mocks, private exported BPMN reviews, and generated BPMN package outputs.
+Public-safe fixture corpus for the `uipath-maestro-bpmn` skill maintenance checks. These files are synthetic, but they intentionally cover source-backed canvas serialization, runtime parser, and generated package-output families.
 
 ## Fixture Set
 

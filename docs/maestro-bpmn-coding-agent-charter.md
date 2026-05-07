@@ -27,7 +27,7 @@ Public skill repository content may include:
 - Generic BPMN authoring guidance and execution-safe workflow rules.
 - Sanitized BPMN fixtures with no customer, tenant, connection, folder, process, URL, or user-identifying data.
 - Public CLI command references for `uip maestro ...` once commands exist or are already published.
-- Contract summaries derived from public or sanitized source excerpts.
+- Contract summaries derived from public-safe source-backed behavior.
 - Review rules: all public source-changing PRs must be draft until human review completes.
 
 Do not commit:
@@ -37,7 +37,7 @@ Do not commit:
 - Direct local absolute paths from developer machines.
 - Internal-only repository implementation details unless the destination repository is explicitly internal and the PR is scoped as such.
 
-Internal research sources can inform the public docs, but the public skill should describe stable behavior and tooling contracts rather than requiring agents to read internal source repos at runtime.
+Source research can inform the public docs, but the public skill should describe stable behavior and tooling contracts rather than requiring agents to read implementation repositories at runtime.
 
 ## Capability Boundaries
 
@@ -117,13 +117,13 @@ Known current CLI gaps:
 
 Frontend source of truth:
 
-- `PO.FrontEnd/src/services/serialization/bpmn-moddle.ts`: UiPath moddle descriptor registration and extension element construction.
-- `PO.FrontEnd/src/services/serialization/bpmn-from-xml.ts`: XML import, diagram validation, object extraction, migration, and warning behavior.
-- `PO.FrontEnd/src/services/serialization/bpmn-to-xml.ts`: XML export, diagram filtering, geometry merge, definitions construction, exporter metadata, and CDATA fixup.
-- `PO.FrontEnd/src/services/serialization/uipath-moddle.v1.json`: current UiPath extension namespace descriptor.
-- `PO.FrontEnd/src/services/serialization/design-schema/*.json`: design-time schema contracts for Orchestrator, Integration Service, Maestro message/timer/event, and business-rule activities.
-- `PO.FrontEnd/src/services/serialization/converters/bpmn-converter-utils/*.ts`: conversion utilities for root, nodes, edges, tasks, events, gateways, boundary events, subprocesses, and scripts.
-- `PO.FrontEnd/mocks/files/*.bpmn` and `PO.FrontEnd/cli/test-resources/**`: fixture corpus for valid exported XML shapes.
+- UiPath moddle descriptor registration and extension element construction.
+- XML import, diagram validation, object extraction, migration, and warning behavior.
+- XML export, diagram filtering, geometry merge, definitions construction, exporter metadata, and CDATA fixup.
+- Current UiPath extension namespace descriptor.
+- Design-time schema contracts for Orchestrator, Integration Service, Maestro message/timer/event, and business-rule activities.
+- Conversion utilities for root, nodes, edges, tasks, events, gateways, boundary events, subprocesses, and scripts.
+- Public-safe fixture coverage for valid exported XML shapes.
 
 Key frontend contract notes:
 
@@ -135,12 +135,12 @@ Key frontend contract notes:
 
 Runtime source of truth:
 
-- `PO.BpmnEngine/src/BpmnEngine/UiPath.PO.BpmnParser/Parser.cs`: runtime parser and supported BPMN element builder map.
-- `PO.BpmnEngine/src/BpmnEngine/UiPath.PO.BpmnParser/Models/Enums/BpmnElementType.cs`: runtime element type enum.
-- `PO.BpmnEngine/src/BpmnEngine/UiPath.PO.BpmnParser/ExtensionsProviders/UiPathExtensionsProvider.cs`: UiPath extension reader.
-- `PO.BpmnEngine/src/BpmnEngine/UiPath.PO.BpmnEngine/**`: execution state, data scopes, lifecycle manager, and result handling.
-- `PO.BpmnEngine/src/BpmnEngine/UiPath.PO.Worker/**`: activity pre/postprocessing, incidents, observability, and Temporal execution bridge.
-- `PO.BpmnEngine/tests/BpmnEngine/UiPath.PO.BpmnParser.Tests/TestData/*.bpmn`: runtime parser fixtures and negative cases.
+- Runtime parser and supported BPMN element builder map.
+- Runtime element type enum.
+- UiPath extension reader.
+- Execution state, data scopes, lifecycle manager, and result handling.
+- Activity pre/postprocessing, incidents, observability, and Temporal execution bridge.
+- Runtime parser fixtures and negative cases.
 
 Runtime-supported BPMN families observed in parser source:
 
@@ -152,23 +152,21 @@ Runtime-supported BPMN families observed in parser source:
 
 Prior generate/analyze work:
 
-- `Maestro-BPMN-Analyzer` contains a static parser/analyzer that extracts tasks, gateways, events, boundary events, Integration Service usage, complexity signals, and uses PO.FrontEnd for viewer styling.
+- Existing static parser/analyzer work extracts tasks, gateways, events, boundary events, Integration Service usage, and complexity signals.
 - Useful lessons: strip diagram data for analysis when appropriate, never persist/log raw BPMN XML from private pipelines, and require `BPMNDiagram` data when the viewer must render.
 - This repo is an internal analytics/reference source, not the public authoring contract.
 
-## Exported Example Inventory
+## Structural Coverage Targets
 
-Three operator-supplied exported BPMN XML files were reviewed as private inputs and must not be committed raw.
+Public fixtures should cover these structural families without reproducing private XML:
 
-Observed structural coverage:
-
-- Example 1: large process with boundary error events, exclusive/parallel gateways, intermediate catch/throw events, send tasks, service tasks, script tasks, generic tasks, groups, annotations, multi-instance marker, timer, message, and terminate end behavior.
-- Example 2: large process with many exclusive gateways, service tasks, subprocesses, user tasks, receive task, multiple start/end events, message event, and terminate end behavior.
-- Example 3: medium process with service tasks, script tasks, send task, boundary error events, timer catch events, exclusive/parallel gateways, and documentation-heavy nodes.
+- Boundary error events, exclusive/parallel gateways, intermediate catch/throw events, send tasks, service tasks, script tasks, generic tasks, groups, annotations, multi-instance marker, timer, message, and terminate end behavior.
+- Subprocesses, user tasks, receive tasks, multiple start/end events, message events, and terminate end behavior.
+- Documentation-heavy nodes, timers, service tasks, send tasks, and boundary error combinations.
 
 Fixture policy:
 
-- Derive sanitized fixtures from these examples only after removing names, IDs, customer/process text, URLs, bindings, connection/folder data, and any payloads.
+- Derive synthetic fixtures only after removing names, IDs, customer/process text, URLs, bindings, connection/folder data, and any payloads.
 - Keep the first public fixture set small and purposeful: one minimal linear process, one gateway/boundary-error process, one Integration Service activity/trigger process, and one subprocess/multi-instance process.
 
 ## Source Inventory for Next Tasks

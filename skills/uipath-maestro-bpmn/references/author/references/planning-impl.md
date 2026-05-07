@@ -20,7 +20,7 @@ Pass 2 makes the confirmed skeleton locally coherent for validation and packagin
 2. **Variables** - add root `uipath:variables` for entry point inputs, process globals, outputs, and schemas; add subprocess variables only when scope requires them.
 3. **Mappings** - add `uipath:mapping` where values move between variables, task inputs, task outputs, and end outputs.
 4. **Bindings** - add root `uipath:bindings` only for documented non-Integration-Service resources or placeholder-safe binding shapes.
-5. **Service shells** - add documented non-Integration-Service `uipath:activity` or `uipath:event` metadata when the service type contract is known.
+5. **Task shells** - add documented non-Integration-Service `uipath:activity` or `uipath:event` metadata when the task wrapper and service type contract are known. Use [supported-elements.md](supported-elements.md) and [task-recipes/](task-recipes/) before writing XML.
 6. **Scripts** - add BPMN script CDATA, `uipath:scriptVersion`, merged `args` input, schema, and outputs.
 7. **Runtime behavior metadata** - add retry, error mapping, loop characteristics, transaction marker, or tags only when user intent is explicit.
 8. **CLI-owned enrichment** - hand Integration Service activities/triggers and generated package metadata to the CLI.
@@ -53,9 +53,18 @@ Root bindings describe resources that packaging turns into `bindings_v2.json`.
 - Keep gateway condition expressions on sequence flows, not on the gateway itself.
 - Keep script source in BPMN `script` CDATA with `scriptFormat="JavaScript"`.
 
-## Non-Integration-Service service shells
+## Non-Integration-Service task shells
 
 The model may fill documented non-Integration-Service shells only when the required fields are known and public-safe. Examples include variable mappings, script tasks, Orchestrator process/agent/API workflow starts, business rules, queue item creation, HITL, message events, and supported agent execution shells.
+
+Wrapper choices are not optional:
+
+- RPA, agent, API workflow, A2A, and create-and-wait queue work use `bpmn:serviceTask`.
+- Queue create uses `bpmn:sendTask`.
+- Business rules use `bpmn:businessRuleTask`.
+- HITL uses `bpmn:userTask`.
+- Agentic and case-management process calls use `bpmn:callActivity`.
+- Script work uses `bpmn:scriptTask`.
 
 For every shell:
 

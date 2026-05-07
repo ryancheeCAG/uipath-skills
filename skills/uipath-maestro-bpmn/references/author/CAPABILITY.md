@@ -19,12 +19,13 @@ Capability index for local BPMN project authoring. Author owns source edits, loc
 2. **Keep pass 1 standard BPMN-first** - pass 1 may include placeholders and annotations for resource intent, but it must not invent `uipath:activity`, `uipath:event`, connector bindings, generated schemas, or package metadata.
 3. **Read the BPMN XML contract before editing** - the frontend contract defines which XML the model may author and which pieces require CLI generation or enrichment.
 4. **Default to reviewable file edits for BPMN source** - edit `.bpmn` directly for model-owned XML so diffs stay inspectable.
-5. **Do not hand-author Integration Service details** - use [plugins/integration-service/](references/plugins/integration-service/) for the planning and implementation boundary.
-6. **Keep generated package files derived** - if `bindings_v2.json`, `entry-points.json`, `operate.json`, or `package-descriptor.json` is stale, prefer regeneration or validation over manual patching.
-7. **Every Studio Web-visible element needs diagram geometry** - ensure diagrams, planes, shapes, bounds, edges, and waypoints exist for rendered nodes and flows.
-8. **Validate once the full local edit is coherent** - intermediate BPMN edits may be invalid while IDs, flows, and diagrams are being reconciled.
-9. **Preserve unknown imported extensions** - do not delete extension elements the skill cannot interpret unless the user explicitly asks for normalization.
-10. **Use synthetic examples only** - never copy private exported BPMN into local fixtures, docs, or comments.
+5. **Choose BPMN element class before resource recipe** - RPA, agents, and API workflows are service tasks; queue create is a send task; business rules are business rule tasks; HITL is a user task. See [supported-elements.md](references/supported-elements.md).
+6. **Do not hand-author Integration Service details** - use [plugins/integration-service/](references/plugins/integration-service/) for the planning and implementation boundary.
+7. **Keep generated package files derived** - if `bindings_v2.json`, `entry-points.json`, `operate.json`, or `package-descriptor.json` is stale, prefer regeneration or validation over manual patching.
+8. **Every Studio Web-visible element needs diagram geometry** - ensure diagrams, planes, shapes, bounds, edges, and waypoints exist for rendered nodes and flows.
+9. **Validate once the full local edit is coherent** - intermediate BPMN edits may be invalid while IDs, flows, and diagrams are being reconciled.
+10. **Preserve unknown imported extensions** - do not delete extension elements the skill cannot interpret unless the user explicitly asks for normalization.
+11. **Use synthetic examples only** - never copy private exported BPMN into local fixtures, docs, or comments.
 
 ## Two-pass workflow
 
@@ -47,6 +48,8 @@ Use this workflow for greenfield projects and for brownfield edits that change t
 | Fill variables, bindings, expressions, and UiPath extensions | [references/planning-impl.md](references/planning-impl.md) |
 | Choose an editing operation | [references/editing-operations.md](references/editing-operations.md) |
 | Choose what the model may write | [shared/bpmn-xml-contract.md](../shared/bpmn-xml-contract.md) |
+| Choose supported BPMN elements and extension wrappers | [references/supported-elements.md](references/supported-elements.md) |
+| Add resource-backed task recipes | [references/task-recipes/](references/task-recipes/) |
 | Work with Integration Service nodes/triggers | [references/plugins/integration-service/](references/plugins/integration-service/) |
 
 ## Common tasks
@@ -57,6 +60,7 @@ Use this workflow for greenfield projects and for brownfield edits that change t
 | Create a confirmed BPMN skeleton | [references/planning-arch.md](references/planning-arch.md) + [references/greenfield.md](references/greenfield.md) |
 | Add or revise BPMN structure | [references/brownfield.md](references/brownfield.md) + [references/editing-operations.md](references/editing-operations.md) + [shared/bpmn-xml-contract.md](../shared/bpmn-xml-contract.md) |
 | Add variables, mappings, bindings, or expressions | [references/planning-impl.md](references/planning-impl.md) + [shared/variables-bindings-expressions.md](../shared/variables-bindings-expressions.md) |
+| Select the right BPMN wrapper for RPA, agent, API workflow, queue, HITL, business rule, or call activity work | [references/supported-elements.md](references/supported-elements.md) + [references/task-recipes/](references/task-recipes/) |
 | Add an Integration Service activity or trigger | [references/plugins/integration-service/](references/plugins/integration-service/) |
 | Add a specific BPMN or UiPath extension element | [Plugin references](#plugin-references) |
 | Prepare for upload or run | [references/validation.md](references/validation.md) then [operate/CAPABILITY.md](../operate/CAPABILITY.md) |
@@ -81,6 +85,8 @@ Use this workflow for greenfield projects and for brownfield edits that change t
 - [planning-arch.md](references/planning-arch.md) - pass 1 BPMN skeleton planning
 - [planning-impl.md](references/planning-impl.md) - pass 2 UiPath extension fill
 - [editing-operations.md](references/editing-operations.md) - safe edit operations for BPMN XML
+- [supported-elements.md](references/supported-elements.md) - source-backed supported BPMN elements and UiPath extension wrappers
+- [task-recipes/](references/task-recipes/) - BPMN-first recipes for resource-backed tasks
 - [validation.md](references/validation.md) - local validation checklist
 - [plugins/integration-service/](references/plugins/integration-service/) - Integration Service planning and CLI enrichment boundary
 
@@ -91,17 +97,17 @@ Each plugin reference has a `planning.md` for pass 1 shape/resource decisions an
 - [plugins/start-end-events/](references/plugins/start-end-events/) - start events, end events, intermediate events, and boundary events
 - [plugins/gateways/](references/plugins/gateways/) - exclusive, inclusive, parallel, event-based, and complex gateways
 - [plugins/sequence-flows/](references/plugins/sequence-flows/) - control-flow edges, conditions, defaults, and diagram waypoints
-- [plugins/service-tasks/](references/plugins/service-tasks/) - service task wrappers and common service metadata boundaries
+- [plugins/service-tasks/](references/plugins/service-tasks/) - base service task boundary; use [task-recipes/](references/task-recipes/) for concrete resource-backed tasks
 - [plugins/connectors/](references/plugins/connectors/) - connector-backed activities, triggers, waits, and dynamic schemas
 - [plugins/waits-triggers/](references/plugins/waits-triggers/) - timers, waits, triggers, receives, and timeout behavior
 - [plugins/script/](references/plugins/script/) - script tasks, script metadata, inputs, outputs, and error paths
-- [plugins/hitl/](references/plugins/hitl/) - human-in-the-loop tasks, outcomes, timeouts, and Action Center bindings
-- [plugins/queues/](references/plugins/queues/) - Orchestrator queue item creation and queue result handling
+- [plugins/hitl/](references/plugins/hitl/) - user task representation for Action Center work
+- [plugins/queues/](references/plugins/queues/) - send task or service task representation for queue work
 - [plugins/call-activity-subprocess/](references/plugins/call-activity-subprocess/) - call activities, subprocesses, event subprocesses, and scoped mappings
 - [plugins/multi-instance/](references/plugins/multi-instance/) - sequential or parallel collection processing
-- [plugins/agents/](references/plugins/agents/) - agent job and A2A agent execution shells
-- [plugins/rpa-jobs/](references/plugins/rpa-jobs/) - Orchestrator RPA process job execution
-- [plugins/api-workflows/](references/plugins/api-workflows/) - API workflow invocation and response handling
+- [plugins/agents/](references/plugins/agents/) - service task recipes for agent job and A2A execution shells
+- [plugins/rpa-jobs/](references/plugins/rpa-jobs/) - service task recipe for Orchestrator RPA process execution
+- [plugins/api-workflows/](references/plugins/api-workflows/) - service task recipe for API workflow invocation
 - [plugins/signals/](references/plugins/signals/) - signal definitions, throws, catches, waits, and broadcast semantics
 - [plugins/business-rules/](references/plugins/business-rules/) - business rule task invocation and result routing
 

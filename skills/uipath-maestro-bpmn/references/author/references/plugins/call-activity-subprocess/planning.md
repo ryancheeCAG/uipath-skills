@@ -1,6 +1,6 @@
 # Call Activity and Subprocess Planning
 
-Use this reference when planning reusable or scoped process blocks.
+Use this reference when planning reusable or scoped process blocks. For agentic or case-management process calls, see [task-recipes/call-activity.md](../../task-recipes/call-activity.md).
 
 ## When to use
 

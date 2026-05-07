@@ -1,6 +1,6 @@
 # API Workflow Planning
 
-Use this reference when planning API workflow execution from BPMN.
+Use this reference when planning API workflow execution from BPMN. API workflows are resource recipes for `bpmn:serviceTask`, not peer BPMN element types. See [task-recipes/api-workflow.md](../../task-recipes/api-workflow.md).
 
 ## When to use
 
@@ -19,7 +19,7 @@ Use this reference when planning API workflow execution from BPMN.
 
 ## Model may draft
 
-- Service task wrapper with documented `Orchestrator.ExecuteApiWorkflowAsync` shell.
+- `bpmn:serviceTask` wrapper with documented `Orchestrator.ExecuteApiWorkflowAsync` shell.
 - Input/output mappings and public-safe request examples.
 - Boundary error paths and gateways.
 

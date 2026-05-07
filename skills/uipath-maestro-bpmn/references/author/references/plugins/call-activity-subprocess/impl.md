@@ -1,6 +1,6 @@
 # Call Activity and Subprocess Implementation
 
-This document defines the implementation boundary for call activities and subprocesses.
+This document defines the implementation boundary for call activities and subprocesses. For agentic or case-management process calls, see [task-recipes/call-activity.md](../../task-recipes/call-activity.md).
 
 ## Model-owned implementation
 

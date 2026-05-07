@@ -1,6 +1,6 @@
 # Business Rule Planning
 
-Use this reference when planning business rule execution from BPMN.
+Use this reference when planning business rule execution from BPMN. Business rules are `bpmn:businessRuleTask`, not generic service tasks. See [task-recipes/business-rule.md](../../task-recipes/business-rule.md).
 
 ## When to use
 
@@ -19,7 +19,7 @@ Use this reference when planning business rule execution from BPMN.
 
 ## Model may draft
 
-- Service task wrapper with documented `Orchestrator.BusinessRules` shell.
+- `bpmn:businessRuleTask` wrapper with documented `Orchestrator.BusinessRules` shell.
 - Input/output mappings and post-rule gateway conditions.
 - Retry and boundary error paths.
 - Public-safe binding placeholders.

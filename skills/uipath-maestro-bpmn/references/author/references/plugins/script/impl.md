@@ -15,9 +15,14 @@ The model may edit:
 
 ## Implementation rules
 
+- Script tasks execute through Jint, not Node.js or a browser runtime.
 - Keep script source deterministic and side-effect-light.
 - Use `args` as the input object when that is the local convention.
 - Return or map explicit outputs instead of mutating undeclared globals.
+- Prefer `uipath:scriptVersion value="v3"` unless preserving an imported version.
+- Available helpers are limited to `uipath.aggregate`, `uipath._aggregate`, `uipath._pipe`, and no-op `console` methods.
+- Do not use npm packages, filesystem, network, browser globals, or long-running async behavior.
+- Keep execution within the 64 MB memory and 30 second timeout envelope.
 - Do not embed secrets, account data, URLs, or local paths.
 - Do not use scripts as a substitute for connector enrichment or RPA work.
 
@@ -27,3 +32,4 @@ The model may edit:
 - Output variables exist and are writable.
 - Script CDATA is syntactically coherent.
 - `uipath:scriptVersion` is present when required by the local contract.
+- For `v2` and later, returned JSON may map through `response`; older script versions must return a JSON object.

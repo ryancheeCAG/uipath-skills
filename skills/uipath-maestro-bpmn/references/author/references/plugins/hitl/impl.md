@@ -1,12 +1,12 @@
 # HITL Implementation
 
-This document defines the implementation boundary for HITL tasks.
+This document defines the implementation boundary for HITL task recipes. HITL is implemented as `bpmn:userTask`; see [task-recipes/hitl.md](../../task-recipes/hitl.md).
 
 ## Model-owned implementation
 
 The model may edit:
 
-- `bpmn:serviceTask` wrapper for human work.
+- `bpmn:userTask` wrapper for human work.
 - Documented `Actions.HITL` `uipath:activity` shell.
 - Input body CDATA using synthetic payload fields.
 - Output mappings for action result, completed fields, comments, and decision values.

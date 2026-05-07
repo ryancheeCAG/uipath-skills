@@ -12,6 +12,12 @@ The model may edit:
 - Public-safe correlation variable names and mappings.
 - Non-Integration-Service message event shells when documented.
 
+Do not duplicate message-event concepts:
+
+- Plain BPMN message events describe process semantics.
+- `Maestro.ReceiveMessageEvent` and `Maestro.SendMessageEvent` are model-owned UiPath message-event shells.
+- Connector-backed waits and triggers use `Intsvc.WaitForEvent` or `Intsvc.EventTrigger` and require CLI enrichment.
+
 ## CLI-owned or operator-owned implementation
 
 The CLI or operator must provide:

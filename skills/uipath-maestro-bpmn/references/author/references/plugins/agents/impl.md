@@ -1,6 +1,6 @@
 # Agent Implementation
 
-This document defines the implementation boundary for agent tasks.
+This document defines the implementation boundary for agent task recipes. Agents are implemented as `bpmn:serviceTask`; see [task-recipes/agent-job.md](../../task-recipes/agent-job.md).
 
 ## Model-owned implementation
 

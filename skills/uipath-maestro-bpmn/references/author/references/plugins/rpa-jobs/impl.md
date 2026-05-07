@@ -1,6 +1,6 @@
 # RPA Job Implementation
 
-This document defines the implementation boundary for RPA job tasks.
+This document defines the implementation boundary for RPA job task recipes. RPA jobs are implemented as `bpmn:serviceTask`; see [task-recipes/rpa-job.md](../../task-recipes/rpa-job.md).
 
 ## Model-owned implementation
 

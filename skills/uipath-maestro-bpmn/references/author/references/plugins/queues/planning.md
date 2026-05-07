@@ -1,6 +1,6 @@
 # Queue Planning
 
-Use this reference when planning Orchestrator queue interactions from BPMN.
+Use this reference when planning Orchestrator queue interactions from BPMN. Queue create is `bpmn:sendTask`; create-and-wait queue work is `bpmn:serviceTask`. See [task-recipes/queue.md](../../task-recipes/queue.md).
 
 ## When to use
 
@@ -19,7 +19,7 @@ Use this reference when planning Orchestrator queue interactions from BPMN.
 
 ## Model may draft
 
-- `bpmn:serviceTask` with documented `Orchestrator.CreateQueueItem` shell.
+- `bpmn:sendTask` with documented `Orchestrator.CreateQueueItem` shell, or `bpmn:serviceTask` with `Orchestrator.CreateAndWaitForQueueItem`.
 - Queue payload CDATA with synthetic fields.
 - Output mappings and error paths.
 - Placeholder-safe binding references.

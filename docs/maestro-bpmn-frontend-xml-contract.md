@@ -1,6 +1,6 @@
 # Maestro BPMN Frontend XML Contract
 
-Status: planning contract for `uipath-maestro-bpmn`. This document is sanitized for the public skills repository. It summarizes frontend and packaging behavior observed from internal source and private exported BPMN examples without including raw private XML, tenant data, URLs, connection IDs, folder data, private names, or local paths.
+Status: planning contract for `uipath-maestro-bpmn`. This document is sanitized for the public skills repository. It summarizes source-backed frontend and packaging behavior without including raw private XML, tenant data, URLs, connection IDs, folder data, private names, or local paths.
 
 ## Scope
 
@@ -12,19 +12,16 @@ The contract is planning/research only. It does not implement the skill or intro
 
 Frontend serialization source of truth:
 
-- `PO.FrontEnd/src/services/serialization/bpmn-moddle.ts`: registers the UiPath moddle descriptor and constructs UiPath extension elements.
-- `PO.FrontEnd/src/services/serialization/bpmn-from-xml.ts`: imports BPMN XML, validates diagram presence, filters orphan diagrams, extracts objects, maps extension elements, and runs migrations.
-- `PO.FrontEnd/src/services/serialization/bpmn-to-xml.ts`: exports BPMN XML, filters diagrams, merges geometry, builds definitions, writes exporter metadata, and fixes CDATA serialization.
-- `PO.FrontEnd/src/services/serialization/uipath-moddle.v1.json`: UiPath extension namespace descriptor.
-- `PO.FrontEnd/src/services/serialization/design-schema/*.json`: design-time contracts for Integration Service, Orchestrator, HITL, message events, timer triggers, case scheduler, API workflow, business rules, and agents.
-- `PO.FrontEnd/src/services/serialization/elements/*.ts`: BPMN node, edge, lane, group, object, parent, shape, documentation, and flow builders.
-- `PO.FrontEnd/src/services/serialization/converters/bpmn-converter-utils/*.ts`: conversion helpers for root, tasks, events, gateways, boundaries, subprocesses, scripts, and edges.
-- `PO.FrontEnd/src/services/serialization/migrations/*.ts`: import-time migration registry and versioned migrations.
-- `PO.FrontEnd/src/services/validation/bpmn/**/*.ts`: canvas validation rules that should be mirrored by a CLI validator.
-- `PO.FrontEnd/src/utils/PackagingUtil.ts`: browser-side packaging helper for bindings, entry points, operate metadata, package descriptor, case conversion, and Flow asset copy support.
-- `PO.FrontEnd/Tools/UiPath.Tool.ProcessOrchestration/**`: .NET packaging tool used by solution packaging infrastructure.
+- UiPath moddle descriptor registration and extension element construction.
+- BPMN XML import, diagram validation, object extraction, extension mapping, warning behavior, and import migrations.
+- BPMN XML export, diagram filtering, geometry merge, definitions construction, exporter metadata, and CDATA fixup.
+- Design-time contracts for Integration Service, Orchestrator, HITL, message events, timer triggers, case scheduler, API workflow, business rules, and agents.
+- BPMN node, edge, lane, group, object, parent, shape, documentation, and flow builders.
+- Conversion helpers for root, tasks, events, gateways, boundaries, subprocesses, scripts, and edges.
+- Canvas validation rules that should be mirrored by a CLI validator.
+- Packaging helpers for bindings, entry points, operate metadata, package descriptors, case conversion, and asset copy support.
 
-Private exported examples were reviewed only for structural coverage. The examples confirm that real exports combine root process extensions, entry points, variables, bindings, mappings, Integration Service activities/triggers, Orchestrator calls, HITL, subprocesses, script tasks, tags, retries, boundary errors, timers, message events, gateways, groups, annotations, and BPMN DI. No private XML content is reproduced here.
+Private examples may be used only to confirm structural coverage. Public docs and fixtures must use synthetic XML and public-safe summaries.
 
 ## Baseline BPMN Document
 
@@ -260,13 +257,13 @@ Frontend import currently runs versioned migrations after XML import. Model-gene
 - Avoid rewriting private or user-authored extension payloads without an explicit normalize command.
 - Keep variable-scope migration behavior conservative; the frontend has disabled automatic cross-scope variable relocation for compatibility.
 
-## Private Export Coverage
+## Synthetic Coverage Targets
 
-The private exported examples confirmed these public-safe coverage points:
+The fixture corpus should cover these public-safe structural points:
 
 - Large and medium processes use hundreds of sequence flows, many tasks/service tasks, exclusive gateways, boundary error events, intermediate events, timers, messages, terminate ends, groups, annotations, and BPMN DI.
 - UiPath extensions appear both at root process level and node level.
-- Real exports include `uipath:variables`, `uipath:bindings`, `uipath:entryPointId`, `uipath:activity`, `uipath:event`, `uipath:mapping`, `uipath:context`, `uipath:input`, `uipath:output`, `uipath:inputSchema`, `uipath:scriptVersion`, `uipath:retry`, `uipath:caseManagement`, `uipath:tags`, `uipath:loopCharacteristics`, and `uipath:migrationVersion`.
+- Representative projects include `uipath:variables`, `uipath:bindings`, `uipath:entryPointId`, `uipath:activity`, `uipath:event`, `uipath:mapping`, `uipath:context`, `uipath:input`, `uipath:output`, `uipath:inputSchema`, `uipath:scriptVersion`, `uipath:retry`, `uipath:caseManagement`, `uipath:tags`, `uipath:loopCharacteristics`, and `uipath:migrationVersion`.
 - Observed service type families include `BPMN.Variables`, `Intsvc.ActivityExecution`, `Intsvc.EventTrigger`, `Intsvc.WaitForEvent`, `Actions.HITL`, `Orchestrator.StartJob`, and `Orchestrator.StartAgentJob`.
 - The first public fixture set should be small and synthetic: minimal linear process, gateway plus boundary error, Integration Service activity/trigger shell, and subprocess plus multi-instance.
 

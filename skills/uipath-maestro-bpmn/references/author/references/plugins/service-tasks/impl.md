@@ -1,6 +1,6 @@
 # Service Task Implementation
 
-This document defines the implementation boundary for service tasks.
+This document defines the implementation boundary for `bpmn:serviceTask`. Resource-backed task choices live in [task-recipes/](../../task-recipes/).
 
 ## Model-owned implementation
 
@@ -11,6 +11,8 @@ The model may edit:
 - `uipath:retry`, `uipath:errorMapping`, and tags when explicitly requested.
 - Documented non-Integration-Service `uipath:activity` shells with public-safe context.
 - Boundary error or timeout events attached to the task.
+
+Use service tasks for `Orchestrator.StartJob`, `Orchestrator.StartAgentJob`, `A2A.AgentExecution`, `Orchestrator.ExecuteApiWorkflowAsync`, `Orchestrator.CreateAndWaitForQueueItem`, and supported `Intsvc.*` service executions. Do not use a service task for new queue-create, HITL, business-rule, script, or call-activity XML.
 
 ## CLI-owned implementation
 
