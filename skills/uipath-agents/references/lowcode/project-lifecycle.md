@@ -176,24 +176,18 @@ uip solution bundle . -d ./dist --output json
 
 ## Resource Discovery
 
-`uip solution resource list` queries the Resource Catalog Service for all resources visible to the tenant and returns a compact JSON list. Use it as the first step of any tool-authoring flow — it replaces `uip or folders list` and `uip or processes list`, and covers Action Center apps and Context Grounding indexes too.
-
-Two supported invocations:
+`uip solution resource list` queries the Resource Catalog Service for resources of one kind visible to the tenant and returns a compact JSON list. Use it as the first step of any tool-authoring flow — it replaces `uip or folders list` and `uip or processes list`, and covers Action Center apps and Context Grounding indexes too.
 
 ```bash
-# Local (in-solution): --kind and --search not allowed.
-uip solution resource list [solutionPath] --source local --output json
-
-# Remote (Orchestrator / RCS): --kind and --search supported.
-uip solution resource list [solutionPath] --source remote [--kind <kind>] [--search <term>] --output json
+# Pick one kind per call; --kind is required.
+uip solution resource list --kind <kind> --solution-folder <path> --source <all|local|remote> [--search <term>] --output json
 ```
 
 **Flags:**
-- `--source <all|local|remote>` — default `all`. `local` lists resources already in the solution; `remote` queries Orchestrator / RCS.
-- `--kind <kind>` — filter by resource kind. Supported: `Queue`, `Asset`, `Bucket`, `Process`, `Connection`, `App`, `Index`. **Only valid with `--source remote`.**
-- `--search <term>` — substring match on the resource name (case-insensitive). **Only valid with `--source remote`.**
-
-> **`--kind` and `--search` only work with `--source remote`.** With `--source local` or `--source all` (default), both flags must be omitted — list everything and filter `.Data[]` client-side by `Kind` and `Name`.
+- `--kind <kind>` (required) — one resource kind per invocation. Supported: `Queue`, `Asset`, `Bucket`, `Process`, `Connection`, `App`, `Index`, `Trigger` (any kind RCS indexes).
+- `--source <all|local|remote>` — default `all`. `local` returns resources already in the solution; `remote` queries Orchestrator / RCS only; `all` returns both (with locals winning on `(Kind, Name)` collisions).
+- `--search <term>` — substring match on the resource name (case-insensitive).
+- `--solution-folder <path>` — solution root (default: current directory).
 
 **Output row:**
 

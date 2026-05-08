@@ -36,9 +36,10 @@ initial_prompt: |
   - Escalation app name: "Tool.Guardrail.Escalation.Action.App"
   - Recipient email: reviewer@example.com (type 3)
 
-  Use `uip solution resource list` to attempt to discover the app and
-  populate app fields. If the app is not found remotely, write the
-  minimum required fields (app.name, app.version, app.folderName).
+  Use `uip solution resource list --kind App --source remote` to attempt
+  to discover the app and populate app fields. If the app is not found
+  remotely, write the minimum required fields (app.name, app.version,
+  app.folderName).
 
   Do NOT publish, upload, or deploy. Do NOT ask for approval,
   confirmation, or feedback. Do NOT pause between planning and

@@ -31,13 +31,13 @@ Two supported invocations — pick one based on where you're looking:
 **Local (in-solution):**
 
 ```bash
-uip solution resource list --source local --output json
+uip solution resource list --kind Process --source local --output json
 ```
 
 **Remote (Orchestrator / RCS):**
 
 ```bash
-uip solution resource list --source remote --kind Process --search "<NAME>" --output json
+uip solution resource list --kind Process --source remote --search "<NAME>" --output json
 ```
 
 > **`--kind` and `--search` only work with `--source remote`.** With `--source local` or `--source all` (default), both flags must be omitted — list everything and filter `.Data[]` client-side by `Kind` and `Name`.
@@ -172,11 +172,9 @@ For in-solution agents already registered with the parent solution — auto-regi
 ```bash
 # 1. Scaffold solution + agent per [project-lifecycle.md § End-to-End Example](../../project-lifecycle.md#end-to-end-example--new-standalone-agent).
 
-# 2. Discover the process
-# Remote: --kind / --search supported server-side.
-uip solution resource list --source remote --kind Process --search "<NAME>" --output json
-# Local: --kind and --search NOT supported — list, then filter .Data[] client-side.
-uip solution resource list --source local --output json
+# 2. Discover the process — --kind is required, pick one kind per call.
+uip solution resource list --kind Process --source remote --search "<NAME>" --output json
+uip solution resource list --kind Process --source local --output json
 # Parse .Data[]. Each entry: Source, Key, Name, Kind, Type (lowercase), Folder, FolderKey.
 # Source: "Local" → location: "solution". "Remote" → location: "external".
 # Use Key as referenceKey, Name as processName, Type for the agent-level type,
@@ -226,9 +224,8 @@ uip agent init "ToolAgent" --output json
 # resources/solution_folder/process/agent/ToolAgent.json automatically.
 
 # 3. From ParentAgent, add ToolAgent as a tool — discovery via the unified flow.
-# `--source local` accepts neither --kind nor --search; list then filter client-side.
-uip solution resource list --source local --output json
-# Pick the row with Kind="Process" and Name="ToolAgent", then:
+uip solution resource list --kind Process --source local --output json
+# Pick the row with Name="ToolAgent", then:
 uip solution resource get <KEY> --output json
 # Then create ParentAgent/resources/ToolAgent/resource.json with location: "solution".
 
