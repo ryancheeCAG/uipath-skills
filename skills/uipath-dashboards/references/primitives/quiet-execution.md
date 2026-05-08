@@ -30,7 +30,7 @@ The Task subagent receives:
 The subagent does ALL the heavy lifting, but maximizes parallelism to keep wall-clock low:
 - **Boot:** read all required reference files in ONE message with parallel Reads (saves ~21s vs serial)
 - **Scaffold:** ONE bash call to `assets/scripts/scaffold-project.sh` handles mkdir + .env.local + state.json + template rendering + npm install + shadcn init/add + restore + sanity checks (saves ~60-90s vs ~30 individual Write+Bash calls)
-- **Widget generation:** for each widget, write its 4 files (widget tsx, view tsx, hook, list hook) in ONE message with parallel Writes (saves ~100s across 12 widgets vs serial)
+- **Widget generation:** **MANDATORY: All widget bundle files written in a SINGLE message.** Each widget bundle is 4 files (widget tsx, view tsx, query hook, list-query hook). For a dashboard with N widgets, the subagent emits **ONE message containing 4×N parallel `Write` tool calls** — not N rounds of 4 parallel Writes. With 9 widgets: one round-trip for 36 file writes, NOT nine round-trips. Concretely: prepare every widget's content in a single LLM turn, then emit them all together. The same applies to detail views — all view files in one message after the widgets land. **Two violation tells: (a) widget files have file mtimes spaced more than 2-3 seconds apart; (b) total tool_uses for a 9-widget build exceeds 25.** Aim for ≤ 20 total tool uses across the entire Build pipeline.
 - Type-check, API-existence-check, smoke-check
 - Self-heal validation failures
 - Boot dev server
@@ -246,3 +246,4 @@ If the harness doesn't support subagent dispatch:
 - **Letting npm output through.** It's noisy and uninformative. One line: ✓ dependencies installed.
 - **Surfacing tsc errors directly.** They go through `validation.md` first.
 - **Treating advanced users the same.** A user who uses the words "look at the code" or "show me what you wrote" can get the dev-mode view — but the default is quiet.
+- **Per-round-trip Writes for widgets.** A 9-widget dashboard with one widget per round (4 parallel Writes × 9 rounds) takes ~3 min just on Write latency. The same files in ONE round (36 parallel Writes × 1 round) takes ~6s. The wall-clock difference between these patterns is roughly the difference between a 4-minute build and a 13-minute build. Do not interpret "per-widget parallel writes" as "one widget at a time".

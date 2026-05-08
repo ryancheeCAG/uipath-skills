@@ -86,7 +86,7 @@ The subagent's wall-clock is dominated by LLM round-trip latency, not subprocess
    `--app-name` MUST be the Title Case display name (e.g., `"Agent Health Dashboard"`). `--routing-name` MUST be the `gov-dashboard-<kebab>-<4rand>` slug computed during the Plan phase. If `--routing-name` is omitted, the script derives it from `--app-name` as a defensive fallback — but the Plan-phase agent should always compute and pass it so the user sees the exact slug in the plan before approval.
    Replaces ~30 `Write` calls (templates) + 5 `Bash` calls (npm install, shadcn init/add, restores) with **one** `Bash` call. Saves ~60-90 seconds. The script returns a JSON evidence object (including the `appName` and `routingName` it persisted) that the subagent passes through to the main agent.
 
-3. **Per-widget parallel writes.** Each widget bundle is 4 files (widget tsx, view tsx, query hook, list hook). Write all 4 in a single message with parallel `Write` calls. 12 widgets × (1 round-trip with 4 parallel writes) ≈ 36 seconds; 12 widgets × (4 sequential writes) ≈ 144 seconds. Free 100-second win.
+3. **All widget bundles in a SINGLE message.** Don't iterate widget-by-widget. Prepare content for every widget's 4 files (widget tsx, view tsx, query hook, list-query hook) in one LLM turn, then emit them ALL in one message via 4×N parallel `Write` tool calls. For 9 widgets that's 36 parallel Writes in one round-trip — ~6s wall-clock vs ~180s for nine sequential rounds. Detail views the same way: one message, all view files. **Tool-use budget for the entire Build pipeline: ≤ 20.** A run with 60+ tool uses indicates the subagent failed to batch.
 
 The Task subagent runs the pipeline (each sub-step still delegates to the primitive listed below, but invisibly):
 

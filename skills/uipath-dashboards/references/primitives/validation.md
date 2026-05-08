@@ -24,7 +24,7 @@ Run `npx tsc --noEmit` in the project root. Capture stderr. If non-zero exit:
    - Wrong field name on SDK row → cross-reference the introspected `.d.ts` for the actual field name; correct.
    - `jobError` rendered raw → wrap with `formatJobError()`.
    - `dueDate` referenced (Tasks have no `dueDate` — see `service-semantics.md` § Tasks) → switch to `taskSlaDetail.status` via `taskSlaStatusOf()`.
-4. Re-run tsc. Up to 3 iterations. If still failing, halt and surface to user with: *"I hit a type error I can't fix automatically: <error>. Want me to retry, skip the failing widget, or pause for you to look?"*
+4. Re-run tsc. **Self-heal cap: 1 iteration, not 3.** A single `tsc --noEmit` run is ~25s; three runs is ~80s plus the time to author fixes. If the first heal pass doesn't reach exit 0, surface the remaining errors as a friendly prompt rather than re-iterating — the user can fix or skip a widget faster than another self-heal round. Friendly prompt: *"I hit a type error I can't fix automatically: <error>. Want me to retry, skip the failing widget, or pause for you to look?"*
 
 ### Pass 2 — API existence check
 For each generated query hook in `src/lib/queries/*.ts`:
