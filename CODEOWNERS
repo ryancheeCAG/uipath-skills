@@ -88,3 +88,7 @@
 # Tasks skill (Action Center Operate)
 /skills/uipath-tasks/ @UiPath/ActionCenterDev
 /tests/tasks/uipath-tasks/ @UiPath/ActionCenterDev
+
+# Admin skill (Identity Server management)
+/skills/uipath-admin/ @sriramva-uipath @bansal-anushree @jianjunwang2 @t-hsia @ZuerWang99 @litheon @IsabellaCapriottiUIPath @uipathswapnil @ashleyetheridge
+/tests/tasks/uipath-admin/ @sriramva-uipath @bansal-anushree @jianjunwang2 @t-hsia @ZuerWang99 @litheon @IsabellaCapriottiUIPath @uipathswapnil @ashleyetheridge
