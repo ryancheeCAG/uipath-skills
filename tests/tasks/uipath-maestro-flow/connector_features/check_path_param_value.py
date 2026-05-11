@@ -7,6 +7,7 @@ Usage:
 Looks for <expected_value> in either:
   - Any node's `inputs.detail.pathParameters` dict values (native connector path)
   - Any node's `inputs.detail.url` or `inputs.detail.endpoint` (managed HTTP path)
+  - Any node's `inputs.detail.bodyParameters.url` (HTTP v2 CLI-configured path)
 """
 
 from __future__ import annotations
@@ -46,13 +47,25 @@ def main() -> None:
                 if str(value) == needle:
                     print(f"OK: {needle!r} found in pathParameters of node {node.get('id')!r}")
                     return
-        for key in ("url", "endpoint"):
-            target = str(detail.get(key, "") or "")
+        candidates = [
+            ("url", detail.get("url", "")),
+            ("endpoint", detail.get("endpoint", "")),
+        ]
+        body_parameters = detail.get("bodyParameters", {}) or {}
+        if isinstance(body_parameters, dict):
+            candidates.append(
+                ("bodyParameters.url", body_parameters.get("url", ""))
+            )
+        for label, value in candidates:
+            target = str(value or "")
             if needle in target:
-                print(f"OK: {needle!r} found in {key} of node {node.get('id')!r}")
+                print(f"OK: {needle!r} found in {label} of node {node.get('id')!r}")
                 return
 
-    _fail(f"{needle!r} not found in any node's pathParameters, url, or endpoint")
+    _fail(
+        f"{needle!r} not found in any node's pathParameters, url, endpoint, "
+        "or bodyParameters.url"
+    )
 
 
 if __name__ == "__main__":
