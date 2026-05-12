@@ -65,9 +65,7 @@ A placeholder task in `caseplan.json.nodes[<stage>].data.tasks[<lane>][]`:
 }
 ```
 
-Note the empty `data: {}` — no `taskTypeId`, no folder path, no input/output wiring. Connector placeholders follow the same shape with `type` set to `connector-activity` or `connector-trigger` and no `data.typeId` / `data.connectionId` keys.
-
-> **`action` placeholders MUST include `data.taskTitle`** — validator rejects empty per [`plugins/tasks/action/impl-json.md`](plugins/tasks/action/impl-json.md). Source from sdd.md's task-title hint or fall back to `displayName`. Include `data.priority` and `data.recipient` if known from planning; otherwise omit those keys. Other placeholder fields (`data.context`, `data.inputs`, `data.outputs`, `data.actionCatalogName`) stay omitted until the action-app is attached.
+Note the empty `data: {}` — no `taskTypeId`, no folder path, no input/output wiring. The shape is uniform across classes: connector placeholders use `type` `connector-activity` / `connector-trigger`; action placeholders too — no exception for `data.taskTitle` or other action-specific keys.
 
 ### In-stage timer
 
