@@ -29,7 +29,9 @@ initial_prompt: |
   Route success to a final action that logs "QueryParams test passed".
   Validate the final flow file.
   If the Google Tasks connector operation is not present in the registry, use
-  a managed HTTP fallback for the same REST call and finish after validation.
+  a managed HTTP fallback for the same REST call: GET
+  https://tasks.googleapis.com/tasks/v1/lists/@default/tasks with query
+  parameter showHidden=true. Finish after validation.
   Do not keep searching for a connector node that the registry does not expose.
 
 success_criteria:
