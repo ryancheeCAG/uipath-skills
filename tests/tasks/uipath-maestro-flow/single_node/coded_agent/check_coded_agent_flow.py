@@ -11,10 +11,12 @@ from _shared.flow_check import (  # noqa: E402
     run_debug,
 )
 
+PROJECT_GLOB = "CountLettersCoded/CountLettersCoded/project.uiproj"
+
 
 def main():
-    assert_flow_has_node_type(["uipath.core.agent"])
-    payload = run_debug(timeout=240)
+    assert_flow_has_node_type(["uipath.core.agent"], project_glob=PROJECT_GLOB)
+    payload = run_debug(timeout=240, project_glob=PROJECT_GLOB)
     # 3 r's in 'counterrevolutionary'.
     assert_output_value(payload, 3)
     print("OK: Coded-agent node present; output contains 3")

@@ -63,6 +63,12 @@ initial_prompt: |
   are NOT registry keys. Confirm the key with
   `uip maestro flow registry search "azureactivedirectory"` before adding
   the node.
+  Exact connector node type: use
+  `uipath.connector.uipath-microsoft-azureactivedirectory.list-groups` for
+  the List Groups operation. If registry search or `flow node add` cannot
+  retrieve connector metadata in this no-live sandbox, hand-author that exact
+  node type with empty `inputs` per the no-live connector guidance. Do not
+  substitute generic `list-records` for this task.
 
   Add a Decision node to check whether the call succeeded.
   Route failure to a Terminate node with error message "CeqlWhere test failed".
