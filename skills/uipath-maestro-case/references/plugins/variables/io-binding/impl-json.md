@@ -51,7 +51,66 @@ src_output = find_output_by_name(src_task, "outputName")
 target_input["value"] = f"=vars.{src_output['var']}"
 ```
 
-After all bindings, verify every bound input has a non-empty `value` and every `=vars.X` resolves to an existing ID in: any task `data.outputs[].var`, the variables `inputOutputs[].id`, or the variables `inputs[].id`. Variables array path is schema-dependent — `root.data.uipath.variables.{inputOutputs,inputs}[].id` in v19, top-level `variables.{inputOutputs,inputs}[].id` in v20 (Rule 18).
+After all bindings, run the end-of-Phase-3 validator. It performs three cross-reference checks:
+
+### Check 1 — `=vars.X` reference resolution
+
+Verify every bound input has a non-empty `value`, and every `=vars.X` reference resolves to an existing entry in one of:
+- Any task `data.outputs[].id` (the resolver match key; mirrors `var` under skill convention)
+- Variables `inputOutputs[].id`
+- Variables `inputs[].id`
+
+Variables array path is schema-dependent — `root.data.uipath.variables.{inputOutputs,inputs}[].id` in v19, top-level `variables.{inputOutputs,inputs}[].id` in v20 (Rule 18).
+
+> **Scan key:** match by `.id`, NOT `.var`. The runtime resolver matches on `Variable.id` (`VariablesService.findVariableByVariableId`). Under the skill convention `id === var` on self-declaring outputs, scanning by `.var` is harmless in practice, but `.id` is symmetric with the resolver.
+
+Also scan `=vars.X` references in:
+- Edge guard expressions (`edges[].data.conditionExpression`)
+- Entry / exit condition expressions (stage and task)
+- SLA expressions
+- `=js:` expressions anywhere they appear
+
+Same resolution rule applies — these are read-side consumers of the variable namespace.
+
+### Check 2 — Out-arg producer presence (Q10 Option II)
+
+For every entry in `root.data.uipath.variables.outputs[]` (formal Out-arg entries), the entry's `var` field is a POINTER to the variable slot that should hold the value at case end (audit knowledge doc §4.6). Validation gates on whether the SDD declared a `Default`:
+
+| SDD Case Variables row for this Out-arg | Required at validate time | If missing |
+|---|---|---|
+| **Has `Default` value** | `root.inputOutputs[]` companion exists with `id === <var>` AND `default` field is non-empty. (Producer task is OPTIONAL — companion's default is the fallback.) | ERROR — companion was supposed to be written by variables plugin |
+| **No `Default` value** | At least one `task.data.outputs[]` entry exists with `id === <var>`. (No companion is written when there's no Default per [`../global-vars/impl-json.md` § Out argument](../global-vars/impl-json.md).) | ERROR — Out-arg has no value source |
+
+Pseudocode:
+
+```text
+for entry in root.outputs[]:
+  var = entry.var
+  has_companion_default = exists(io in root.inputOutputs[] where io.id == var and io.default not empty)
+  has_producer_task    = exists(t in all task.outputs[] where t.id == var)
+
+  if sdd_row(name=entry.name).default is not empty:
+      if not has_companion_default: ERROR("Out-arg with Default lacks companion default")
+  else:
+      if not has_producer_task: ERROR("Out-arg without Default lacks producing task output")
+```
+
+On ERROR, AskUserQuestion:
+
+```
+Out-argument "<name>" (id <random>, var <var>) has no value source:
+  SDD row Default: <"" | "<value>">
+  Companion root.inputOutputs[].id="<var>": <missing | default="">
+  Producing task.data.outputs[].id="<var>": <missing>
+Either:
+  (a) Add an `outputs: ... <- <connectorField>` row to a task that produces this value (matching <var>)
+  (b) Add a Default value to the SDD Case Variables row
+  (c) Recategorize the variable
+```
+
+### Check 3 — Type mismatch warnings
+
+Where a `=vars.X` reference resolves to a declaration with a different `type` than the consuming input expects, log WARNING. Proceed (string coercion is common and runtime-tolerant).
 
 ## Connector Tasks
 
@@ -90,7 +149,8 @@ All issues go to the shared issue list per [logging/impl-json.md](../../logging/
 | Placeholder task (no `data.inputs[]`) | `SKIPPED` | Skip all bindings |
 | Input name not found (exact match) | `ERROR` | Skip binding — log available inputs |
 | Source output not found (exact match) | `ERROR` | Skip binding — log available outputs |
-| `=vars.X` not in any task `outputs[]` or root `inputOutputs[]` | `ERROR` | Skip binding |
+| `=vars.X` not in any task `outputs[].id` or root `inputOutputs[].id` / `inputs[].id` | `ERROR` | Skip binding |
+| Out-arg formal entry's `var` doesn't match any task `outputs[].id` AND companion has no `default` | `ERROR` | Log Out-arg producer issue (Check 2 above); AskUserQuestion |
 | Type mismatch (input vs variable) | `WARNING` | Proceed |
 
 Example log entry (pseudocode — record in-reasoning, not via subprocess):

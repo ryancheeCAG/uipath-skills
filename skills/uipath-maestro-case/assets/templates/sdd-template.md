@@ -145,9 +145,27 @@ The generated SDD must start with:
 
 ### Case Triggers
 
-| Trigger Type | Source | Configuration | Initial Variable Mapping |
-|-------------|--------|---------------|-------------------------|
-| {None \| Intsvc.EventTrigger \| Intsvc.TimerTrigger} | {source system, connector, or "Manual"} | {IS connector event config, timer cycle/duration, or "N/A"} | {source field -> case variable, one per line} |
+> Variable mapping (which trigger payload field populates which case variable) is declared in the **Case Variables** table below via `sourceTriggers` / `sourceFields` columns — NOT here. This table just identifies and configures each trigger.
+
+| T# | Trigger Type | Source | Configuration |
+|----|-------------|--------|---------------|
+| T02 | {None \| Intsvc.EventTrigger \| Intsvc.TimerTrigger \| Manual} | {source system, connector, or "Manual"} | {see Configuration rules below} |
+
+> Number triggers sequentially starting at T02 (T01 is reserved for the case file). The T-number is referenced by Case Variables rows whose value comes from this trigger's payload.
+
+**Configuration column — write user-specified intent only:**
+
+| Trigger type | What to write |
+|---|---|
+| Event trigger | The operation in business terms (e.g., `Calendar created`, `Email received`). Append a filter expression if the user wants filtering (e.g., `Email received in Inbox; filter: subject contains "URGENT"`). Append a required event-param value only when the user supplies it explicitly (e.g., `Email received in folder "<folder name>"`). |
+| Timer trigger | Cycle or duration (e.g., `every 24 hours`, `daily at 09:00 UTC`). |
+| Manual | `N/A` or omit. |
+
+DO NOT include in Configuration:
+- CLI enum values like `CALENDAR_CREATED` or `createdRecord` (the skill resolves these from the IS connector cache at planning time).
+- Default modes like `polling` vs `webhook` (the skill defaults; the user only overrides when they care).
+- Meta notes like `No required event parameters` or `No user filter` (absence is the default; the skill discovers required params at `case spec` time).
+- Connector activity slug, HTTP method, or any spec-discovered detail.
 
 ### Case Exit Conditions
 
@@ -159,17 +177,68 @@ The generated SDD must start with:
 
 ### Case Variables
 
-> Complete inventory of all case-level variables. Every variable must list where it is produced and where it is consumed.
+> Complete inventory of all case-level variables and arguments. Every row's `Category` column is REQUIRED — drives classification at build time. Inference from other columns is no longer supported.
 
-| Variable | Type | Default | Description | Produced By | Consumed By |
-|----------|------|---------|-------------|-------------|-------------|
-| {camelCase name} | {String \| Number \| Boolean \| Date \| Object \| Array \| ...} | {default value or "—"} | {description of what this variable represents} | {trigger, task name, or "computed"} | {comma-separated list of tasks that read this variable} |
+| Name | Category | Type | sourceTriggers | sourceFields | Default | Description |
+|------|----------|------|----------------|--------------|---------|-------------|
+| {camelCase name} | {In \| Out \| Variable} | {string \| number \| boolean \| date \| object \| array \| jsonSchema} | {T-number(s), CSV — required when value comes from trigger payload; empty for pure state / Out-args} | {keyed `T<N>: <path>; T<M>: <path>` format when sourceTriggers has multiple entries; single `<path>` when one trigger; empty when no trigger source} | {default value or empty} | {what this variable represents} |
+
+**Category semantics:**
+
+- **`In`** — formal case argument supplied by an external caller (manual trigger / API). For manual/timer triggers only. **NOT valid for event-trigger-sourced rows** — those are case-internal state populated by the trigger, not formal arguments. Use `Variable` instead.
+- **`Out`** — formal case argument returned to the caller at case end. Value comes from a task output (via task plugin's `<-` aliasing — see per-task `Outputs` tables below) OR from a `Default` value if no task fires. `sourceTriggers` MUST be empty (direction mismatch — values flow case→caller, not trigger→case).
+- **`Variable`** — case-internal state. May be populated by trigger payload (use `sourceTriggers` + `sourceFields`), by a task output (use `<-` notation in that task's Outputs table — same Name on both sides drives the wiring), or initialized via `Default` only.
+
+**`sourceFields` notation (when sourceTriggers has multiple T-numbers):**
+
+```
+T02: response.subject; T03: response.title
+```
+
+Strict per-trigger — each T-number in `sourceTriggers` must have a corresponding entry in `sourceFields`. Same field name across triggers must be spelled out per trigger (no shorthand). Paths support dot-path nesting (e.g., `response.user.name`); array indexing (`items[0]`) not supported in v1.
+
+**Out-arg producer rule (validated at end of Phase 3):**
+
+Every `Out` row must have at least one of:
+1. A `Default` value (the fallback returned when no task fires)
+2. A task whose `Outputs` table includes a row with the same Name as the Out-arg (the producer — runtime writes its value into the Out-arg slot)
+
+If neither holds, the io-binding validator surfaces the misalignment.
+
+**Examples:**
+
+| Name | Category | Type | sourceTriggers | sourceFields | Default | Description |
+|------|----------|------|----------------|--------------|---------|-------------|
+| caseStatus | Variable | string | | | "Open" | Pure case state |
+| subject | Variable | string | T02 | response.subject | | Populated by event trigger payload |
+| caseStarter | Variable | string | T02, T03 | T02: response.user; T03: response.initiator | | Multi-trigger, different fields per trigger |
+| applicantName | In | string | | | | Formal In-arg for manual trigger (no source) |
+| finalDecision | Out | string | | | | Out-arg; producer is "Approve Decision" task |
 
 ---
 
 ## Section 2: Stages & Tasks
 
 **Purpose:** The case plan — every stage as a self-contained subsection with its own entry/exit conditions, SLA, and task definitions with inline I/O bindings. Stages use correct node types from the schema (`case-management:Stage` or `case-management:ExceptionStage`).
+
+**I/O bindings — how the Inputs / Outputs tables drive task wiring:**
+
+- **Inputs `Binding` column** = the case variable expression (`=vars.X`), metadata (`=metadata.X`), or literal that feeds this task input at runtime. Written into `task.data.inputs[].value`.
+- **Outputs `Field` column** = the connector / process response field name. Supports dot-path nesting for nested responses (e.g., `result.score`, `data.user.id`). Top-level field name when the response is flat.
+- **Outputs `Binding` column** = the case-scope variable name (camelCase) that stores the extracted value. Drives `var` / `id` on `task.data.outputs[]`. When Field and Binding camelCase to the same string, no aliasing is needed; when they differ, the aliasing is automatic — the Binding column is the authoritative storage slot name. The runtime engine writes the extracted `Field` value into `vars.<Binding>`.
+
+The wiring on disk:
+```jsonc
+// task.data.outputs[] entry (written by task plugin)
+{ "name": "<schema-display-name>",
+  "source": "=<Field>",        // ← extracts from response
+  "var":    "<Binding>",       // ← storage slot name (resolver key)
+  "id":     "<Binding>",       // ← mirrors var
+  ...
+}
+```
+
+If a task output's Binding matches a Case Variables row's Name (e.g., `Out` arg), the runtime engine writes the value into that slot — natural alignment via shared name.
 
 > Repeat the following structure for each stage in the case plan. Number stages sequentially.
 

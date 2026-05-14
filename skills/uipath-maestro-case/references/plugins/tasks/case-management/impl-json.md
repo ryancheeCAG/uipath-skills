@@ -51,6 +51,12 @@ Both share `resourceKey` = `<folderPath>.<name>`. ID: `b` + 8 chars. Deduplicate
 2. **Recursion guard** — confirm the sub-case `entityKey` from tasks.md does NOT match the current case's own entityKey (direct recursion) and does not appear as an ancestor in already-written `case-management` tasks (transitive recursion). If either check fails, flag for user review.
 3. Set `data.name` = `=bindings.<nameBindingId>`, `data.folderPath` = `=bindings.<folderPathBindingId>`
 4. Write `data.inputs[]` / `data.outputs[]` from Step 0 schema. Each input: `{ name, type, id, var, elementId, value: "" }`. Each output: `{ name, type, id, var, value, source, target, elementId }`.
+
+   **Output aliasing per `<-` notation** (parsed from tasks.md `outputs:` row; documented in [`../../variables/io-binding/planning.md`](../../variables/io-binding/planning.md#discovering-inputoutput-names)):
+   - `<sdd-name> <- <response-path>` → `source: "=<response-path>"`, `var/id/target/value: "<sdd-name>"`. `name` stays as the schema's display name.
+   - Bare `<name>` → camelCase the schema field → `var/id/target/value` = camelCased, `source: "=<schema-field-name>"`.
+   - Dot-paths supported on the right side (`result.score`, `data.user.email`). Array indexing not supported in v1.
+   - [Uniqueness rule](../../variables/global-vars/impl-json.md#uniqueness-rule) applies to `var/id/target` on collision; `source` is never suffixed.
 5. Append to target stage's `tasks[laneIndex][]`
 
 > Entry conditions added in Step 10. Input value bindings in Phase 3 per [io-binding/impl-json.md](../../variables/io-binding/impl-json.md).
