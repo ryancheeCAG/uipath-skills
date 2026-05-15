@@ -263,7 +263,7 @@ These checks need the `trigger-spec-cache.json` to exist (Phase 3 product), so t
 | Check | Severity | Action |
 |---|---|---|
 | `Category=In` row references a spec output of an **event** trigger | ERROR | Reject — audit Finding #6 misclassification. AskUserQuestion: recategorize as Variable. |
-| `sourceField` path doesn't exist in the referenced trigger's `caseShape.outputs[]` (top-level miss OR nested-path walk fails) | ERROR | Reject — audit Finding #5 drift. AskUserQuestion: present available spec fields. |
+| `sourceField` path doesn't exist in the referenced trigger's `caseShape.outputs[]` (top-level miss OR nested-path walk fails) | ERROR | Halt — audit Finding #5 drift. AskUserQuestion at planning time, listing the available spec property keys (e.g., `Title`, `Description`, `Location`, …). User picks the correct field; update SDD's `sourceField` accordingly. **DO NOT** preserve the SDD value with a "runtime fallback" note (e.g., `"if extraction fails, switch source to =response.Title"`) — that defers resolution to runtime where the failure is silent (audit Finding #1). Resolve at planning. |
 | `sourceField` exists but its type doesn't match SDD row's Type | WARNING | Proceed but log to `build-issues.md`. |
 | Multi-trigger row's `sourceFields` has a T-number not in `sourceTriggers` (or vice versa) | ERROR | Reject (Q9 strict). |
 
