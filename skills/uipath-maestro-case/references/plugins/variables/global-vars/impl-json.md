@@ -106,8 +106,8 @@ For each trigger in `trigger-spec-cache.json`:
 
 | Spec output state | SDD reference | `triggerNode.outputs[]` write | `root.inputs[]` | `root.outputs[]` | `root.inputOutputs[]` |
 |---|---|---|---|---|---|
-| Not referenced by SDD | (no row) | `{name: <spec.name>, var: <spec.name>, id: <spec.name>, source: <spec.source>, elementId: <triggerId>}` — copy the spec's own `source` value verbatim (e.g., `"=response"`, `"=Error"`); do NOT synthesize a path. Plain-name auto-emit per Q5/Alt 1. | — | — | Optional companion — only needed if downstream code targets `=vars.<field>` AND the trigger output alone is insufficient. Default: skip (trigger output with `id` self-declares). |
-| Referenced as `Category=Variable` | row's `sourceField` path | `{name: <sdd-name>, var: <sdd-name>, id: <sdd-name>, source: "=<row.sourceField>", elementId: <triggerId>}` (Pattern C with id present for self-resolution; `source` is `=` prepended to the raw `sourceField` value from tasks.md) | — | — | `{id: <sdd-name>, name: <sdd-name>, type: <type>, elementId: "root"}` — companion with elementId="root" routes variable to Case Variables panel (per audit Finding #6). |
+| Not referenced by SDD | (no row) | `{name: <spec.name>, var: <spec.name>, id: <spec.name>, type: <spec.type>, source: <spec.source>, elementId: <triggerId>}` — `type` and `source` come from the spec entry verbatim (e.g., `type: "jsonSchema"` + `source: "=response"`); do NOT synthesize a path. Plain-name auto-emit per Q5/Alt 1. | — | — | **Required** — `{id: <spec.name>, name: <spec.name>, type: <spec.type>, elementId: <triggerId>, body: <spec.body>}`. For `jsonSchema`-typed entries (e.g., `response`, `Error`), the companion holds the full body schema that the FE picker uses to discover sub-fields. Without it, sub-field picking is broken and the variable can't be selected in connector-task input bindings. |
+| Referenced as `Category=Variable` | row's `sourceField` path | `{name: <sdd-name>, var: <sdd-name>, id: <sdd-name>, type: <sdd-row.type>, source: "=<row.sourceField>", elementId: <triggerId>}` (Pattern C with id present for self-resolution; `source` is `=` prepended to the raw `sourceField` value from tasks.md; `type` comes from the SDD row, NOT the spec — author's chosen type wins) | — | — | `{id: <sdd-name>, name: <sdd-name>, type: <sdd-row.type>, elementId: "root"}` — companion with elementId="root" routes variable to Case Variables panel (per audit Finding #6). |
 | Referenced as `Category=In` | (only valid for manual/timer triggers — see § In-arg below) | **REJECT for event triggers** (audit Finding #6 misclassification — recategorize to Variable) | — | — | — |
 | Referenced as `Category=Out` | — | **REJECT** (direction mismatch — Out-args flow case→caller) | — | — | — |
 
@@ -115,17 +115,23 @@ For each trigger in `trigger-spec-cache.json`:
 
 **Variant A semantics (per Q6a):** matching is by **top-level spec output name only** (i.e., the `name` field of an entry in `caseShape.outputs[]` — `response`, `Error`, etc.). When an SDD row's Name equals the top-level spec name, the SDD-named entry **replaces** the would-be plain-name auto-emit for that exact entry; do not write both.
 
-**Sub-field references DO NOT trigger replacement.** When SDD references a sub-field path (e.g., `sourceField: response.Title`), the Pattern C entry is in ADDITION to — not in place of — the top-level `response` auto-emit. Worked example for SDD `calendarTitle ← response.Title` on a trigger whose spec returns two top-level outputs `response` and `Error`:
+**Sub-field references DO NOT trigger replacement.** When SDD references a sub-field path (e.g., `sourceField: response.Title`), the Pattern C entry is in ADDITION to — not in place of — the top-level `response` auto-emit. Worked example for SDD `calendarTitle ← response.Title` (Variable, type=string) on a trigger whose spec returns two top-level `jsonSchema` outputs `response` and `Error`:
 
 ```jsonc
 triggerNode.outputs[]: [
-  { name: "Title",    var: "calendarTitle", id: "calendarTitle", source: "=response.Title", elementId: "<triggerId>" },  // Pattern C — SDD
-  { name: "response", var: "response",      id: "response",      source: "=response",       elementId: "<triggerId>" },  // auto-emit — coexists, NOT replaced
-  { name: "Error",    var: "Error",         id: "Error",         source: "=Error",          elementId: "<triggerId>" }   // auto-emit — unreferenced
+  { name: "Title",    var: "calendarTitle", id: "calendarTitle", type: "string",     source: "=response.Title", elementId: "<triggerId>" },  // Pattern C — SDD
+  { name: "response", var: "response",      id: "response",      type: "jsonSchema", source: "=response",       elementId: "<triggerId>" },  // auto-emit — coexists
+  { name: "Error",    var: "Error",         id: "Error",         type: "jsonSchema", source: "=Error",          elementId: "<triggerId>" }   // auto-emit — unreferenced
+]
+
+root.inputOutputs[]: [
+  { id: "calendarTitle", name: "calendarTitle", type: "string",     elementId: "root" },                    // Pattern C companion → Case Variables panel
+  { id: "response",      name: "response",      type: "jsonSchema", elementId: "<triggerId>", body: <full schema from spec> },  // auto-emit companion (REQUIRED — body drives sub-field picker)
+  { id: "Error",         name: "Error",         type: "jsonSchema", elementId: "<triggerId>", body: <error schema from spec> }
 ]
 ```
 
-Three entries total: one Pattern C wire + two auto-emit entries for the un-replaced top-level outputs.
+Six entries total: 3 trigger outputs + 3 companions. The auto-emit companions carry the full body schemas so the FE picker can navigate sub-fields. The Pattern C companion has no body (its type is the primitive `string`).
 
 ### Loop B — SDD-only rows (rows with no trigger source)
 
