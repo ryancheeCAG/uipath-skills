@@ -1,3 +1,4 @@
+# ci: validate refreshed UIPATH_* secrets (draft PR — do not merge)
 task_id: skill-review-rpa-project
 description: >
   Skill-guided evaluation: agent uses the uipath-review skill to perform
