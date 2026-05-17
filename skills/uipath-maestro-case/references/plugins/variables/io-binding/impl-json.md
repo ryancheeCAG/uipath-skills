@@ -78,35 +78,63 @@ For every entry in `root.data.uipath.variables.outputs[]` (formal Out-arg entrie
 
 | SDD Case Variables row for this Out-arg | Required at validate time | If missing |
 |---|---|---|
-| **Has `Default` value** | `root.inputOutputs[]` companion exists with `id === <var>` AND `default` field is non-empty. (Producer task is OPTIONAL — companion's default is the fallback.) | ERROR — companion was supposed to be written by variables plugin |
-| **No `Default` value** | At least one `task.data.outputs[]` entry exists with `id === <var>`. (No companion is written when there's no Default per [`../global-vars/impl-json.md` § Out argument](../global-vars/impl-json.md).) | ERROR — Out-arg has no value source |
+| **Has `Default` value** | `root.inputOutputs[]` companion exists with `id === <var>` AND `default` field is non-empty. (Producer task is OPTIONAL — companion's default is the fallback.) | AskUserQuestion (companion was supposed to be written by variables plugin) |
+| **No `Default` value, and producer alias is declared in SDD on an unresolved (Rule 17 placeholder) task** | n/a — declared-but-unwirable case | **No prompt.** Silent WARN: log to `tasks/build-issues.md` under `## Open Items for User`. Rule 17 already gave the author the choice; this is the placeholder path. |
+| **No `Default` value, and NO producer alias is declared anywhere** | n/a — pure orphan | AskUserQuestion (4 options, see below) |
 
 Pseudocode:
 
 ```text
 for entry in root.outputs[]:
   var = entry.var
-  has_companion_default = exists(io in root.inputOutputs[] where io.id == var and io.default not empty)
-  has_producer_task    = exists(t in all task.outputs[] where t.id == var)
+  has_companion_default      = exists(io in root.inputOutputs[] where io.id == var and io.default not empty)
+  has_producer_alias_in_sdd  = exists in SDD any task's Outputs row whose left-side name == var
+  has_producer_wire_in_plan  = exists in caseplan.json any task.data.outputs[] where id == var
+  producer_task_unresolved   = the SDD-declared producer task is a Rule 17 placeholder (data.uipath = {})
 
   if sdd_row(name=entry.name).default is not empty:
-      if not has_companion_default: ERROR("Out-arg with Default lacks companion default")
+      # Has Default — companion must exist with default
+      if not has_companion_default: AskUserQuestion("companion missing for Default")
   else:
-      if not has_producer_task: ERROR("Out-arg without Default lacks producing task output")
+      if has_producer_alias_in_sdd and producer_task_unresolved and not has_producer_wire_in_plan:
+          # Declared producer but task is unresolvable — Rule 17 already prompted; just log
+          LOG_OPEN_ITEM("Out-arg with declared but unresolvable producer — runtime undefined until producer is wired")
+      elif not has_producer_alias_in_sdd:
+          # Pure orphan — author never declared a producer. Ask.
+          AskUserQuestion("pure orphan", options=(a, b, c, d))
 ```
 
-On ERROR, AskUserQuestion:
+**On AskUserQuestion ("pure orphan" branch):**
 
 ```
 Out-argument "<name>" (id <random>, var <var>) has no value source:
   SDD row Default: <"" | "<value>">
   Companion root.inputOutputs[].id="<var>": <missing | default="">
   Producing task.data.outputs[].id="<var>": <missing>
-Either:
-  (a) Add an `outputs: ... <- <connectorField>` row to a task that produces this value (matching <var>)
-  (b) Add a Default value to the SDD Case Variables row
-  (c) Recategorize the variable
+
+Pick one:
+  (a) Add producer task output — name the task; the skill will add `outputs: <name> <- <field>` to it
+  (b) Add a Default value to the SDD Case Variables row — supply value inline
+  (c) Recategorize as Variable (case-internal state) or remove the variable
+  (d) Continue with best-effort emit (case builds; runtime returns undefined for this Out-arg; entry logged under "Open Items for User" in build-issues.md)
 ```
+
+Option (d) is the build-with-best escape for cases where the author intends to wire the producer later but wants to keep iterating now — equivalent to the silent-WARN treatment that declared-but-unresolvable producers (T20-style) get automatically.
+
+**Rationale for the split:** real-world authoring is iterative. When an author has already gone through a Rule 17 prompt for the producer task (T20-style), the skill should not pile a second prompt on top — that's the path the author already chose by picking "Skip". But when the author authored a *pure orphan* with no producer declared at all (T14-style — wait-for-timer with no aliasing wire AND no Default), there's no prior signal of intent; the AskUserQuestion is the right surface to ask "did you mean to forget this, or wire it now?" Option (d) preserves the build-with-best escape.
+
+**Build-issues entry template** (both branches log to this, only the AskUserQuestion branch ALSO prompts):
+
+```markdown
+## Open Items for User
+
+- **[Q10 II — Out-arg `<name>` has no value source]** — The Out-argument `<name>` (id `<random>`, var `<var>`) is declared in `variables.outputs[]` but {Default missing companion default | no producer wired AND no Default}. Runtime will return `undefined` for this Out-argument unless one of:
+  - Add an `outputs: <name> <- <connectorField>` row to a task that produces this value (matching `<var>`)
+  - Add a Default value to the SDD Case Variables row
+  - Recategorize the variable as `Variable` or remove it
+```
+
+See [implementation.md § Step 12 — End-of-Phase-3 validator pass](../../../implementation.md) for invocation.
 
 ### Check 3 — Type mismatch warnings
 
