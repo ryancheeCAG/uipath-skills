@@ -59,6 +59,7 @@ If the user provides a taxonomy file, use `--skip-taxonomy` and `import-taxonomy
 | "List projects" | `uip ixp projects list --output json` |
 | "Configure the model" / "Change preprocessing" | `uip ixp projects configure-model <project-name> [options] --output json` |
 | "Upload a document" / "Add documents to an existing project" | `uip ixp documents upload <project-name> <file> --output json` — see [CLI Reference § Uploading documents](references/cli-reference.md#uploading-documents-to-an-existing-project). One file per call; loop for multiple. For brand-new projects use `projects create` instead. |
+| "Delete a document" / "Remove a document" | `uip ixp documents delete <project-name> <document-id> --output json` — irreversible, triggers retrain. To delete by filename, look up the `DocumentId` via `documents list` (the `Filename` column shows the original upload name). |
 
 ## Common Pitfalls
 
