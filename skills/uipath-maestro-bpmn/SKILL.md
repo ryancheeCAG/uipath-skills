@@ -51,15 +51,16 @@ Guide for authoring, inspecting, validating, packaging, operating, and diagnosin
 
 1. **BPMN XML is the source of record** - edit `.bpmn` for process structure; treat generated package JSON as derived unless a CLI contract explicitly says otherwise.
 2. **Model owns skeleton and documented non-IS XML only** - generate BPMN control flow, diagram coordinates, root variables, mappings, entry point IDs, script tasks, retry/error metadata, and documented non-Integration-Service UiPath extensions. Do not invent undocumented UiPath extension payloads.
-3. **Use two-pass authoring for substantial changes** - write the standard BPMN skeleton first, get operator confirmation of the process shape, then fill model-owned UiPath extension XML.
-4. **CLI owns Integration Service enrichment** - Integration Service activities/triggers, connection bindings, connector metadata, dynamic schemas, trigger properties, and generated output templates must come from registry-backed CLI enrichment or validation.
-5. **Never use private source material in skill content** - no exported customer BPMN, tenant URLs, folder keys, connection IDs, user names, process names, local paths, screenshots, or temporary mission notes. Examples must be synthetic.
-6. **Use JSON output for parsed CLI calls** - whenever CLI output is parsed programmatically, request JSON output from the CLI and preserve the raw command result in the local transcript or a sanitized report.
-7. **Do not run debug or deployed process execution without explicit user consent** - debug/run can trigger real side effects in external systems.
-8. **Ask before cloud-side mutations** - upload, publish, deploy, run, pause, resume, cancel, retry, migrate, and move-cursor operations require a clear user decision.
-9. **Do not automatically invoke sibling skills** - when BPMN references an RPA process, agent, app, API workflow, or case asset that is missing, identify the dependency and provide handoff instructions.
-10. **Validate before operate** - run local XML/project/package validation before upload, publish, or debug. Treat validation warnings about CLI-owned enrichment as blockers for real runs when the target element can execute.
-11. **Preserve unknown extension payloads unless normalizing explicitly** - do not delete or rewrite user-authored or imported UiPath extension XML just because the skill cannot fully interpret it.
+3. **Work solution-first** - new BPMN work belongs inside a local UiPath solution directory with a `.uipx` file and one or more project subdirectories. Wrap imported standalone projects before upload, publish, debug, or run.
+4. **Use two-pass authoring for substantial changes** - write the standard BPMN skeleton first, get operator confirmation of the process shape, then fill model-owned UiPath extension XML.
+5. **CLI owns Integration Service enrichment** - Integration Service activities/triggers, connection bindings, connector metadata, dynamic schemas, trigger properties, and generated output templates must come from registry-backed CLI enrichment or validation.
+6. **Never use private source material in skill content** - no exported customer BPMN, tenant URLs, folder keys, connection IDs, user names, process names, local paths, screenshots, or internal work-tracking notes. Examples must be synthetic.
+7. **Use JSON output for parsed CLI calls** - whenever CLI output is parsed programmatically, request JSON output from the CLI and preserve the raw command result in the local transcript or a sanitized report.
+8. **Do not run debug or deployed process execution without explicit user consent** - debug/run can trigger real side effects in external systems.
+9. **Ask before cloud-side mutations** - upload, publish, deploy, run, pause, resume, cancel, retry, migrate, and move-cursor operations require a clear user decision.
+10. **Do not automatically invoke sibling skills** - when BPMN references an RPA process, agent, app, API workflow, or case asset that is missing, identify the dependency and provide handoff instructions.
+11. **Validate before operate** - run local XML/project/package validation before upload, publish, or debug. Treat validation warnings about CLI-owned enrichment as blockers for real runs when the target element can execute.
+12. **Preserve unknown extension payloads unless normalizing explicitly** - do not delete or rewrite user-authored or imported UiPath extension XML just because the skill cannot fully interpret it.
 
 ## Anti-patterns (universal)
 

@@ -1,6 +1,40 @@
 # Project Layout
 
-Maestro BPMN Process Orchestration projects use BPMN XML as source and generated JSON files as package/runtime metadata.
+Maestro BPMN Process Orchestration projects use BPMN XML as source and generated JSON files as package/runtime metadata. New work should live inside a UiPath solution directory.
+
+## Solution workspace
+
+For new local work, use a solution directory with a `.uipx` manifest and one or more project subdirectories:
+
+```text
+SolutionName/
+  SolutionName.uipx
+  ProjectName/
+    ProjectName.bpmn
+    project.uiproj
+    bindings_v2.json
+    entry-points.json
+    operate.json
+    package-descriptor.json
+```
+
+Create the solution first, then initialize the BPMN project inside it:
+
+```bash
+uip solution init --help --output json
+uip solution init SolutionName --output json
+cd SolutionName
+uip maestro bpmn init ProjectName --output json
+uip solution project list --output json
+```
+
+Use `uip solution init` when the probe succeeds. If the installed CLI returns
+`unknown command 'init'`, substitute `uip solution new SolutionName --output json`
+with the same arguments. Current `uip maestro bpmn init` registers the project
+when it runs inside a solution. If an older CLI does not register it, use
+`uip solution project add ProjectName SolutionName.uipx --output json`. Use
+`uip solution project import --source <ProjectDir> --solutionFile <SolutionFile> --output json`
+when an existing project starts outside the solution.
 
 ## Canonical source files
 
@@ -12,14 +46,7 @@ Maestro BPMN Process Orchestration projects use BPMN XML as source and generated
   directory as the main BPMN file: `InvoiceTriageBpmn/project.uiproj`, not next
   to the project directory.
 
-For a new local project, create a single project directory and place source
-files under it:
-
-```text
-ProjectName/
-  ProjectName.bpmn
-  project.uiproj
-```
+For a new local project, place the project directory under the solution. Avoid continuing long-term work in an unregistered standalone project.
 
 ## Generated or CLI-managed package files
 
@@ -31,7 +58,7 @@ ProjectName/
 Treat these JSON files as derived unless a CLI contract explicitly identifies a field as user-authored. For source fixes, edit BPMN or rerun CLI enrichment rather than patching generated output by hand.
 
 Local packaging requires the generated metadata set to exist. In particular,
-`uip maestro bpmn pack <ProjectDir> <OutputDir> --output json` consumes
+`uip maestro bpmn pack <SolutionDir>/<ProjectName> <OutputDir> --name <ProjectName> --output json` consumes
 `package-descriptor.json`; it does not create a missing descriptor from only
 the BPMN and `project.uiproj`.
 
@@ -47,7 +74,7 @@ A Process Orchestration package content folder contains:
 - `operate.json`.
 - `package-descriptor.json`.
 
-The package descriptor maps BPMN and generated JSON files under `content/`. The entry point file path references the BPMN file and start event, using the root start event's unique entry point ID.
+The local package descriptor maps BPMN and generated JSON files with its `files` map; the packaged artifact places those files under `content/`. The entry point file path references the BPMN file and start event, using the root start event's unique entry point ID.
 
 ## Authoring boundary
 
