@@ -33,12 +33,11 @@ flags. The BPMN storage shape is different: enrichment writes BPMN
 `.flow` node `inputs.detail`. Do not use Flow node JSON or `uip maestro flow
 node configure` as a BPMN authoring shortcut.
 
-For Integration Service resource execution, target the post-rename command
-surface (`uip is resources run <verb> ...`). If the local CLI reports
-`unknown command 'run'`, retry the same call once with the legacy surface
-(`uip is resources execute <verb> ...`). This fallback is only for command
-surface detection; do not hide real auth, permission, validation, or connector
-errors by changing verbs.
+For Integration Service resource execution, target the current command surface
+(`uip is resources execute <verb> ...`). If the local CLI documents a renamed
+`run` verb instead, retry the same call once with that verb. This fallback is
+only for command surface detection; do not hide real auth, permission,
+validation, or connector errors by changing verbs.
 
 If enrichment tooling is unavailable, leave the element as a draft intent and record the open question. Do not hand-author connection IDs or private resource metadata.
 

@@ -153,7 +153,7 @@ rules to decide whether executable BPMN enrichment is complete.
 6. Resolve reference fields with the connection bound to this project:
 
    ```bash
-   uip is resources run list "<connector-key>" "<reference-object>" \
+   uip is resources execute list "<connector-key>" "<reference-object>" \
      --connection-id "<connection-id>" \
      --output json
    ```
@@ -161,10 +161,10 @@ rules to decide whether executable BPMN enrichment is complete.
    Reference IDs are connection-scoped. Never carry IDs from another solution,
    another connection, or a prior session. Paginate through
    `Data.Pagination.HasMore` / `NextPageToken` until the target is found or the
-   server says there are no more pages. If the installed CLI returns
-   `unknown command 'run'`, retry this same reference-resolution call with the
-   legacy verb shape `uip is resources execute list ...`. Do not retry with the
-   alternate verb for authentication, permission, network, or connector errors.
+   server says there are no more pages. If the installed CLI documents a
+   renamed `run` verb instead of `execute`, retry this same reference-resolution
+   call with that verb. Do not retry with the alternate verb for authentication,
+   permission, network, or connector errors.
 
 ### Activity metadata rules
 

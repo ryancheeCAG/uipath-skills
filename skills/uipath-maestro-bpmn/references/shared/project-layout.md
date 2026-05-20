@@ -41,17 +41,16 @@ SolutionName/
 Create the solution first, then initialize the BPMN project inside it:
 
 ```bash
-uip solution init --help --output json
-uip solution init SolutionName --output json
+uip solution new --help --output json
+uip solution new SolutionName --output json
 cd SolutionName
 uip maestro bpmn init ProjectName --output json
 uip solution project list --output json
 ```
 
-Use `uip solution init` when the probe succeeds. If the installed CLI returns
-`unknown command 'init'`, substitute `uip solution new SolutionName --output json`
-with the same arguments. Current `uip maestro bpmn init` registers the project
-when it runs inside a solution. If an older CLI does not register it, use
+Use `uip solution new` to create the solution directory and `.uipx` manifest.
+Current `uip maestro bpmn init` registers the project when it runs inside a
+solution. If an older CLI does not register it, use
 `uip solution project add ProjectName SolutionName.uipx --output json`. Use
 `uip solution project import --source <ProjectDir> --solutionFile <SolutionFile> --output json`
 when an existing project starts outside the solution.

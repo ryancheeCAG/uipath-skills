@@ -34,17 +34,16 @@ uip maestro bpmn pack ./MyProcess ./dist -n MyProcess --output json
 Typical solution setup before Studio Web or cloud lifecycle:
 
 ```bash
-uip solution init --help --output json
-uip solution init MySolution --output json
+uip solution new --help --output json
+uip solution new MySolution --output json
 cd MySolution
 uip maestro bpmn init MyProcess --output json
 uip solution project list --output json
 ```
 
-Use `uip solution init` when the probe succeeds. If the installed CLI returns
-`unknown command 'init'`, substitute `uip solution new MySolution --output json`
-with the same arguments. Current `uip maestro bpmn init` registers the project
-when it runs inside a solution. If an older CLI does not register it, use
+Use `uip solution new` to create the solution directory and `.uipx` manifest.
+Current `uip maestro bpmn init` registers the project when it runs inside a
+solution. If an older CLI does not register it, use
 `uip solution project add MyProcess MySolution.uipx --output json`. If a project
 was created outside a solution, import or wrap it before continuing with upload,
 publish, debug, or run. Do not move a local-only project into a solution when
