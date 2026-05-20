@@ -6,7 +6,7 @@ Capability index for local BPMN project authoring. Author owns source edits, loc
 
 ## When to use this capability
 
-- Create a Maestro BPMN project inside a local UiPath solution.
+- Create a Maestro BPMN project scaffold.
 - Edit `.bpmn` XML for process structure, diagrams, variables, bindings, entry points, scripts, timers, messages, gateways, subprocesses, boundary errors, and documented non-Integration-Service UiPath extensions.
 - Inspect an existing BPMN project and identify source versus generated files.
 - Run the two-pass authoring workflow: standard BPMN skeleton first, operator shape confirmation second, UiPath extension fill last.
@@ -29,9 +29,16 @@ authoring. Validation fixtures are coverage examples, not greenfield authoring
 templates. Open fixtures only after a validation failure or a directly linked
 guide requires a concrete example, and then read the smallest relevant fixture.
 
+For local-only skeleton requests, stay in pass 1. Read this capability,
+project layout, the BPMN XML contract, planning architecture, and any directly
+relevant plugin `planning.md` files. Do not read planning implementation,
+wrapper shells, task recipes, generated metadata guides, operation guides, or
+fixtures unless the request asks for executable UiPath metadata or validation
+has already failed.
+
 ## Critical rules
 
-1. **Use a solution-first workspace** - for new work, create or reuse a solution directory, place the BPMN project as a child project, and register it in the `.uipx` manifest.
+1. **Match the requested workspace shape** - for local-only authoring, validation, or packaging, create the BPMN project at the requested path. Use a solution directory only when the user asks for one or when preparing for Studio Web upload, publish, debug, or run.
 2. **Use the two-pass workflow for non-trivial authoring** - first generate or edit a pure BPMN skeleton with readable IDs and diagram geometry, then ask the operator to confirm the process shape, then add UiPath variables, bindings, mappings, entry points, and documented non-Integration-Service extensions.
 3. **Keep pass 1 standard BPMN-first** - pass 1 may include placeholders and annotations for resource intent, but it must not invent `uipath:activity`, `uipath:event`, connector bindings, generated schemas, or package metadata.
 4. **Read the BPMN XML contract before editing** - the Maestro BPMN contract defines which XML the model may author and which pieces require CLI generation or enrichment.
@@ -48,13 +55,28 @@ guide requires a concrete example, and then read the smallest relevant fixture.
 
 Use this workflow for greenfield projects and for brownfield edits that change topology, entry points, service calls, subprocess boundaries, or variable contracts.
 
-1. **Create or choose the solution workspace** - use a local `.uipx` solution directory and register the BPMN project under it.
+1. **Create or choose the workspace** - use the requested project directory for local-only work. If the task includes Studio Web upload, publish, debug, or run, create or reuse a local `.uipx` solution directory and register the BPMN project under it before handing off to Operate.
 2. **Plan the process shape** - identify starts, human/system steps, gateways, subprocesses, timers/messages, error paths, end states, variables, resources, and Integration Service enrichment needs. See [planning-arch.md](references/planning-arch.md).
 3. **Pass 1: author the BPMN skeleton** - create or edit standard BPMN elements, sequence flows, event definitions, diagram planes, shapes, edges, and placeholder labels. Keep this pass mostly free of UiPath extension XML except preserving existing extensions in brownfield files.
 4. **Operator shape confirmation** - summarize the skeleton in process terms and explicitly confirm starts, branches, joins, subprocess boundaries, error paths, and external-system placeholders before filling execution metadata.
 5. **Pass 2: fill model-owned UiPath XML** - add root variables, entry point IDs, mappings, bindings, scripts, retry/error metadata, and documented non-Integration-Service `uipath:activity` or `uipath:event` shells. See [planning-impl.md](references/planning-impl.md).
 6. **CLI enrichment handoff** - run or request registry-backed enrichment for Integration Service activities/triggers and generated package metadata. If tooling is unavailable, leave draft intent documented and keep the project in Author state.
 7. **Validate and summarize** - run local validation after the source is coherent, then report validation status, generated-file status, and unresolved enrichment blockers.
+
+### Fast path: local BPMN skeleton
+
+Use this path when the user asks for a local BPMN skeleton, explicitly says to
+build the skeleton first, or only requests BPMN routing/diagram structure and
+also says not to upload, publish, debug, deploy, or run.
+
+1. Create the project at the requested path, for example
+   `ProjectName/ProjectName.bpmn` with `ProjectName/project.uiproj`.
+2. Author standard BPMN elements, sequence flows, branch conditions, defaults,
+   and BPMN DI for every visible node and edge.
+3. Include only minimal UiPath extension XML that the request explicitly needs.
+   Do not browse pass-2 wrapper or resource recipes just to create a skeleton.
+4. Run a local XML parse or BPMN validation if requested, then report that the
+   result is a skeleton and identify any executable metadata not implemented.
 
 ## Workflow
 
@@ -76,7 +98,7 @@ Use this workflow for greenfield projects and for brownfield edits that change t
 | I need to... | Read these |
 | --- | --- |
 | Understand project files | [shared/project-layout.md](../shared/project-layout.md) |
-| Create a confirmed BPMN project in a solution | [references/greenfield.md](references/greenfield.md) + [shared/project-layout.md](../shared/project-layout.md) |
+| Create a confirmed BPMN project | [references/greenfield.md](references/greenfield.md) + [shared/project-layout.md](../shared/project-layout.md) |
 | Create a confirmed BPMN skeleton | [references/planning-arch.md](references/planning-arch.md) + [references/greenfield.md](references/greenfield.md) |
 | Add or revise BPMN structure | [references/brownfield.md](references/brownfield.md) + [references/editing-operations.md](references/editing-operations.md) + [shared/bpmn-xml-contract.md](../shared/bpmn-xml-contract.md) |
 | Add variables, mappings, bindings, or expressions | [references/planning-impl.md](references/planning-impl.md) + [shared/variables-bindings-expressions.md](../shared/variables-bindings-expressions.md) |

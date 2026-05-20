@@ -7,7 +7,7 @@ Use this guide when BPMN source changed and local package metadata must be refre
 - `.bpmn` is the source of record for process structure, root variables, root bindings, entry point IDs, mappings, diagrams, and documented non-Integration-Service UiPath XML.
 - `entry-points.json`, `bindings_v2.json`, `operate.json`, and `package-descriptor.json` are derived package metadata unless a CLI contract explicitly marks a field as user-authored.
 - Connector-backed or dynamically schematized `Intsvc.*` activity and event payloads are executable only after registry-backed enrichment supplies connector metadata, connection binding references, dynamic schemas, and generated package resources. Confirmed plain connectionless HTTP follows the documented pass-2 authoring recipe instead.
-- New work should be inside a solution directory. Use standalone project metadata only as an import/wrap step or a local fallback.
+- Local-only work may use a standalone project directory. Before upload, debug, publish, or run, wrap or register the project in a solution directory.
 
 ## Regeneration Inputs
 
@@ -36,7 +36,7 @@ Do not derive metadata from stale package files first. Use existing generated fi
    output when parsing command results:
 
    ```bash
-   uip maestro bpmn pack <SolutionDir>/<ProjectName> <OutputDir> --name <ProjectName> --output json
+   uip maestro bpmn pack <ProjectDir> <OutputDir> --name <ProjectName> --output json
    ```
 
 5. Inspect the package or generated content for:
