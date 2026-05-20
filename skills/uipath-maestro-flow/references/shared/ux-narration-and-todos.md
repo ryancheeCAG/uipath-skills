@@ -29,6 +29,7 @@ Bash plumbing inside a step is invisible to the user — the step's narration li
 | --- | --- |
 | Start of a logical step | **Narrate.** One short line, plain English, user terms. |
 | Multiple actions within the same step | No additional narration — the step's opening line covers them |
+| Multiple `Edit`s within the same step on the same file | Batch as parallel tool calls in the **same** turn. See [editing-operations.md — Batch independent `Edit`s in one turn](../author/references/editing-operations.md#batch-independent-edits-in-one-turn). |
 | Step transitions (one outcome done, next starting) | Narrate the next step |
 | Decision point | Brief one-liner before `AskUserQuestion` ("This decision affects which connection binding I generate — choose one:") |
 | Failure / retry | Always narrate — explain what failed and what's being tried next |

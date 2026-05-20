@@ -15,9 +15,29 @@ Strategy selection and shared concepts for modifying `.flow` files. Direct `.flo
 
 - The CLI auto-manages cross-cutting state (`definitions[]`, `variables.nodes`, edge references, layout). A scripting mutation bypasses that and forces hand-rolling it — extra surface for mistakes.
 - `Edit` shows a line-by-line diff in the transcript; a script is an opaque payload. The user reviews tool calls, not script bodies.
-- `Edit` calls are atomic per-call. A coordinated multi-section change is *not* one transaction — it's a sequence of `Edit` calls the user can interrupt between. Treating it as a single Python script removes that interruption point.
+- `Edit` calls are atomic per-call **and reviewable individually in the transcript**. A coordinated multi-section change is a sequence of `Edit` tool calls — each one shown with its own diff and cancellable on its own — whether the agent issues them serially or in parallel within a single turn. Treating the whole change as one Python script removes that per-call review point, even if it would be marginally faster than a turn of parallel `Edit`s. (Parallel `Edit`s in one turn give the speed without giving up the review point — see [Batch independent `Edit`s in one turn](#batch-independent-edits-in-one-turn).)
 
 If the change feels too tangled for a sequence of `Edit` calls, use `Write` for the whole file or stop and ask the user via `AskUserQuestion` (see rung 4 above) — see the `Edit`/`Write` recipes in [editing-operations-json.md](editing-operations-json.md) and the SKILL.md rule on forbidden tools.
+
+### Batch independent `Edit`s in one turn
+
+When a single logical step requires multiple `Edit` calls against the **same `.flow` file**, issue them in **one assistant turn as parallel tool calls** — not one Edit per turn. Models that wait for each `Edit` call's result before issuing the next add a round-trip per call (6+ for an add-a-node), and that is the dominant source of latency in flow authoring.
+
+**Batch when:**
+
+- All `Edit`s anchor on **disjoint `old_string`s** (different regions of the file — e.g., `nodes[]`, `definitions[]`, `variables.nodes[]`, `layout.nodes`, `bindings[]`, `edges[]`)
+- All `Edit`s belong to the **same logical step** (per [shared/ux-narration-and-todos.md](../../shared/ux-narration-and-todos.md) — "Add the Slack node and wire it" is ONE step)
+- The file has been `Read` once at the start of the step and not mutated between batch members
+
+**Do not batch when:**
+
+- Two `Edit`s share an `old_string` (e.g., both anchor on the trailing `]` of `nodes[]`) — they will collide. Serialize those two, batch the rest.
+- The next `Edit`'s `old_string` is content that an earlier batch member produces (e.g., editing a field of a node that the same batch is inserting). Sequence: insert first, then edit the inserted field in a follow-up turn.
+- You are between two distinct logical steps (add-node-A, then add-node-B). `Read` between steps to refresh anchors.
+
+**Validation and format are not batch members.** `uip maestro flow validate` and `uip maestro flow format` read the post-edit `.flow` file from disk. Issuing them in the same tool-call block as the `Edit`s is a read-after-write race: the parallel scheduler does not guarantee the `Edit`s have flushed before the CLI opens the file. Both also consume the output of the edits, which is exactly the "next call's input is the previous call's output" case ruled out above. They belong in a follow-up turn — and only one of them, in line with the "Validate once at the end" rule in [author/CAPABILITY.md](../CAPABILITY.md). The canonical shape per logical step is: prereq turn (`registry get`) → batch turn (parallel `Edit`s) → gate turn (`validate`, then `format` on the success path).
+
+**Why this is safe.** The "atomic interruption" argument in [Why not Python / Node / jq / sed?](#why-not-python--node--jq--sed) is about scripted mutations bypassing tool-call review — not about parallel `Edit` calls. Each `Edit` in a parallel batch still shows its own line-by-line diff in the transcript; the user can still cancel any of them. Batching reduces turns, not reviewability.
 
 ## Required Strategy
 
