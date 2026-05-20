@@ -18,6 +18,10 @@ sandbox:
   driver: tempdir
   python: {}
 
+pre_run:
+  - command: "python3 $TASK_DIR/../../_shared/ensure_slack_office_bellevue.py"
+    timeout: 180
+
 initial_prompt: |
   Create a flow called "SlackWeatherPipeline". Read the #office-bellevue Slack channel description to find out which city the office is in, then fetch the current weather for that city from open-meteo. If it's above 60F output 'warm office today', otherwise 'cold office today'.
 
@@ -26,8 +30,13 @@ initial_prompt: |
   Before starting, load the uipath-maestro-flow skill. Read and follow its workflow steps exactly.
 
   Test connections for this task live in Orchestrator folder "Shared/uipath-maestro-flow".
-  Resolve its key with `uip or folders get "Shared/uipath-maestro-flow" -o json`
+  Resolve its key with `uip or folders get "Shared/uipath-maestro-flow" --output json`
   and pass `--folder-key <key>` on every `uip is connections list` call.
+  The pre-run fixture ensures #office-bellevue exists and has this description:
+  "700 Bellevue Way NE, Suite 2000, Bellevue, WA 98004".
+  Resolve the channel ID from the current Slack connection. If `curated_channels`
+  does not show it immediately, search the `conversations` resource with
+  pagination. Do not substitute #office or any other Slack channel.
 
 success_criteria:
   - type: run_command
