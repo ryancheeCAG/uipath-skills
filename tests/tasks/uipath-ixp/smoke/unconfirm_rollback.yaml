@@ -1,0 +1,70 @@
+task_id: skill-ixp-unconfirm-rollback-smoke
+description: >
+  Smoke test: agent uses the uipath-ixp skill to roll back a previous
+  confirmation that turned out to be wrong. Of the new labelling
+  verbs, `unconfirm` is the only one whose mental model is novel
+  (every other verb has a direct UI analogue) — the test ensures the
+  skill teaches it reachably. Verifies the agent picks
+  `uip ixp labellings unconfirm` rather than a re-confirm with a
+  changed `--fields` list (which would not actually remove the wrong
+  annotation, because the SDK carries forward existing annotations).
+
+  Platform note: the smoke test runs without an authenticated tenant,
+  so `uip ixp` commands that hit the service will fail with an auth
+  error. That is acceptable — what matters is that the agent invokes
+  the correct command shape with the correct flags.
+tags: [uipath-ixp, smoke, lifecycle:execute]
+
+sandbox:
+  driver: tempdir
+  python: {}
+
+initial_prompt: |
+  Yesterday I confirmed the `Invoice Number` field (field id `f-001`)
+  on document `doc-abc-123` in project `my_invoices-f1afa9ef-ixp`. I
+  just noticed the prediction was actually wrong — the model picked
+  up the PO number, not the invoice number. Undo that confirmation
+  so the field goes back to un-annotated. Keep every other
+  annotation on the document intact.
+
+  Important:
+  - The `uip` CLI is available but is NOT connected to a live IXP tenant
+    in this environment. Commands will fail with auth errors — that is
+    expected. Run each command once and move on. Do NOT retry or attempt
+    to login.
+  - Do NOT prompt the user for confirmation — this is an automated test.
+
+success_criteria:
+  - type: command_executed
+    description: "Agent invoked `uip ixp labellings unconfirm <project> <document>`"
+    tool_name: "Bash"
+    command_pattern: 'uip\s+ixp\s+labellings\s+unconfirm\s+["'']?my_invoices-f1afa9ef-ixp["'']?\s+["'']?doc-abc-123["'']?'
+    min_count: 1
+    weight: 3.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Unconfirm call targeted field f-001 via --fields"
+    tool_name: "Bash"
+    command_pattern: '--fields\s+[^|;&]*f-001'
+    min_count: 1
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent used --output json on a uip ixp command"
+    tool_name: "Bash"
+    command_pattern: 'uip\s+ixp\s+.*--output\s+json'
+    min_count: 1
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Anti-pattern: re-running `confirm` with a different --fields list
+  # does NOT remove a prior annotation — the SDK preserves carry-forward
+  # annotations. The agent must not reach for confirm to undo a confirm.
+  - type: command_not_executed
+    description: "Agent did NOT try to undo via labellings confirm"
+    tool_name: "Bash"
+    command_pattern: 'uip\s+ixp\s+labellings\s+confirm\s+["'']?my_invoices-f1afa9ef-ixp["'']?\s+["'']?doc-abc-123["'']?'
+    weight: 1.5
+    pass_threshold: 1.0
