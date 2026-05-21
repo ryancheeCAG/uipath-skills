@@ -66,7 +66,7 @@ Manage field groups (label_defs) — the document type containers for fields. To
 
 | Command | Description |
 |---------|-------------|
-| `uip ixp groups add <project-name> --name <group-name> --fields <json> [--instructions <text>] --output json` | Create a new field group with at least one field. `--fields` is a JSON array `[{"name":"...","type":"<type-name>","instructions":"..."}]` (1-32 entries). `type` resolves against the project's `entity_defs`. |
+| `uip ixp groups add <project-name> --name <group-name> --instructions <text> --fields <json> --output json` | Create a new field group with instructions and at least one field. `--instructions` describes what document/section the group covers (the model sees it during extraction). `--fields` is a JSON array `[{"name":"...","type":"<type-name>","instructions":"..."}]` (1-32 entries). `type` resolves against the project's `entity_defs`. |
 | `uip ixp groups delete <project-name> --name <group-name> --confirm-data-loss --output json` | Delete a field group. **IRREVERSIBLE** — deletes all annotations on all fields in the group. `--confirm-data-loss` is required. |
 | `uip ixp groups rename <project-name> --name <group-name> --new-name <name> --output json` | Rename a field group. Preserves all fields and annotations. |
 
