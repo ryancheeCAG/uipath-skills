@@ -49,9 +49,9 @@ Use the **Read tool** to view the document file (the Read tool handles PDF, PNG,
 1. **Look at the document** to understand the layout and where field values appear.
 2. **For each predicted field**, assign one of four verdicts:
    - **CONFIRMED** — the predicted value matches what is in the document. Minor OCR-level differences (capitalization, whitespace) are acceptable.
-   - **CORRECTED** — the prediction found the right field in the right location, but the value is OCR-mangled (e.g., `MSIÓÓÓ601020/` instead of `MSI0601020`). The reference is correct but the text needs fixing.
+   - **CORRECTED** — **OCR-mangled values only.** The prediction found the right field in the right location, the bytes-on-page are correct, but the text was garbled in transcription (e.g., `MSIÓÓÓ601020/` instead of `MSI0601020`, `lNGRAM` instead of `INGRAM`). The reference is correct, only the literal characters need fixing. Do NOT use CORRECTED for booleans that came back with the wrong answer, inferred/computed values that came back wrong, or any case where IXP picked the wrong source on the page — those are NOT CONFIRMED.
    - **MISSING** — IXP predicted **no value** (empty `FormattedValue`) AND the field is genuinely absent from the document. Both conditions must hold. If IXP predicted a value but the field isn't actually in the document, that's NOT CONFIRMED, not MISSING — Critical Rule 12 forbids overriding a non-empty prediction with "missing".
-   - **NOT CONFIRMED** — the predicted value is wrong, the field is misassigned, or IXP predicted a value the document doesn't contain. Left unannotated.
+   - **NOT CONFIRMED** — the prediction is wrong for any reason other than OCR mangling. Covers: wrong literal value on the right field, wrong-source extraction, hallucinated value, boolean came back with the wrong answer, inferred/computed value came back wrong, predicted a value the document doesn't contain. Left unannotated. Do NOT try to "fix" these with `--corrections` — `--corrections` is OCR-only (see Critical Rule 8). Improve the prompt instead.
 3. **Report your verdict for every field.** Print a table per document:
 
 ```text
@@ -62,14 +62,16 @@ Field                    | Verdict       | Reason
 Invoice Number           | CORRECTED     | OCR mangled "MSIÓÓÓ601020/" → "MSI0601020", top-right of page 1
 Invoice Date             | CONFIRMED     | Predicted "2018-02-28" matches document
 Vendor Address           | NOT CONFIRMED | Predicted "123 Main St" but actual is "456 Oak Ave", top-left of page 1
+Has Signature            | NOT CONFIRMED | Predicted "false" but signature visible bottom-right (boolean came back wrong — NOT CORRECTED)
+Total After Tax          | NOT CONFIRMED | Predicted "$1100.00" but Subtotal+Tax = "$1210.00" (inferred value wrong — NOT CORRECTED)
 Terms of Payment         | MISSING       | IXP predicted no value AND field not visible in document
 Discount                 | MISSING       | IXP predicted no value AND no discount section on the page
 Line Items > Description | CONFIRMED     | Predicted "Widget A" matches row 1 in the table
 ```
 
-For **CORRECTED** fields: state the mangled predicted value, the corrected value, and where it appears.
+For **CORRECTED** fields: state the mangled predicted value, the corrected value, and where it appears. The mistake must be at the character level — same field, same location, garbled bytes.
 For **MISSING** fields: state that the prediction was empty AND describe how you verified the field is absent (e.g., "no payment-terms section anywhere in the document").
-For **NOT CONFIRMED** fields: state the predicted value, the actual value (if visible) and location, or that IXP predicted something the document doesn't contain.
+For **NOT CONFIRMED** fields: state the predicted value, the actual value (if visible) and location. Includes any non-OCR mistake — wrong source, wrong boolean, wrong inferred value, hallucination, value the document doesn't contain. **Do NOT use `--corrections` to fix these** — improve the field's prompt instructions instead.
 
 4. **Build three lists from the table:**
    - **Confirmed field IDs** — all CONFIRMED + CORRECTED fields

@@ -86,7 +86,7 @@ Structural edits to a field within an existing field group. For instruction-only
 | Command | Description |
 |---------|-------------|
 | `uip ixp labellings get-predictions <project-name> [document-id] --output json` | Get IXP model predictions for all documents (or a single document). Returns predicted labels with `FieldId`, `FieldName`, and `FormattedValue`. |
-| `uip ixp labellings confirm <project-name> <document-id> [--fields <ids>] [--corrections <json>] --output json` | Confirm predictions for a document. `--fields "id1,id2,id3"` confirms only those fields. `--corrections '[{"field_id":"...","value":"..."}]'` overrides OCR-mangled values while keeping the prediction's document references. |
+| `uip ixp labellings confirm <project-name> <document-id> [--fields <ids>] [--corrections <json>] --output json` | Confirm predictions for a document. `--fields "id1,id2,id3"` confirms only those fields. `--corrections '[{"field_id":"...","value":"..."}]'` is **only for OCR-mangled values** — same field, same location, garbled bytes. Do NOT use `--corrections` to flip wrong booleans, fix wrong inferred values, or override any non-OCR mistake; those fields must be left unannotated. See Critical Rule 8. |
 | `uip ixp labellings mark-missing <project-name> <document-id> --fields <ids> --output json` | Mark fields as missing on a document — the field is annotated as having no value and no location. **Only use for fields where IXP itself predicted no value** (the prediction's `FormattedValue` is empty/absent for that field in `labellings get-predictions`). If IXP predicted a wrong value, leave the field unannotated instead. Returns `Unmatched` for any IDs not found in the document's extractions. |
 
 ## Deployments
