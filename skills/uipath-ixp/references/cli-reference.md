@@ -60,13 +60,23 @@ done
 
 **When NOT to use this:** for filling a brand-new project, prefer `projects create <name> <folder-path>` — uploads the whole folder and suggests a taxonomy in one call.
 
-## Fields
+## Groups
 
-Structural edits to a field group (label_def): add, delete, rename, change type. For instruction-only edits use `projects update-prompts`.
+Manage field groups (label_defs) — the document type containers for fields. To edit fields **inside** an existing group, use the `fields` subject below.
 
 | Command | Description |
 |---------|-------------|
-| `uip ixp fields add <project-name> --group <field-group-name> --field <name> --type <type-name> [--instructions <text>] --output json` | Add a new field to a field group. `--type` is the name of an entity_def in the project's taxonomy (see `projects get-taxonomy`). |
+| `uip ixp groups add <project-name> --name <group-name> --fields <json> [--instructions <text>] --output json` | Create a new field group with at least one field. `--fields` is a JSON array `[{"name":"...","type":"<type-name>","instructions":"..."}]` (1-32 entries). `type` resolves against the project's `entity_defs`. |
+| `uip ixp groups delete <project-name> --name <group-name> --confirm-data-loss --output json` | Delete a field group. **IRREVERSIBLE** — deletes all annotations on all fields in the group. `--confirm-data-loss` is required. |
+| `uip ixp groups rename <project-name> --name <group-name> --new-name <name> --output json` | Rename a field group. Preserves all fields and annotations. |
+
+## Fields
+
+Structural edits to a field within an existing field group. For instruction-only edits use `projects update-prompts`. To create the group itself, use `groups add` above.
+
+| Command | Description |
+|---------|-------------|
+| `uip ixp fields add <project-name> --group <field-group-name> --field <name> --type <type-name> [--instructions <text>] --output json` | Add a new field to an **existing** field group. `--type` is the name of an entity_def in the project's taxonomy (see `projects get-taxonomy`). |
 | `uip ixp fields delete <project-name> --group <field-group-name> --field <name> --output json` | Remove a field from a field group. |
 | `uip ixp fields rename <project-name> --group <field-group-name> --field <name> --new-name <name> --output json` | Rename a field. Preserves `field_id` and existing annotations. |
 | `uip ixp fields change-type <project-name> --group <field-group-name> --field <name> --type <type-name> --confirm-data-loss --output json` | Change a field's type. **IRREVERSIBLE** — the server creates a new field under the hood, so all existing annotations for that field are deleted. `--confirm-data-loss` is required. |
