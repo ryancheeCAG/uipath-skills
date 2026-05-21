@@ -92,123 +92,67 @@ uip maestro flow registry get <NODE_TYPE> --output json | jq '.Data.Node'
 
 ### Add a node
 
-**Tool:** `Edit` (one assistant turn, parallel calls into `nodes[]` + `definitions[]` + `variables.nodes` + `layout.nodes` + `edges[]` + — for resource nodes — top-level `bindings[]`)
+**Tool:** `uip maestro flow batch-edit` (one CLI call that applies all node + edge mutations atomically and runs validate / format internally)
 
-**One turn.** After `uip maestro flow registry get` returns the definition, issue **all** of the batch members below as **parallel `Edit` calls in a single assistant turn**. They anchor on disjoint regions of the `.flow` file, so they are safe to batch. Do **not** issue them one per turn — that adds a round-trip per call and is the dominant source of latency in flow authoring. See [Batch independent `Edit`s in one turn](editing-operations.md#batch-independent-edits-in-one-turn).
+**One turn.** After `uip maestro flow registry get` returns the definition, issue a single `uip maestro flow batch-edit <flow-file> --spec '@spec.json'` call. The CLI command applies every operation in the spec atomically, regenerates `definitions[]` / `variables.nodes[]` / `layout.nodes` / `bindings[]` from the current node graph, and runs validate + format internally — so this replaces what was previously a parallel batch of `Edit` calls into disjoint `.flow` regions. Do **not** decompose the spec back into per-region `Edit` calls — that loses the atomicity and re-introduces the read-after-write race that the gate turn used to absorb. The Phase 1 [Batch independent `Edit`s in one turn](editing-operations.md#batch-independent-edits-in-one-turn) rule still applies to non-flow files and to partial edits the CLI command doesn't cover.
 
-**Prereq turn:** Run `uip maestro flow registry get <NODE_TYPE> --output json` and copy the returned node definition object (`Data.Node` or the top-level node object, depending on CLI/plugin version). Capture the definition's `version` field — you'll set the node instance's `typeVersion` to that exact value.
+**Prereq turn:** Run `uip maestro flow registry get <NODE_TYPE> --output json` and copy the returned node definition object (`Data.Node` or the top-level node object, depending on CLI/plugin version). Capture the definition's `version` field — you'll set the node instance's `typeVersion` in the spec to that exact value. Pick a unique camelCase `id` for the new node here too; both the `addNode` and every `addEdge` referencing it use that planned `id`.
 
-**Gate turn (after the batch):** Run `uip maestro flow validate` and then `uip maestro flow format`. These read the file from disk and cannot be batch members — see the [validation / format carve-out](editing-operations.md#batch-independent-edits-in-one-turn).
+**Mutate turn:** One call to `uip maestro flow batch-edit <flow-file> --spec '@spec.json'` (or inline JSON via `--spec '<json>'`). The CLI runs validate + format internally and returns one structured result — no separate gate turn.
 
-#### Batch members (parallel `Edit` calls in one turn)
+#### Spec shape
 
-> The numbering below is for cross-reference only (e.g., "see batch member 4"). All batch members below are issued in **a single assistant turn as parallel `Edit` calls** — not sequentially. Numbered order is not execution order.
-
-##### 1. Insert into `nodes[]`
-
-Add this node entry to the `nodes` array:
+The spec is an `operations` array. Each entry has a `kind` plus operation-specific fields. The canonical "Add a node" spec wires `addNode` together with N×`addEdge`:
 
 ```json
 {
-  "id": "<UNIQUE_NODE_ID>",
-  "type": "<NODE_TYPE>",
-  "typeVersion": "<DEFINITION_VERSION>",
-  "display": { "label": "<LABEL>" },
-  "inputs": {},
-  "outputs": {
-    "output": {
-      "type": "object",
-      "description": "The return value of the <node type>",
-      "source": "=result.response",
-      "var": "output"
+  "operations": [
+    {
+      "kind": "addNode",
+      "id": "<UNIQUE_NODE_ID>",
+      "type": "<NODE_TYPE>",
+      "typeVersion": "<DEFINITION_VERSION>",
+      "display": { "label": "<LABEL>" },
+      "config": {
+        "inputs": {},
+        "outputs": {
+          "output": {
+            "type": "object",
+            "description": "The return value of the <node type>",
+            "source": "=result.response",
+            "var": "output"
+          },
+          "error": {
+            "type": "object",
+            "description": "Error information if the <node type> fails",
+            "source": "=result.Error",
+            "var": "error"
+          }
+        }
+      },
+      "bindings": []
     },
-    "error": {
-      "type": "object",
-      "description": "Error information if the <node type> fails",
-      "source": "=result.Error",
-      "var": "error"
-    }
-  }
+    { "kind": "addEdge", "from": "<UPSTREAM_NODE_ID>.<SOURCE_PORT>", "to": "<UNIQUE_NODE_ID>" },
+    { "kind": "addEdge", "from": "<UNIQUE_NODE_ID>", "to": "<DOWNSTREAM_NODE_ID>" }
+  ]
 }
 ```
 
-> **`display` is required on every node** — including control-flow nodes (`core.control.end`, `core.logic.terminate`) where it may feel optional. Omitting it produces a vague `[(root)] Schema validation failed: Invalid input: expected object, received undefined` from `uip maestro flow validate`, which does NOT pinpoint the missing field. Always include `"display": { "label": "<label>" }` on every node, even bare end nodes. See [file-format.md — Node instance](../../shared/file-format.md#node-instance) and [MST-9368](https://uipath.atlassian.net/browse/MST-9368) for the validator-error-clarity follow-up.
+The `definition` for this `type:typeVersion` is auto-attached by the CLI from the registry cache populated during the prereq `registry get` — do not include `definitions[]` entries in the spec. `variables.nodes[]` and `layout.nodes` are regenerated from `nodes[]` after the spec is applied.
 
-> **What actually makes `$vars.<sourceNodeId>.output` resolve is `variables.nodes[]` (batch member 4 below), not the instance `outputs` block.** The BPMN emitter ignores the action-node instance `outputs` block at serialization — it reads the manifest's `outputDefinition` for the activity-side mapping and reads `variables.nodes[]` for the process-level `<uipath:inputOutput>` declarations downstream nodes depend on. Authoring an `outputs` block matching the manifest is fine (the canonical examples include it for documentation), but you can skip it on action and trigger nodes. End / terminate nodes are different — see [end/impl.md](plugins/end/impl.md). The standard patterns are in [file-format.md — Node outputs](../../shared/file-format.md#node-outputs). **Always run `uip maestro flow format` in the gate turn after the batch — it regenerates `variables.nodes[]` from the current node graph (MST-9972).**
+> **`display` is required on every `addNode` op** — including control-flow nodes (`core.control.end`, `core.logic.terminate`) where it may feel optional. Omitting it produces a vague `[(root)] Schema validation failed: Invalid input: expected object, received undefined` from the CLI, which does NOT pinpoint the missing field. Always include `"display": { "label": "<label>" }` on every `addNode` op, even bare end nodes. See [file-format.md — Node instance](../../shared/file-format.md#node-instance) and [MST-9368](https://uipath.atlassian.net/browse/MST-9368) for the validator-error-clarity follow-up.
 
-> **No full `model` block on nodes.** BPMN type, serviceType, event definition, and binding/context templates are provided by the definition in `definitions[]` (copied verbatim from the registry). Most instance-specific identity fields live under `inputs`: `entryPointId`/`isDefaultEntryPoint` for triggers and `color`/`content` for sticky notes. Attached inline-agent resource nodes that declare `model.source: true` use only the minimal instance block `"model": { "source": "<resourceId>" }`. For `uipath.agent.autonomous`, write the inline agent `projectId` at `inputs.source` instead; flow-core hoists source identity into inputs and no instance `model` block is written. See [file-format.md — Instance-specific identity fields](../../shared/file-format.md#instance-specific-identity-fields).
+> **What actually makes `$vars.<sourceNodeId>.output` resolve is `variables.nodes[]`, which `batch-edit` regenerates from `nodes[]` + `definitions[]` after each spec applies.** The BPMN emitter ignores the action-node instance `outputs` block at serialization — it reads the manifest's `outputDefinition` for the activity-side mapping and reads `variables.nodes[]` for the process-level `<uipath:inputOutput>` declarations downstream nodes depend on. Including an `outputs` block matching the manifest under `config.outputs` is fine (the canonical examples include it for documentation), but you can skip it on action and trigger nodes. End / terminate nodes are different — see [end/impl.md](plugins/end/impl.md). The standard patterns are in [file-format.md — Node outputs](../../shared/file-format.md#node-outputs). MST-9972 still applies; `batch-edit` calls format internally so this is self-healing.
 
-> **No `ui` block on nodes.** Do NOT put `position`, `size`, or `collapsed` on the node. Use batch member 5 (`layout.nodes`) instead.
+> **No full `model` block in the `addNode` `config`.** BPMN type, serviceType, event definition, and binding/context templates come from the definition the CLI attaches from the registry. Most instance-specific identity fields live under `config.inputs`: `entryPointId`/`isDefaultEntryPoint` for triggers and `color`/`content` for sticky notes. Attached inline-agent resource nodes that declare `model.source: true` use only the minimal instance block `"model": { "source": "<resourceId>" }` under `config`. For `uipath.agent.autonomous`, write the inline agent `projectId` at `config.inputs.source` instead; flow-core hoists source identity into inputs and no instance `model` block is written. See [file-format.md — Instance-specific identity fields](../../shared/file-format.md#instance-specific-identity-fields).
 
-##### 2. Insert into `definitions[]`
+> **No `ui` block on `addNode` ops.** Do NOT put `position`, `size`, or `collapsed` on the op. `batch-edit` regenerates `layout.nodes` from the node graph.
 
-If a definition for this `type:typeVersion` is not already present, add one:
+> **(Resource nodes only) populate `bindings`.** Skip unless the node type is one of `uipath.core.rpa-workflow.*`, `uipath.core.agent.*`, `uipath.core.flow.*`, `uipath.core.agentic-process.*`, `uipath.core.api-workflow.*`, or `uipath.core.human-task.*`. For resource nodes, the `addNode` op's `config` stays minimal (just `inputs`/`outputs`) and you populate the op's `bindings` array — two entries per resource (`name` + `folderPath`) with `resourceKey` exactly matching the definition's `model.bindings.resourceKey`. `batch-edit` merges these into the flow's top-level `bindings[]`. The BPMN emit layer rewrites the definition's `<bindings.{name}>` placeholders to `=bindings.{id}` by matching on `(resourceKey, name)`. Without matching `bindings` entries on the op, the CLI's internal validate passes but `uip maestro flow debug` fails with "Folder does not exist or the user does not have access to the folder." The definition stays verbatim from the registry — do NOT rewrite `<bindings.*>` placeholders. See the relevant plugin's `impl.md` for the exact JSON.
 
-- Paste the returned node definition object from the registry response verbatim
-- Set the node instance `typeVersion` (in batch member 1 above) to the pasted definition's exact `version`
-- One definition per unique `type:typeVersion` — not one per node instance
+> **Layout rule:** Don't pre-compute coordinates. `batch-edit` runs `uip maestro flow format` internally, which arranges nodes horizontally, sets size to `{ "width": 96, "height": 96 }`, and recurses into subflows.
 
-##### 3. (Resource nodes only) Insert into top-level `bindings[]`
-
-Skip this batch member unless the node type is one of `uipath.core.rpa-workflow.*`, `uipath.core.agent.*`, `uipath.core.flow.*`, `uipath.core.agentic-process.*`, `uipath.core.api-workflow.*`, or `uipath.core.human-task.*`.
-
-For resource nodes:
-
-1. The instance (batch member 1) stays minimal — just `inputs`/`outputs`/`display`.
-2. Add matching entries to the top-level `bindings[]` array (sibling of `nodes`/`edges`/`definitions`): two entries per resource (`name` + `folderPath`) with `resourceKey` exactly matching the definition's `model.bindings.resourceKey`.
-
-The BPMN emit layer rewrites the definition's `<bindings.{name}>` placeholders to `=bindings.{id}` by matching on `(resourceKey, name)`. Without matching entries in top-level `bindings[]`, `uip maestro flow validate` passes but `uip maestro flow debug` fails with "Folder does not exist or the user does not have access to the folder." The definition stays verbatim from the registry — do NOT rewrite `<bindings.*>` placeholders inside it. See the relevant plugin's `impl.md` for the exact JSON.
-
-##### 4. Insert into `variables.nodes[]`
-
-REQUIRED. The BPMN emitter reads `variables.nodes[]` to declare process-level variables. `uip maestro flow format` (in the gate turn) regenerates this block from `nodes[]` + `definitions[]`, so running format after the batch will self-heal an omitted entry; running validate alone does not. Without it, downstream `$vars.<sourceNodeId>.output` resolves to `undefined` at runtime — MST-9972.
-
-```json
-[
-  {
-    "id": "<NODE_ID>.output",
-    "type": "object",
-    "description": "<Output description>",
-    "binding": {
-      "nodeId": "<NODE_ID>",
-      "outputId": "output"
-    }
-  },
-  {
-    "id": "<NODE_ID>.error",
-    "type": "object",
-    "description": "Error information if the node fails",
-    "binding": {
-      "nodeId": "<NODE_ID>",
-      "outputId": "error"
-    }
-  }
-]
-```
-
-##### 5. Insert into `layout.nodes`
-
-Add a placeholder layout entry for the node in the top-level `layout.nodes` object. `flow format` (in the gate turn) rewrites both `position` and `size` on save, so any placeholder is fine:
-
-```json
-"layout": {
-  "nodes": {
-    "<UNIQUE_NODE_ID>": {
-      "position": { "x": 0, "y": 0 },
-      "size": { "width": 96, "height": 96 },
-      "collapsed": false
-    }
-  }
-}
-```
-
-**Layout rule:** Don't compute coordinates by hand — `uip maestro flow format <ProjectName>.flow` in the gate turn arranges nodes horizontally, sets size to `{ "width": 96, "height": 96 }`, and recurses into subflows.
-
-##### 6. Insert into `edges[]`
-
-One edge per wiring connection from / to this node. `edges[]` is disjoint from the node-region anchors above, so edge `Edit`s go in the **same parallel batch** as the node inserts. This holds whether one endpoint or both endpoints are being added in this step (e.g., scaffolding a fresh subflow). Always batch edges with the node(s) they wire.
-
-See [Add an edge](#add-an-edge) below for the JSON shape and port rules.
+> **Edges go in the same spec as the node.** One `addEdge` op per wiring connection from / to the new node. The `from`/`to` strings use the planned `id` from the same spec — the CLI resolves them after `addNode` runs in spec order. This holds whether one endpoint or both endpoints are added in this step (e.g., scaffolding a fresh subflow). See [Add an edge](#add-an-edge) below for the port-string shape (`<nodeId>.<port>`).
 
 ### Delete a node
 
@@ -348,63 +292,69 @@ Only `inout` variables can be updated. `in` variables are read-only.
 
 ### Insert a node between two existing nodes
 
-**Tool:** `Edit` (one assistant turn, ~7 parallel calls). All anchors disjoint — see [Batch independent `Edit`s in one turn](editing-operations.md#batch-independent-edits-in-one-turn).
+**Tool:** `uip maestro flow batch-edit` (one CLI call that applies bypass-removal + node-add + new-path-wiring atomically).
 
-**Prereq turn:** Run `uip maestro flow registry get <NODE_TYPE> --output json` for the new node type (if a definition isn't already in the file).
+**Prereq turn:** Run `uip maestro flow registry get <NODE_TYPE> --output json` for the new node type (if a definition isn't already in the file). Pick the new node's `id` here.
 
-**Batch turn (parallel `Edit` calls):**
+**Mutate turn:** One `uip maestro flow batch-edit <flow-file> --spec '@spec.json'`. The spec contains `addNode` + `removeEdge` (the existing bypass) + 2×`addEdge` (the new path):
 
-- Remove the old edge from `edges[]` (the one connecting the two existing nodes)
-- Add the new node to `nodes[]`
-- Add its definition to `definitions[]` (if not already present)
-- Add its entry to `variables.nodes[]`
-- Add its layout entry to `layout.nodes`
-- Add two new edges to `edges[]`:
-  - upstream → new node (upstream's output port → new node's `input`)
-  - new node → downstream (new node's output port → downstream's `input`)
+```json
+{
+  "operations": [
+    { "kind": "addNode", "id": "<NEW_NODE_ID>", "type": "<NODE_TYPE>", "typeVersion": "<DEFINITION_VERSION>", "display": { "label": "<LABEL>" }, "config": { "inputs": {} } },
+    { "kind": "removeEdge", "from": "<UPSTREAM_NODE_ID>.<SOURCE_PORT>", "to": "<DOWNSTREAM_NODE_ID>" },
+    { "kind": "addEdge", "from": "<UPSTREAM_NODE_ID>.<SOURCE_PORT>", "to": "<NEW_NODE_ID>" },
+    { "kind": "addEdge", "from": "<NEW_NODE_ID>", "to": "<DOWNSTREAM_NODE_ID>" }
+  ]
+}
+```
 
-**Gate turn:** `uip maestro flow validate` then `uip maestro flow format`.
+`batch-edit` applies ops in spec order, regenerates `definitions[]` / `variables.nodes[]` / `layout.nodes`, and runs validate + format internally. No separate gate turn.
 
 ### Insert a decision branch
 
-**Tool:** `Edit` (one assistant turn, ~8 parallel calls). All anchors disjoint — see [Batch independent `Edit`s in one turn](editing-operations.md#batch-independent-edits-in-one-turn).
+**Tool:** `uip maestro flow batch-edit` (one CLI call that adds the decision node, its downstream branch nodes, and the true/false edges).
 
-**Prereq turn:** Run `uip maestro flow registry get core.logic.decision --output json` (if a `core.logic.decision` definition isn't already in the file).
+**Prereq turn:** Run `uip maestro flow registry get core.logic.decision --output json` (if a `core.logic.decision` definition isn't already in the file). Run `registry get` for the downstream node type as well. Pick `id`s for both new nodes here.
 
-**Batch turn (parallel `Edit` calls):**
+**Mutate turn:** One `uip maestro flow batch-edit <flow-file> --spec '@spec.json'`. The spec contains 2×`addNode` (decision + downstream) + edges for the true / false branches:
 
-- Remove the old edge from `edges[]` (the one where the branch should go)
-- Add the decision node to `nodes[]` with `inputs.expression`
-- Add its definition to `definitions[]` (if not already present)
-- Add its entry to `variables.nodes[]`
-- Add its layout entry to `layout.nodes`
-- Add three new edges to `edges[]`:
-  - upstream → decision (target port: `input`)
-  - decision → true branch (source port: `true`, target port: `input`)
-  - decision → false branch (source port: `false`, target port: `input`)
+```json
+{
+  "operations": [
+    { "kind": "addNode", "id": "<DECISION_NODE_ID>", "type": "core.logic.decision", "typeVersion": "<DEFINITION_VERSION>", "display": { "label": "<LABEL>" }, "config": { "inputs": { "expression": "<JS_EXPR>" } } },
+    { "kind": "addNode", "id": "<DOWNSTREAM_NODE_ID>", "type": "<DOWNSTREAM_TYPE>", "typeVersion": "<DEFINITION_VERSION>", "display": { "label": "<LABEL>" }, "config": { "inputs": {} } },
+    { "kind": "addEdge", "from": "<UPSTREAM_NODE_ID>.<SOURCE_PORT>", "to": "<DECISION_NODE_ID>" },
+    { "kind": "addEdge", "from": "<DECISION_NODE_ID>.true", "to": "<DOWNSTREAM_NODE_ID>" },
+    { "kind": "addEdge", "from": "<DECISION_NODE_ID>.false", "to": "<EXISTING_FALSE_BRANCH_NODE_ID>" }
+  ]
+}
+```
 
-**Gate turn:** `uip maestro flow validate` then `uip maestro flow format`.
+Decision source ports are `true` / `false`; target port defaults to `input` (omit the `.input` suffix on the `to` field). `batch-edit` runs validate + format internally.
 
 ### Remove a node and reconnect
 
-**Tool:** `Edit` (one assistant turn, parallel calls). All anchors disjoint — see [Batch independent `Edit`s in one turn](editing-operations.md#batch-independent-edits-in-one-turn).
+**Tool:** `uip maestro flow batch-edit` (one CLI call: remove the node + add the bypass edge).
 
-**Prereq turn:** `Read` the `.flow` file once to capture the node's upstream and downstream node IDs from `edges[]` — you'll need both for the reconnect edge.
+**Prereq turn:** `Read` the `.flow` file once to capture the node's upstream and downstream node IDs from `edges[]` — you'll need both for the bypass edge.
 
-**Batch turn (parallel `Edit` calls):**
+**Mutate turn:** One `uip maestro flow batch-edit <flow-file> --spec '@spec.json'`. The spec contains `removeNode` + 1×`addEdge` (the bypass):
 
-- Remove the node from `nodes[]`
-- Remove all edges referencing the node from `edges[]`
-- Remove the node's entry from `variables.nodes[]`
-- Remove the node's layout entry from `layout.nodes`
-- Prune the orphaned definition from `definitions[]` if no other node uses the same `type` (otherwise skip this call)
-- Add a new edge to `edges[]` connecting upstream directly to downstream
+```json
+{
+  "operations": [
+    { "kind": "removeNode", "id": "<NODE_ID>" },
+    { "kind": "addEdge", "from": "<UPSTREAM_NODE_ID>.<SOURCE_PORT>", "to": "<DOWNSTREAM_NODE_ID>" }
+  ]
+}
+```
 
-**Gate turn:** `uip maestro flow validate` then `uip maestro flow format`.
+`removeNode` cascades: `batch-edit` sweeps `edges[]` for any with matching `sourceNodeId`/`targetNodeId`, prunes orphaned `definitions[]` and `variables.nodes[]` entries, removes the node's `layout.nodes` entry, and (for connector nodes) prunes `bindings_v2.json` only when no remaining node uses the same connector. Validate + format run internally.
 
 ### Replace a mock with a real resource node
 
-**Tool:** `Edit` (one assistant turn, parallel calls across all regions: `nodes[]`, `edges[]`, `definitions[]`, `bindings[]`, `variables.nodes[]`, `layout.nodes`). All anchors disjoint — see [Batch independent `Edit`s in one turn](editing-operations.md#batch-independent-edits-in-one-turn).
+**Tool:** `uip maestro flow batch-edit` (one CLI call: remove the mock + add the real node with bindings + re-wire edges).
 
 **Prereq turn:** Get the resource node manifest and record the mock's connected edges:
 
@@ -418,24 +368,39 @@ uip maestro flow registry get "<RESOURCE_NODE_TYPE>" --output json
 
 Then `Read` the `.flow` file once to capture the mock node's connected edges — you'll need their source/target node IDs to rewire on the new node.
 
-Pick the new node's `id` during planning (before the batch turn). Both the node-add `Edit` and the edge re-create `Edit`s reference it — the `id` is a planning artifact you decide once and reuse across batch members, not something the runtime generates mid-batch.
+Pick the new node's `id` during planning (before the mutate turn). Both the `addNode` op and every `addEdge` op reference it — the `id` is a planning artifact you decide once and reuse across spec ops.
 
-**Batch turn (parallel `Edit` calls):**
+**Mutate turn:** One `uip maestro flow batch-edit <flow-file> --spec '@spec.json'`. The spec contains `removeNode` (mock) + `addNode` (real resource, with `bindings`) + edge fix-ups:
 
-- Remove the mock node from `nodes[]`
-- Remove all edges referencing the mock from `edges[]`
-- Add the real resource node to `nodes[]` with:
-  - Correct `type` and `typeVersion`
-  - `inputs` with resolved field values
-  - `outputs` block (action nodes: `output` + `error`)
-  - No `model` block — binding/context templates come from the definition
-- Add the definition from registry to `definitions[]`
-- Add entries to the top-level `bindings[]` array — two per resource (`name` + `folderPath`), with `resourceKey` matching the definition's `model.bindings.resourceKey`
-- Add the node's entry to `variables.nodes[]`
-- Add the node's layout entry to `layout.nodes`
-- Re-create all edges in `edges[]` using the new node's `id`
+```json
+{
+  "operations": [
+    { "kind": "removeNode", "id": "<MOCK_NODE_ID>" },
+    {
+      "kind": "addNode",
+      "id": "<NEW_NODE_ID>",
+      "type": "<RESOURCE_NODE_TYPE>",
+      "typeVersion": "<DEFINITION_VERSION>",
+      "display": { "label": "<LABEL>" },
+      "config": {
+        "inputs": { "<RESOLVED_FIELD>": "<VALUE>" },
+        "outputs": {
+          "output": { "type": "object", "source": "=result.response", "var": "output" },
+          "error":  { "type": "object", "source": "=result.Error",    "var": "error"  }
+        }
+      },
+      "bindings": [
+        { "resourceKey": "<RESOURCE_KEY>", "name": "<RESOURCE_NAME>", "value": "<RESOURCE_VALUE>" },
+        { "resourceKey": "<RESOURCE_KEY>", "name": "folderPath",       "value": "<FOLDER_PATH>"   }
+      ]
+    },
+    { "kind": "addEdge", "from": "<UPSTREAM_NODE_ID>.<SOURCE_PORT>", "to": "<NEW_NODE_ID>" },
+    { "kind": "addEdge", "from": "<NEW_NODE_ID>", "to": "<DOWNSTREAM_NODE_ID>" }
+  ]
+}
+```
 
-**Gate turn:** `uip maestro flow validate` then `uip maestro flow format`.
+The `addNode` op's `config` carries no `model` block — binding/context templates come from the definition that `batch-edit` attaches from the registry. The `bindings` array must include two entries per resource (`name` + `folderPath`) with `resourceKey` matching the definition's `model.bindings.resourceKey`. `batch-edit` merges them into the flow's top-level `bindings[]`, regenerates `variables.nodes[]` and `layout.nodes`, and runs validate + format internally.
 
 ### Replace manual trigger with scheduled trigger
 

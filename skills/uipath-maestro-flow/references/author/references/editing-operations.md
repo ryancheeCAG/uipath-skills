@@ -21,6 +21,8 @@ If the change feels too tangled for a sequence of `Edit` calls, use `Write` for 
 
 ### Batch independent `Edit`s in one turn
 
+> **For flow node/edge mutations, prefer `uip maestro flow batch-edit` over batched `Edit` calls.** The CLI command applies a full op spec atomically and runs validate + format internally — collapsing what a parallel `Edit` batch did across multiple disjoint regions into a single tool invocation that models can't accidentally serialize. See [editing-operations-json.md — Add a node](editing-operations-json.md#add-a-node) for the canonical spec shape and the four composite operations that use it. Batched `Edit` calls remain the right answer for non-flow files and for partial edits where the CLI command doesn't cover the shape (variables, output mapping on End nodes, variable updates, subflow scaffolding, in-place input tweaks, trigger swaps) — the rule below applies to those.
+
 When a single logical step requires multiple `Edit` calls against the **same `.flow` file**, issue them in **one assistant turn as parallel tool calls** — not one Edit per turn. Models that wait for each `Edit` call's result before issuing the next add a round-trip per call (6+ for an add-a-node), and that is the dominant source of latency in flow authoring.
 
 **Batch when:**
