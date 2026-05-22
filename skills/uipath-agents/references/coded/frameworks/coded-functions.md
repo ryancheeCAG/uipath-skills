@@ -180,7 +180,20 @@ uip functions init
 
 Python only. Discovers entrypoints and generates `entry-points.json`, `bindings.json`, and `project.uiproj`. Must run before `pack` or `push`. Re-run whenever Input/Output schemas or the entrypoint registration in `uipath.json` changes.
 
-### Step 7: Pack and Publish
+### Step 7: Run Locally
+
+```bash
+uip functions run <ENTRYPOINT_NAME> --input '<JSON_INPUT>'
+```
+
+`<ENTRYPOINT_NAME>` is the key from the `functions` object in `uipath.json`. Always use `uip functions run` for local execution — do not invoke the function directly with Python.
+
+Example:
+```bash
+uip functions run main --input '{"invoice_number": "INV-001", "vendor_name": "Acme", "total_amount": 100.0}'
+```
+
+### Step 8: Pack and Publish
 
 ```bash
 uip functions pack                            # creates .nupkg
@@ -201,5 +214,5 @@ uip functions push
 - `uip functions init` must run before `pack` or `push` — it generates `entry-points.json`
 - Python Functions have full job semantics: Orchestrator job ID, audit trail, retry, scheduling
 - JS Functions have no job semantics and cannot be started as Orchestrator jobs — use Python when the caller is Maestro, a Flow, or an agent
-- `uip functions run` works for both Python and JS/TS local execution; `uip functions serve` is JS/TS only (starts the local HTTP server that `run` invokes against)
+- `uip functions run` is the only supported local execution method — do not invoke the function directly with Python; `uip functions serve` is JS/TS only
 - If cloud-backed work requires authentication, run `uip login --organization "<ORG>" --tenant "<TENANT>" --output json`.
