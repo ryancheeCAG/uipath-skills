@@ -23,6 +23,7 @@ What can cause it (cause-branches — pick the right one from evidence):
 5. **Leading or trailing whitespace** — the configured `SheetName` is `"Data "` (trailing space) or `" Data"` (leading space) and the actual sheet is `"Data"` (or vice versa). Common when the name comes from a variable concatenated with another string (`"Data " + month`) or from an external source (queue item, asset, CSV) where whitespace is not trimmed. Symptom: error wording shows the whitespace if you copy it byte-exact; visually the configured name looks correct.
 6. **Non-ASCII or look-alike characters** — sheet name contains characters that look identical but are different code points: regular space (`U+0020`) vs. non-breaking space (`U+00A0`), Latin `a` (`U+0061`) vs. Cyrillic `а` (`U+0430`), straight quote vs. curly quote. Common when the name was copy-pasted from email, Word, or an internationalized data source. Symptom: configured name and actual name look identical in the UI but bytes differ.
 7. **Variable resolved to wrong value at runtime** — the `SheetName` property is a dynamic expression (`row("Region").ToString()`, `Environment.GetEnvironmentVariable(...)`, etc.) that resolved to an unexpected value at runtime. Symptom: error names a sheet that nobody configured deliberately — possibly `Null`, an empty string `""`, a row index like `0`, or an unrelated cell value.
+8. **Sheet is hidden or very-hidden** — the configured sheet name DOES exist in the workbook but is set to `xlSheetHidden` or `xlSheetVeryHidden` visibility. The OpenXML provider returns hidden sheets in lookups, but historical bug reports show legacy `Excel Application Scope` skipping very-hidden sheets when resolving by name on some `UiPath.Excel.Activities` versions. Symptom: an interactive admin can see the sheet via Excel's `Format → Sheet → Unhide`, but the activity reports it missing; `Get Workbook Sheets` may or may not list it depending on provider and version.
 
 What to look for:
 - **The literal configured `SheetName` echoed in the error** — the authoritative input at runtime. Don't trust the design-time expression alone; the runtime value may differ.
@@ -115,6 +116,20 @@ Map the branch identified in Investigation to the fix:
     - String concatenation that included an unexpected value (`"Data " + month` where `month` was `Nothing`).
   - Add a guard before the activity that fails the workflow with a clear message when the resolved name is empty, null, or doesn't match a known sheet — rather than letting the BusinessException surface generically.
   - Prevention: validate dynamic sheet names against `Get Workbook Sheets` output at the start of the job. Treat an unresolved sheet name as a configuration error, not a runtime error.
+
+- **Branch 8 — Hidden or very-hidden sheet:**
+  - Unhide the sheet in Excel: `Format → Sheet → Unhide` (for `xlSheetHidden`), or open the VBA editor (`Alt+F11`) and set the sheet's `Visible` property to `xlSheetVisible` (for `xlSheetVeryHidden` — Excel's `Unhide` dialog does not list very-hidden sheets).
+  - If the sheet must remain hidden (presentation reasons), update the workflow to enumerate sheets via a method that includes hidden ones, and confirm the configured name still matches verbatim.
+  - Upgrade `UiPath.Excel.Activities` to the latest version if the project is on an older release; historical bug reports show legacy `Excel Application Scope` skipping very-hidden sheets in some versions.
+  - Prevention: do not very-hide data sheets that workflows depend on. Either keep them visible, OR document the dependency in the workbook itself (cover sheet / metadata sheet listing all programmatically-read sheets).
+
+## Anti-patterns (what NOT to do)
+
+Two common pieces of advice for this failure mode are anti-patterns that hide the bug without fixing it. The agent should NOT recommend either as a primary resolution.
+
+- **Switching from `Use Excel File` to `Excel Application Scope` (or vice versa) as a "magic fix".** Provider divergence between OpenXML and Excel COM is the cause of branch 2 (case mismatch) — switching scopes coincidentally hides that one branch by replacing case-sensitive lookup with case-insensitive lookup. It does NOT fix branches 1, 3, 4, 5, 6, 7, or 8, and it ties the workflow to a host that must have Excel installed (Excel Application Scope is COM-only). The real fix for branch 2 is to match the casing in the workflow, or to force COM explicitly via a documented property. Treat "try the other scope" as a debugging step (does the same workflow succeed under COM?), not as the resolution.
+
+- **Wrapping the activity in a Try Catch to "handle missing tabs gracefully" with no real recovery path.** A bare `Catch System.Exception` (or `UiPath.Excel.BusinessException`) that only logs and continues turns the workflow into a silent-failure pipeline: the DataTable is empty, downstream activities produce zeros / empty reports / no queue items, and the operator sees a job that completed Successfully despite reading nothing. Use Try Catch only as part of a real recovery path: fall back to a different sheet, send a notification, mark a queue item Failed, or re-throw a domain-specific exception. The same anti-pattern is called out as an orphan-cause in [`read-range-file-locked.md`](./read-range-file-locked.md) — silent exception suppression around Excel scopes is consistently harmful, not helpful.
 
 ## Prevention (cross-branch)
 
