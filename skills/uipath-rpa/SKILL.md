@@ -132,6 +132,8 @@ uip rpa activities find --query log --output json > /dev/null 2>&1 &
 
 ## Critical Rules
 
+**Rule numbering.** Common Rules use 1–11. `### Coded-Specific Rules` continues 12–18. `### XAML-Specific Rules` is an independent 16–24 sequence, so numbers 16/17/18 appear in both mode-specific sections — the `[Coded]` / `[XAML]` prefix on each rule disambiguates. Cross-references in this file ("Common Rule 10", "Rule 21", "Rule 24") always point to a uniquely-numbered rule.
+
 ### Common Rules (Both Modes)
 
 1. **NEVER create a project without confirming none exists.** Follow Step 0 resolution: check explicit path, project name, then CWD for `project.json`. Only create when confirmed no project matches AND user explicitly requests creation.
@@ -162,6 +164,9 @@ uip rpa activities find --query log --output json > /dev/null 2>&1 &
 8. **Use `--output json`** on all CLI commands whose output is parsed programmatically.
 8a. **`run` / `debug start` success/failure verdict comes from the outer `Result` (and equivalently the inner `HasErrors`), NEVER from any log entry's `Level`.** A successful workflow may emit `Log Message` activities at `Error` or `Warning` level as observability — those are workflow-emitted data, not CLI failures. Compile failures, validation failures, and unhandled runtime exceptions all flip `HasErrors` and propagate to the outer `Result`. Treating log-entry levels as a failure signal flips green runs to "failed" and burns retries on healthy workflows. See [cli-reference.md § run](references/cli-reference.md) and [debugging.md § Reading Debug Output Effectively](references/debugging.md#reading-debug-output-effectively).
 9. **For "leverage / reuse / find shared libraries" requests, search the tenant feed — not the local filesystem, NuGet.org, or keyword-permutation loops.** Run `uip resource libraries list --limit 500 --output-filter "<JMESPath>" --output json`. On zero results from the filtered call, take the fallback branch — do not re-keyword. Skip when an SDD already records §16 "Shared libraries referenced" or the user has said "no shared libraries" earlier in the session. See [tenant-library-search-guide.md](references/tenant-library-search-guide.md) for the full procedure.
+10. **Register every test case file in `project.json` → `designOptions.fileInfoCollection`.** Applies to both XAML and coded test cases. Required keys, GUID format, JSON snippet, and full schema (including `dataVariationFilePath` for data-driven and `publishAsTestCase` for coded): [references/testing-guide.md § project.json Registration](references/testing-guide.md#projectjson-registration) and [assets/json-template.md](assets/json-template.md).
+
+11. **Test case structure: Given-When-Then.** Applies to both XAML and coded test cases. See [references/testing-guide.md § XAML Test Case Structure](references/testing-guide.md#xaml-test-case-structure-given-when-then) for the canonical patterns (the section's lead also points to the coded variant in `coded/operations-guide.md`).
 
 ### Execution Discipline (Both Modes)
 
@@ -175,13 +180,13 @@ uip rpa activities find --query log --output json > /dev/null 2>&1 &
 
 ### Coded-Specific Rules
 
-8. **[Coded] ALWAYS inherit from `CodedWorkflow`** base class for workflow and test case classes (NOT for Coded Source Files).
-9. **[Coded] ALWAYS use `[Workflow]` or `[TestCase]` attribute** on the `Execute` method.
-10. **[Coded] Update `project.json` entry points** when adding/removing workflow files in **Process** projects. **Tests and Library projects do NOT use `entryPoints`** — skip this step for those project types. Always update `fileInfoCollection` for test case files.
-12. **[Coded] One workflow/test case class per file**, class name must match file name.
-13. **[Coded] Namespace = sanitized project name** from `project.json`. Sanitize: remove spaces, replace hyphens with `_`, ensure valid C# identifier.
-14. **[Coded] Entry method is always named `Execute`**.
-15. **[Coded] Use Coded Source Files** for reusable code — plain `.cs` files without `CodedWorkflow` inheritance, no entry point.
+12. **[Coded] ALWAYS inherit from `CodedWorkflow`** base class for workflow and test case classes (NOT for Coded Source Files).
+13. **[Coded] ALWAYS use `[Workflow]` or `[TestCase]` attribute** on the `Execute` method.
+14. **[Coded] Update `project.json` → `entryPoints`** when adding/removing workflow files in **Process** projects. **Tests and Library projects do NOT use `entryPoints`** — skip this step for those project types. For `fileInfoCollection` (required for every test case in every project type — XAML and coded alike), see Common Rule 10.
+15. **[Coded] One workflow/test case class per file**, class name must match file name.
+16. **[Coded] Namespace = sanitized project name** from `project.json`. Sanitize: remove spaces, replace hyphens with `_`, ensure valid C# identifier.
+17. **[Coded] Entry method is always named `Execute`**.
+18. **[Coded] Use Coded Source Files** for reusable code — plain `.cs` files without `CodedWorkflow` inheritance, no entry point.
 
 ### XAML-Specific Rules
 
@@ -205,9 +210,9 @@ uip rpa activities find --query log --output json > /dev/null 2>&1 &
 | **Work in a hybrid project** | Hybrid | [coded-vs-xaml-guide.md](references/coded-vs-xaml-guide.md) → [project-structure.md](references/project-structure.md) |
 | **Create a new project** | Both | [environment-setup.md](references/environment-setup.md) |
 | **Add/edit a coded workflow** | Coded | [coded/operations-guide.md](references/coded/operations-guide.md) → [coded/coding-guidelines.md](references/coded/coding-guidelines.md) |
-| **Add a coded test case** | Coded | [coded/operations-guide.md](references/coded/operations-guide.md) |
-| **Set up data-driven testing** | Both | [testing-guide.md § Data-Driven Testing](references/testing-guide.md) |
-| **Create XAML test case (Given-When-Then)** | XAML | [testing-guide.md § XAML Test Case Structure](references/testing-guide.md) |
+| **Add a coded test case** | Coded | [coded/operations-guide.md](references/coded/operations-guide.md) — remember: register in `fileInfoCollection` (Common Rule 10) |
+| **Set up data-driven testing** | Both | [testing-guide.md § Data-Driven Testing](references/testing-guide.md) — remember: register in `fileInfoCollection` (Common Rule 10) |
+| **Create XAML test case (Given-When-Then)** | XAML | [testing-guide.md § XAML Test Case Structure](references/testing-guide.md) — remember: register in `fileInfoCollection` (Common Rule 10) |
 | **Use mock testing** | XAML | [testing-guide.md § Mock Testing (WIP)](references/testing-guide.md) — requires CLI command not yet available |
 | **Use XAML test activities** | XAML | [testing-guide.md § XAML Test Activities](references/testing-guide.md) |
 | **Use execution templates** | XAML | [testing-guide.md § Execution Templates](references/testing-guide.md) |
