@@ -6,11 +6,13 @@
 
 ## Execution Model
 
-**Execute `uia-configure-target` steps inline in the main conversation.** Do NOT delegate the entire skill to a subagent. The skill's internal steps already spawn their own subagents.
+**Execute `uia-configure-target` steps inline in the conversation that authors the workflow file consuming the OR entries.** Do NOT delegate `uia-configure-target` to a further subagent below that conversation. The skill's internal steps already spawn their own subagents.
+
+Scope of "the authoring conversation". In the decomposed layout from [project-structure-guide.md](project-structure-guide.md), the Main orchestrator dispatches one sub-workflow agent per business step, in parallel. For each sub-workflow that contains UIA activities, the *sub-workflow agent itself* is the authoring conversation — it runs `uia-configure-target` directly. **The top-level orchestrator → per-sub-workflow agent fan-out is the intended parallel-authoring pattern and remains allowed; only nesting an *additional* subagent below the authoring agent for this skill is prohibited.**
 
 Why this matters:
-- **OR references** must be visible in the main conversation so they can be attached to workflow activities as the workflow is created. See `{PROJECT_DIR}/.local/docs/packages/UiPath.UIAutomation.Activities/references/uia-target-attachment-guide.md`.
-- **Context continuity** — as the main conversation proceeds, it already knows which screens and elements are registered: the references were returned in earlier turns, and the OR itself is queryable via the OR CLI. This is what "knowing what's registered" means here — the in-conversation state plus live OR queries — so duplicate captures are avoided and the workflow build stays coherent.
+- **OR references** must be visible in the conversation that writes the consuming activities so they can be attached to workflow activities as the workflow is created. See `{PROJECT_DIR}/.local/docs/packages/UiPath.UIAutomation.Activities/references/uia-target-attachment-guide.md`.
+- **Context continuity** — that conversation already knows which screens and elements it has registered for its workflow: the references were returned in earlier turns, and the OR itself is queryable via the OR CLI. This is what "knowing what's registered" means here — the in-conversation state plus live OR queries — so duplicate captures are avoided and the workflow build stays coherent. Adding another subagent layer between the authoring agent and `uia-configure-target` severs this loop.
 
 Read the SKILL.md, then execute each step of the internal procedure yourself. Only spawn `Agent` where the skill explicitly says to.
 
