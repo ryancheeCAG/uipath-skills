@@ -62,7 +62,10 @@ they do not provide `--work-dir`; keep the report path if the routine output
 must be retained as durable evidence. If a Rookery task needs
 `run_workspace_checks`, target the actual `uipcli` checkout; when that checkout
 is unavailable or lacks the required Bun scripts, report `workspace_checks` as a
-structural skip instead of running checks in this skills worktree.
+structural skip instead of running checks in this skills worktree. If callers
+override `--work-dir` or `--report` with a path inside the product worktree, the
+path must stay under an ignored runtime directory such as `.rookery/`,
+`.rookery-tmp/`, or `.codex/`.
 
 ### Capability-index template
 

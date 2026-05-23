@@ -105,9 +105,16 @@ fi
 if [ -z "$REPORT_PATH" ]; then
   REPORT_PATH="$WORK_DIR/report.json"
 else
+  REPORT_PATH="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$REPORT_PATH")"
+  case "$REPORT_PATH" in
+    "$REPO_ROOT"|"$REPO_ROOT"/*)
+      if ! is_under_repo_runtime_dir "$REPORT_PATH"; then
+        echo "refusing to write report inside product worktree: $REPORT_PATH" >&2
+        exit 2
+      fi
+      ;;
+  esac
   mkdir -p "$(dirname "$REPORT_PATH")" || exit 1
-  REPORT_DIR="$(cd "$(dirname "$REPORT_PATH")" && pwd)"
-  REPORT_PATH="$REPORT_DIR/$(basename "$REPORT_PATH")"
 fi
 
 case "$WORK_DIR" in
