@@ -6,9 +6,78 @@ Activity patterns for `UiPath.DataService.Activities`. All activities are generi
 
 `UiPath.DataService.Activities`
 
+## Authoring Decision Tree
+
+Branch on two binary signals before writing any Data Service XAML:
+
+1. **`INSIDE_SOLUTION`** — `true` iff `<PROJECT_DIR>` has an ancestor `.uipx` file. Resolve via the walk-up in [Solution membership and properties](#solution-membership-and-properties) below.
+2. **`ScopeValue`** — for solution projects, the value the user picks in Studio Desktop's Folder/Tenant radio. Standalone projects always serialize `"Tenant"`.
+
+| `INSIDE_SOLUTION` | `ScopeValue` | Branch | Entity source | Namespace alias + assembly | `x:TypeArguments` |
+|---|---|---|---|---|---|
+| `false` | `"Tenant"` | **A** | `<PROJECT_DIR>/.entities/EntitiesStore.json` | `<initial>:` from `DataService.<ProjectName>` | `<initial>:<EntityName>` |
+| `true` | `"Tenant"` | **A** | `<PROJECT_DIR>/.entities/EntitiesStore.json` | `<initial>:` from `DataService.<ProjectName>` | `<initial>:<EntityName>` |
+| `true` | `"Folder"` | **B** | `<SOLUTION_DIR>/resources/solution_folder/entity/[native/]<Name>.json` | `udacsdeb:` from `DataFabric.Entities.<22-char-hash>` | `udacsdeb:<EntityName>_<UUID-with-dashes-as-underscores>` |
+
+> **Constraint.** Folder scope is solution-only — there is no fourth row. If the user wants Folder scope but no `.uipx` exists, route them through [xaml/data-service-project-shape-guide.md](../../../xaml/data-service-project-shape-guide.md) to pick (or convert) the project shape before continuing.
+
+Branch A or B determines the fill-in for every downstream section ([Prerequisites](#prerequisites), [XAML Namespace Declarations](#xaml-namespace-declarations), [Generic Type Argument](#generic-type-argument)). Downstream is mechanical — pick the branch from the table, then follow its sub-section in each.
+
+## Solution membership and properties
+
+Solution-awareness is required only when authoring Data Service activities — this section is the source of truth for the walk-up algorithm, property names, and on-disk locations used by Branch B above.
+
+### Walk up to find the solution
+
+Walk parent directories of `<PROJECT_DIR>` until either a `.uipx` file is found or the filesystem root is reached.
+
+```text
+dir = projectRoot
+while dir != filesystem root:
+    if any *.uipx in dir:
+        SOLUTION_DIR = dir
+        SOLUTION_FILE = <the .uipx>
+        SOLUTION_ID   = (read "SolutionId" field from the JSON manifest)
+        INSIDE_SOLUTION = true
+        break
+    dir = parent(dir)
+```
+
+Mirrors `solution-sdk`'s `findNearestParentUipxFile(startDir)`. Works from inside the project directory or the solution directory.
+
+If no `.uipx` is found, `INSIDE_SOLUTION=false` — only Tenant scope is available; see Branch A.
+
+### List Folder-scoped entity artefacts
+
+Once `SOLUTION_DIR` is set, navigate to `<SOLUTION_DIR>/resources/solution_folder/entity/`. If a `native/` subdirectory exists (Studio Desktop's current layout), use that path instead. Each `*.json` file inside is a Folder-scoped entity artefact for Data Service:
+
+- `resource.key` field → `SolutionEntityKey` (resource UUID; also the `EntityId` and the suffix in `x:TypeArguments="udacsdeb:<EntityName>_<UUID-with-dashes-as-underscores>"`)
+- `resource.name` field → `SolutionEntityName` (display name; the runtime `BindingsKey` lookup)
+- `resource.spec.resourceJson` → stringified entity schema (same shape as one `EntitiesStore.json:Entities[*]` entry)
+
+For the merged local + remote view (including entities in the tenant that aren't yet added to the solution), use the CLI; see [Discovering values for XAML](#discovering-values-for-xaml).
+
+### JIT bundle DLL (the assembly referenced by `xmlns:udacsdeb`)
+
+Three project-local files describe the JIT bundle:
+
+| File | Size | Role |
+|---|---|---|
+| `<PROJECT_DIR>/.project/JitCustomTypes.json` | ~200 B | Pointer — `bundleHash` only, no schema. Names the cache directory below. |
+| `<PROJECT_DIR>/.project/JitCustomTypesSchema.json` | ~25 KB+ | Bundle definition — `jitAssemblyCompilerCommands[0].bundleOptions.entitiesBundle.Types` carries every CLR type's property list, attributes, and enum values that Studio JIT-compiles. |
+| `<PROJECT_DIR>/.local/.customtypes/EntitiesBundle_<bundleHash>/DataFabric.Entities.<22-char-suffix>.dll` | precompiled assembly | The actual DLL Studio emits at design time. Suffix matches the `xmlns:udacsdeb` `assembly=...` value and the `AssemblyReference` in `TextExpression.ReferencesForImplementation`. |
+
+`bundleHash` (in `JitCustomTypes.json` and the cache directory name) and the DLL filename suffix are two different deterministic identifiers — both derived from bundle content, but used in different namespaces. The directory is keyed by `bundleHash`; the assembly is keyed by `<suffix>`.
+
+**Runtime story.** This is structurally identical to Branch A: Studio precompiles a real .NET assembly at design time, parks it under `.local/`, and pack bundles it into the deployment archive. The robot loads it at runtime like any other referenced assembly. No runtime JIT, no `AssemblyResolve` hook needed beyond the standard package-relative resolution. If validation says `Cannot create unknown type '...DataFabric.Entities.Bundle}EntityName_<UUID>'`, the bundle DLL is stale or missing — re-open the project in Studio Desktop to regenerate.
+
+### Publishing implication
+
+Solution-resident projects that author Data Service activities must NOT be packed and uploaded standalone via `uip rpa pack` + `uip or packages upload`. Such a `.nupkg` does not carry `resources/solution_folder/` (the solution-level resource artefacts), so Orchestrator's `resourceOverwrites` never gets populated and Folder-scoped Data Service activities lose their `X-UiPath-FolderPath` injection at runtime. The JIT bundle DLL itself ships in the package regardless (it's a normal assembly reference), so the runtime can still construct entity instances — but every API call hits tenant-level routing or 404s. Use `uip solution pack` / `solution publish` / `solution deploy` via [`/uipath:uipath-solution`](../../../../../uipath-solution/SKILL.md) instead.
+
 ## Prerequisites
 
-Branch on `INSIDE_SOLUTION` from the rpa skill's [Step 0 walk-up](../../../../SKILL.md#step-0-resolve-project_dir-and-solution-membership). Source-of-truth for entity schema and CLR types differs by branch.
+Branch on `INSIDE_SOLUTION` (see [Solution membership and properties](#solution-membership-and-properties) above). Source-of-truth for entity schema and CLR types differs by branch.
 
 ### Branch A — Standalone or Tenant scope (`INSIDE_SOLUTION=false`, or solution project with `ScopeValue="Tenant"`)
 
@@ -38,12 +107,12 @@ Only entities explicitly imported via Studio have CLR types in the generated DLL
 2. **Entity pick via Studio**: Studio Desktop's `SolutionResourcesWidget` (Folder/Tenant radio + entity picker) writes the entity to the solution. No `EntitiesStore.json` is produced for this branch.
 3. **`entitiesStores` in project.json**: `[]` (empty). Studio Desktop intentionally leaves it empty for Folder-scope projects.
 4. **Solution resource artefact**: lives at `<SOLUTION_DIR>/resources/solution_folder/entity/native/<EntityName>.json` (preferred) or `<SOLUTION_DIR>/resources/solution_folder/entity/<EntityName>.json` (older layout). Match either path. The `key` field is the entity UUID (= `SolutionEntityKey`); `name` is the display name (= `SolutionEntityName`); `spec.resourceJson` carries the full schema.
-5. **JIT bundle metadata**: `<PROJECT_DIR>/.project/JitCustomTypes.json` lists the JIT-compiled entity types with their `EntitySchema` JSON. The assembly suffix (`DataFabric.Entities.<22-char-hash>`) is content-addressed from the bundle.
+5. **JIT bundle**: schema lives in `<PROJECT_DIR>/.project/JitCustomTypesSchema.json` (`jitAssemblyCompilerCommands[0].bundleOptions.entitiesBundle.Types`); `<PROJECT_DIR>/.project/JitCustomTypes.json` is a small pointer file holding just `bundleHash`; the precompiled DLL lives at `<PROJECT_DIR>/.local/.customtypes/EntitiesBundle_<bundleHash>/DataFabric.Entities.<22-char-suffix>.dll`. See [JIT bundle DLL](#jit-bundle-dll-the-assembly-referenced-by-xmlnsudacsdeb) below.
 6. **Binding contract**: `<PROJECT_DIR>/.project/PackageBindingsMetadata.json` declares one entry per Data Service activity type (see [Binding source by surface](#binding-source-by-surface) below).
 
 **Stop conditions (Branch B).** Before any solution-scoped Data Service activity:
 1. Walk `<SOLUTION_DIR>/resources/solution_folder/entity/[native/]`. No artefact for `<EntityName>` → **stop**: "Entity `<EntityName>` not registered in the solution. Pick it via Studio Desktop's entity picker (Folder scope) or via Studio Web, then retry."
-2. Read `<PROJECT_DIR>/.project/JitCustomTypes.json`; if absent, the JIT bundle hasn't been built — re-open the project in Studio Desktop to regenerate.
+2. Check `<PROJECT_DIR>/.project/JitCustomTypes.json` (pointer) and `<PROJECT_DIR>/.local/.customtypes/EntitiesBundle_<bundleHash>/DataFabric.Entities.<suffix>.dll` (precompiled DLL); if either is absent, the JIT bundle hasn't been built — re-open the project in Studio Desktop to regenerate.
 3. For schema lookups, read `spec.resourceJson` from the artefact in step 1 (it is a stringified JSON with the same shape as `EntitiesStore.json:Entities[*]`).
 
 ### Entity Lookup Scope
@@ -100,7 +169,7 @@ Assembly references for `TextExpression.ReferencesForImplementation`:
 xmlns:udacsdeb="clr-namespace:UiPath.DataService.Activities.Core.SWEntities.DataFabric.Entities.Bundle;assembly=DataFabric.Entities.<22-char-hash>"
 ```
 
-- `<22-char-hash>` is content-addressed from the JIT bundle (`.project/JitCustomTypes.json`'s `entityAssemblyKey.assemblyName`). Adding / removing / mutating entities in the bundle changes the suffix. Match the actual value from the project — do not hard-code.
+- `<22-char-hash>` is content-addressed from the JIT bundle definition. Read the actual value from the project — either the DLL filename at `<PROJECT_DIR>/.local/.customtypes/EntitiesBundle_<bundleHash>/DataFabric.Entities.<suffix>.dll`, or the existing `xmlns:udacsdeb` / `AssemblyReference` in the project's XAML files. Adding / removing / mutating entities in the bundle changes the suffix. Do not hard-code.
 - The alias `udacsdeb` is Studio's convention; any short alias resolves at parse time, but Studio Desktop's serializer always writes `udacsdeb`.
 
 Imports for `TextExpression.NamespacesForImplementation`:
@@ -144,7 +213,9 @@ All activities use `x:TypeArguments` — the value **must** be a concrete entity
 <uda:CreateEntityRecord x:TypeArguments="udacsdeb:YourEntityName_<UUID-with-dashes-as-underscores>" ... />
 ```
 
-Branch B disambiguates same-named entities across folders via the UUID suffix. The UUID is `SolutionEntityKey` with dashes replaced by underscores — e.g. `FolderEntity` with key `cb998ac2-2056-f111-8fcb-000d3a32b519` becomes `udacsdeb:FolderEntity_cb998ac2_2056_f111_8fcb_000d3a32b519`.
+Branch B's type name is `<EntityName>_<UUID-with-dashes-as-underscores>`. The UUID is `SolutionEntityKey` with dashes replaced by underscores — e.g. `FolderEntity` with key `cb998ac2-2056-f111-8fcb-000d3a32b519` becomes `udacsdeb:FolderEntity_cb998ac2_2056_f111_8fcb_000d3a32b519`. The suffix uniquely identifies the JIT-compiled CLR type inside the project's `DataFabric.Entities.<hash>` bundle.
+
+> **Same-name constraint.** Even though the JIT type name includes the UUID, a solution cannot host two entities with the same `name` — Studio rejects the second add with `Resource was not added to the solution` (the runtime `BindingsKey` lookup is keyed on `SolutionEntityName` alone, so two same-named Folder-scoped resources in one solution would collide at runtime). To reach two same-named entities from different tenant folders, use separate solutions / projects. See [xaml/data-service-project-shape-guide.md § Constraints](../../../xaml/data-service-project-shape-guide.md#constraints).
 
 Using `udd:IEntity` produces: `Selected Entity type (UiPath.DataService.Definition.IEntity) is not valid`.
 
@@ -306,7 +377,7 @@ Canonical binding contract: `<PROJECT_DIR>/.project/PackageBindingsMetadata.json
 
 The entity itself is declared once per solution at `<SOLUTION_DIR>/resources/solution_folder/entity/[native/]<EntityName>.json` — that artefact carries the UUID (`key`), display name (`name`), and full schema (`spec.resourceJson`). Studio Desktop writes the artefact directly when the user picks an entity in the Folder-scope picker.
 
-Studio Desktop does **NOT** produce `bindings_v2.json`. `uip solution resource refresh` against a Studio Desktop project reports `Created: 0, Imported: 0, Skipped: 0` (expected — nothing to read).
+Studio Desktop does **NOT** produce `bindings_v2.json` for RPA projects. `uip solution resource refresh` against a Studio Desktop RPA project reports `Created: 0, Imported: 0, Skipped: 0` (expected — nothing to read).
 
 #### Studio Web (RPA) / Maestro Flow / Maestro Case scaffold projects
 
@@ -393,9 +464,9 @@ These commands live in the `uipath-solution` skill — see [develop-solution.md]
 ## Common Pitfalls
 
 - `x:TypeArguments` must be a concrete entity type — `udd:IEntity` is rejected at validation. Branch A: `<initial>:EntityName`. Branch B: `udacsdeb:EntityName_<sanitized-UUID>`.
-- Branch A namespace must include the full `assembly=DataService.<ProjectName>` qualifier. Branch B namespace must include `assembly=DataFabric.Entities.<22-char-hash>` (read the hash from `.project/JitCustomTypes.json:entityAssemblyKey.assemblyName`).
+- Branch A namespace must include the full `assembly=DataService.<ProjectName>` qualifier. Branch B namespace must include `assembly=DataFabric.Entities.<22-char-suffix>` (read the suffix from the DLL filename at `<PROJECT_DIR>/.local/.customtypes/EntitiesBundle_<bundleHash>/`, or from an existing `xmlns:udacsdeb` / `AssemblyReference` in the project's XAML).
 - Branch A: `EntitiesStore.json` contains all tenant entities, but only explicitly imported ones have CLR types in the generated DLL. If validation returns `Cannot create unknown type '{clr-namespace:...}EntityName'` — **stop and ask the user** to import the entity via Studio > Data Service tab > "Import Entities". Do not attempt to fix this by changing namespaces or assembly references.
-- Branch B: if validation returns `Cannot create unknown type '{clr-namespace:UiPath.DataService.Activities.Core.SWEntities.DataFabric.Entities.Bundle}EntityName_<UUID>'`, the JIT bundle is stale. Re-open the project in Studio Desktop to regenerate `.project/JitCustomTypes.json` and refresh the assembly hash.
+- Branch B: if validation returns `Cannot create unknown type '{clr-namespace:UiPath.DataService.Activities.Core.SWEntities.DataFabric.Entities.Bundle}EntityName_<UUID>'`, the JIT bundle DLL is stale or missing under `.local/.customtypes/`. Re-open the project in Studio Desktop to regenerate; the assembly suffix and `bundleHash` will refresh together.
 - For Create / Update activities, populate two things and let Studio's serializer choose `IsInRecordView`:
   1. **`InputEntityInFieldView`** — object-initializer expression (runtime reads this when `IsInRecordView` is false / null).
   2. **`RecordState.SelectedFields`** — field GUIDs and values (Studio card UI reads this).

@@ -1,6 +1,6 @@
 ---
 name: uipath-rpa
-description: "Always invoke for `.xaml` or `.cs` workflow files. UiPath RPA — create, edit, build, run, debug `.cs` coded workflows and `.xaml` workflows. UI automation with Object Repository selectors, test case authoring, Integration Service connector calls. Live desktop/browser UI exploration and control. Deploy via `.uipx`→uipath-solution (Step 0 walks up to detect a parent `.uipx`). Non-solution Orchestrator ops→uipath-platform. Test reports→uipath-test. Agents→uipath-agents."
+description: "Always invoke for `.xaml` or `.cs` workflow files. UiPath RPA — create, edit, build, run, debug `.cs` coded workflows and `.xaml` workflows. UI automation with Object Repository selectors, test case authoring, Integration Service connector calls. Live desktop/browser UI exploration and control. Deploy via `.uipx`→uipath-solution. Non-solution Orchestrator ops→uipath-platform. Test reports→uipath-test. Agents→uipath-agents."
 when_to_use: "User wants to create, edit, debug, or run a UiPath automation — '.cs' coded workflows or '.xaml' files. Triggers: 'build a workflow', 'automate Excel/email/web/PDF/queue items', 'add a try-catch', 'fix this XAML error', 'scrape this site', 'process invoices', 'create a test case', or project.json shows UiPath dependencies. NOT for '.flow' files (→uipath-maestro-flow), Python agents (→uipath-agents)."
 ---
 
@@ -26,14 +26,13 @@ Full assistant for creating, editing, managing, and running UiPath automation pr
 Before doing any work, check if `.claude/rules/project-context.md` exists in the project directory.
 
 **If the file exists** → check for staleness:
-1. Read the first line of `.claude/rules/project-context.md` to extract the metadata comment: `<!-- discovery-metadata: cs=N xaml=N deps=N solution=true|false -->`
+1. Read the first line of `.claude/rules/project-context.md` to extract the metadata comment: `<!-- discovery-metadata: cs=N xaml=N deps=N -->`
 2. Count current files: Glob `**/*.cs` (excluding `.local/` and `.codedworkflows/`) and `**/*.xaml` in the project directory
 3. Count current dependencies: read `project.json` and count keys in the `.dependencies` object
-4. Detect current solution membership: walk up from the project root for a `.uipx` (per [Step 0](#step-0-resolve-project_dir-and-solution-membership)). Compare the boolean against the stored `solution` value.
-5. Compare the current counts against the stored metadata values
-6. For each count (cs, xaml, deps), compute the percentage difference: `abs(current - stored) / max(stored, 1) * 100`
-7. If **any individual count differs by 60–70% or more** OR **the `solution` flag is missing from the comment** OR **the `solution` value changed since last discovery** → run the discovery flow below
-8. If all counts are within the threshold and the `solution` flag matches → context is fresh, proceed with the skill workflow
+4. Compare the current counts against the stored metadata values
+5. For each count (cs, xaml, deps), compute the percentage difference: `abs(current - stored) / max(stored, 1) * 100`
+6. If **any individual count differs by 60–70% or more** → run the discovery flow below
+7. If all counts are within the threshold → context is fresh, proceed with the skill workflow
 
 **If the file does NOT exist** → run the discovery flow below.
 
@@ -45,18 +44,11 @@ Before doing any work, check if `.claude/rules/project-context.md` exists in the
    - `AGENTS.md` at project root — read by UiPath Autopilot in Studio Desktop. If `AGENTS.md` already exists, look for `<!-- PROJECT-CONTEXT:START -->` / `<!-- PROJECT-CONTEXT:END -->` markers and replace only between them; if no markers exist, append the fenced block at the end
 4. Then proceed with the skill workflow
 
-## Step 0: Resolve PROJECT_DIR and Solution Membership
+## Step 0: Resolve PROJECT_DIR
 
 Before creating or modifying anything, determine which project to work with. See [references/environment-setup.md](references/environment-setup.md) for the full procedure.
 
 **Quick check:** Find `project.json` to establish `{projectRoot}`. That's it — no Studio Desktop check needed. `uip rpa` auto-launches a headless Studio (UiPath.Studio.Helm NuGet) on first call. Studio Desktop is required only for `files diff` and `focus-activity`.
-
-**Then detect solution membership.** Walk up from `{projectRoot}` until you hit a `.uipx` file or the filesystem root. If a `.uipx` is found, set `SOLUTION_DIR` to its directory and `INSIDE_SOLUTION=true`. This single signal changes how publish/deploy works:
-
-- `INSIDE_SOLUTION=true` → publish/deploy is owned by `uipath-solution`. Do not run `uip rpa pack` + `uip or packages upload` for deploy — it bypasses the solution's resource artefacts (`resources/solution_folder/entity/[native/]<Name>.json`) → `X-UiPath-FolderPath` and breaks any solution-scoped `UiPath.DataService.Activities` activities. Hand off to `/uipath:uipath-solution`. See [references/publishing-guide.md § Step 0](references/publishing-guide.md).
-- `INSIDE_SOLUTION=false` → standalone project. Follow the existing pack/upload path.
-
-The walk-up mirrors `solution-sdk findNearestParentUipxFile(...)` and works regardless of whether the user invoked you from inside the project directory or from the solution directory.
 
 ## Project Type Detection
 
@@ -202,6 +194,7 @@ Skip this path when the task has no UI surface (data transforms, IS connector ca
 | **Work in a Legacy (.NET 4.6.1) project** | Legacy | [legacy/legacy-mode-guide.md](references/legacy/legacy-mode-guide.md) — entry point. Modern-mode rules below do not apply. |
 | **Choose coded vs XAML** | Both | [coded-vs-xaml-guide.md](references/coded-vs-xaml-guide.md) |
 | **Work in a hybrid project** | Hybrid | [coded-vs-xaml-guide.md](references/coded-vs-xaml-guide.md) → [project-structure.md](references/project-structure.md) |
+| **Pick Solution vs Standalone for a Data Fabric automation** | Both | [xaml/data-service-project-shape-guide.md](references/xaml/data-service-project-shape-guide.md). Folder-scoped entities require Solution; Tenant-scoped works in either shape. |
 | **Create a new project** | Both | [environment-setup.md](references/environment-setup.md) |
 | **Add/edit a coded workflow** | Coded | [coded/operations-guide.md](references/coded/operations-guide.md) → [coded/coding-guidelines.md](references/coded/coding-guidelines.md) |
 | **Add a coded test case** | Coded | [coded/operations-guide.md](references/coded/operations-guide.md) |
@@ -221,8 +214,7 @@ Skip this path when the task has no UI surface (data transforms, IS connector ca
 | **Call an IS connector (coded)** | Coded | [coded/integration-service-guide.md](references/coded/integration-service-guide.md) |
 | **Call an IS connector (XAML)** | XAML | [is-connector-xaml-guide.md](references/is-connector-xaml-guide.md) → [connector-capabilities.md](references/connector-capabilities.md) |
 | **Build/run/validate** | Both | [cli-reference.md](references/cli-reference.md) → [validation-guide.md](references/validation-guide.md) |
-| **Pack & publish a standalone project to Orchestrator** | Both | [publishing-guide.md](references/publishing-guide.md) — only when `INSIDE_SOLUTION=false` |
-| **Pack & publish a project that lives in a `.uipx` solution** | Both | Hand off to `/uipath:uipath-solution`. Do NOT run `uip rpa pack` for deploy. See [publishing-guide.md § Step 0](references/publishing-guide.md). |
+| **Pack & publish project to Orchestrator** | Both | [publishing-guide.md](references/publishing-guide.md) |
 | **List project best-practice / analyzer rules** | Both | [cli-reference.md § analyzer-rules list](references/cli-reference.md) |
 | **Add a NuGet package** | Coded | [coded/operations-guide.md § Add Dependency](references/coded/operations-guide.md) → [coded/third-party-packages-guide.md](references/coded/third-party-packages-guide.md) |
 | **Find / reuse existing tenant libraries** | Both | [tenant-library-search-guide.md](references/tenant-library-search-guide.md) |

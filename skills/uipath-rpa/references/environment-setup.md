@@ -28,26 +28,6 @@ If the CWD is not the project root:
 - **Pass `--project-dir` explicitly** to every `uip rpa` command
 - Store the project root path and use it consistently as `{projectRoot}`
 
-### Walk up to detect solution membership
-
-After `{projectRoot}` is set, walk up parent directories looking for a `.uipx` file. Stop on the first match or when the filesystem root is reached. Mirrors `solution-sdk`'s `findNearestParentUipxFile(startDir)`.
-
-```text
-dir = projectRoot
-while dir != filesystem root:
-    if any *.uipx in dir:
-        SOLUTION_DIR = dir
-        SOLUTION_FILE = <the .uipx>
-        SOLUTION_ID = (read "SolutionId" field from SOLUTION_FILE if present)
-        INSIDE_SOLUTION = true
-        break
-    dir = parent(dir)
-```
-
-If `INSIDE_SOLUTION` is true, the project's **publish/deploy strategy is owned by `uipath-solution`**. Do NOT run `uip rpa pack` + `uip or packages upload` for deploy — it produces a standalone `.nupkg` that bypasses the solution's resource artefacts (`resources/solution_folder/entity/[native/]<Name>.json`) → `X-UiPath-FolderPath` and breaks any `UiPath.DataService.Activities` Folder-scope record. See [publishing-guide.md § Step 0](publishing-guide.md) before any pack/upload.
-
-This applies regardless of whether the user invoked you from inside the project directory or from the solution directory — the walk-up will catch both.
-
 ## Step 0.2: Authentication (If Needed)
 
 Some commands (IS connections, workflow examples, cloud features) require authentication:
@@ -59,6 +39,10 @@ uip login
 If you encounter auth errors (401, 403, "not authenticated") during any phase, prompt the user to run `uip login` to authenticate against their UiPath Cloud tenant.
 
 ## Step 0.3: Creating a New Project
+
+> If this project uses Data Fabric entities (`UiPath.DataService.Activities`), see [xaml/data-service-project-shape-guide.md](xaml/data-service-project-shape-guide.md) before `uip rpa init` — entity scope constrains project shape.
+
+### `uip rpa init` flag selection
 
 **ALWAYS use `uip rpa init`** — never write `project.json`, `project.uiproj`, or other scaffolding files manually.
 
