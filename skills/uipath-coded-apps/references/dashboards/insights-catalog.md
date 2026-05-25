@@ -262,6 +262,80 @@ const chartData = (data as any)?.data ?? []
 
 ---
 
+### Recipe 13 — P50 + P95 Latency (multi-line)
+**Triggers:** "latency with P50 and P95", "compare P50 vs P95", "latency percentiles"
+**Template:** `multi-line-chart.tsx`
+```tsx
+const { data, loading, error } = useInsights<{ data: Array<{ name: 'P50' | 'P95'; value: number; date: string }> }>(
+  'agents.getLatencyTimeline', { startTime: SEVEN_DAYS_AGO }
+)
+const rawData = (data as any)?.data ?? []
+const chartData = rawData.reduce((acc: Record<string, unknown>[], row: { name: string; value: number; date: string }) => {
+  const existing = acc.find(r => r.date === row.date) as Record<string, unknown> | undefined
+  if (existing) { existing[row.name] = row.value }
+  else acc.push({ date: row.date, [row.name]: row.value })
+  return acc
+}, [])
+// X_KEY: "date"
+// SERIES: [{ key: 'P50', color: 'hsl(var(--chart-1))' }, { key: 'P95', color: 'hsl(var(--chart-2))' }]
+```
+
+---
+
+### Recipe 14 — Agent Error Rate KPI with Sparkline
+**Triggers:** "agent error rate trend", "errors with trend", "error KPI with sparkline"
+**Template:** `kpi-with-sparkline.tsx`
+```tsx
+const { data, loading, error } = useInsights<{ data: Array<{ name: string; value: number; date: string }> }>(
+  'agents.getErrors', { startTime: SEVEN_DAYS_AGO }
+)
+const allRows = (data as any)?.data ?? []
+// Aggregate total errors per day across all agents
+const byDate = allRows.reduce((acc: Record<string, number>, r: { date: string; value: number }) => {
+  const day = r.date.slice(0, 10)
+  acc[day] = (acc[day] ?? 0) + r.value
+  return acc
+}, {})
+const sparklineData = Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b)).map(([date, errors]) => ({ date, errors }))
+const latestValue = sparklineData.length > 0 ? String(sparklineData[sparklineData.length - 1].errors) : '—'
+// VALUE_EXPRESSION: latestValue
+// Y_KEY: "errors"
+// DELTA_DIR: "down-good"  (fewer errors is better)
+```
+
+---
+
+### Recipe 15 — Top Agents Ranked Table
+**Triggers:** "top agents", "leaderboard", "agents ranked by", "most errors/usage/consumption"
+**Template:** `ranked-table.tsx`
+```tsx
+const { data, loading, error } = useInsights<{ data: Array<{ agentName: string; count: number }> }>(
+  'agents.getTopErroredAgents', { startTime: SEVEN_DAYS_AGO }
+)
+const rows = [...((data as any)?.data ?? [])].sort((a, b) => b.count - a.count)
+// COLUMNS: [{ key: 'agentName', label: 'Agent' }, { key: 'count', label: 'Errors', numeric: true }]
+// X_KEY for sort: "count"
+```
+
+---
+
+### Recipe 16 — Incident Type Progress Bars
+**Triggers:** "incident breakdown", "error vs escalation", "incident types as bars", "proportion breakdown"
+**Template:** `progress-bar-list.tsx`
+```tsx
+const { data, loading, error } = useInsights<{
+  data: { errorCount: number; escalationCount: number; policyCount: number }
+}>('agents.getIncidentDistribution', { startTime: THIRTY_DAYS_AGO })
+const items = [
+  { label: 'Errors',      value: (data as any)?.data?.errorCount ?? 0 },
+  { label: 'Escalations', value: (data as any)?.data?.escalationCount ?? 0 },
+  { label: 'Policy',      value: (data as any)?.data?.policyCount ?? 0 },
+].filter(d => d.value > 0)
+// LABEL_KEY: "label"   VALUE_KEY: "value"
+```
+
+---
+
 **No matching recipe?** Derive from scratch using the Routing Table in `data-router.md` and the Key response fields in the tables above.
 
 ## Suggested Dashboard Packages
