@@ -1,0 +1,81 @@
+task_id: uipath-coded-apps-dashboard-multiwidget
+description: >
+  Validates that a 5-widget dashboard builds correctly end-to-end: all
+  widgets generated in a single parallel block, index.ts exports all
+  components, App.tsx imports them, and tsc --noEmit passes across the
+  entire project. Exercises the tool-use budget with a real workload.
+tags: [uipath-coded-apps, integration, dashboard, feature:scaffold]
+
+sandbox:
+  driver: tempdir
+  node: {}
+
+initial_prompt: |
+  Build an agent health dashboard with these 5 widgets:
+  1. Active agents count (KPI)
+  2. Agent error trend last 7 days (line chart)
+  3. Invocation activity last 24 hours (area chart)
+  4. P95 latency trend last 7 days (line chart)
+  5. Top agents by usage (table, ranked by units consumed)
+
+  Do NOT ask for approval, confirmation, or feedback.
+  Do NOT pause between planning and implementation.
+  Before starting, load the uipath-coded-apps skill and follow its workflow.
+
+success_criteria:
+  # 5 widget files
+  - type: run_command
+    description: "check_dashboard validates 5 widgets with Insights routing"
+    command: >
+      python3 $SKILLS_REPO_PATH/tests/tasks/uipath-coded-apps/dashboard/_shared/check_dashboard.py
+      --min-widgets 5 --require-insights --no-tsc
+    timeout: 30
+    expected_exit_code: 0
+    weight: 4.0
+    pass_threshold: 1.0
+
+  # All Insights endpoints represented
+  - type: file_contains
+    description: "KPI widget uses agents.getAgents"
+    path: "src/widgets"
+    pattern: "agents\\.getAgents"
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Error trend uses agents.getErrors"
+    path: "src/widgets"
+    pattern: "agents\\.getErrors"
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Activity chart uses agents.getConsumptionTimeline"
+    path: "src/widgets"
+    pattern: "agents\\.getConsumptionTimeline"
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Latency chart uses agents.getLatencyTimeline"
+    path: "src/widgets"
+    pattern: "agents\\.getLatencyTimeline"
+    weight: 1.5
+    pass_threshold: 1.0
+
+  # App.tsx wires widgets into DashboardShell
+  - type: file_contains
+    description: "App.tsx imports from widgets"
+    path: "src/App.tsx"
+    pattern: "from.*widgets"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # TypeScript clean across 5 widgets
+  - type: command_executed
+    description: "tsc --noEmit ran"
+    tool_name: "Bash"
+    command_pattern: 'tsc\s+--noEmit'
+    min_count: 1
+    weight: 3.0
+    pass_threshold: 1.0

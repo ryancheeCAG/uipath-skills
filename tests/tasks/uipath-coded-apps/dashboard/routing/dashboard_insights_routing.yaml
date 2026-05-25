@@ -1,0 +1,73 @@
+task_id: uipath-coded-apps-dashboard-insights-routing
+description: >
+  Validates that Insights-routed metrics use the correct namespace and
+  endpoint. Checks that agent errors use agents.getErrors, latency uses
+  agents.getLatencyTimeline, and not a misrouted traceview or wrong endpoint.
+tags: [uipath-coded-apps, integration, dashboard, feature:routing]
+
+sandbox:
+  driver: tempdir
+  node: {}
+
+initial_prompt: |
+  Build a dashboard showing:
+  - Agent error trend over the last 7 days
+  - P95 latency per agent
+  - Top agents ranked by error count
+
+  Do NOT ask for approval, confirmation, or feedback.
+  Do NOT pause between planning and implementation.
+  Before starting, load the uipath-coded-apps skill and follow its workflow.
+
+success_criteria:
+  # Error trend uses agents.getErrors
+  - type: file_contains
+    description: "Error trend widget uses agents.getErrors endpoint"
+    path: "src/widgets"
+    pattern: "agents\\.getErrors"
+    weight: 3.0
+    pass_threshold: 1.0
+
+  # Latency uses agents.getLatencyTimeline
+  - type: file_contains
+    description: "Latency widget uses agents.getLatencyTimeline endpoint"
+    path: "src/widgets"
+    pattern: "agents\\.getLatencyTimeline"
+    weight: 3.0
+    pass_threshold: 1.0
+
+  # Top erroring agents uses agents.getTopErroredAgents
+  - type: file_contains
+    description: "Top agents widget uses agents.getTopErroredAgents"
+    path: "src/widgets"
+    pattern: "agents\\.getTopErroredAgents"
+    weight: 2.5
+    pass_threshold: 1.0
+
+  # All three use useInsights hook
+  - type: file_contains
+    description: "Widgets use useInsights hook (not raw fetch)"
+    path: "src/widgets"
+    pattern: "useInsights"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # Outcome check via script
+  - type: run_command
+    description: "check_dashboard validates Insights routing and structure"
+    command: >
+      python3 $SKILLS_REPO_PATH/tests/tasks/uipath-coded-apps/dashboard/_shared/check_dashboard.py
+      --min-widgets 3 --require-insights
+      --require-recipe agents.getErrors --no-tsc
+    timeout: 30
+    expected_exit_code: 0
+    weight: 3.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "tsc --noEmit ran"
+    tool_name: "Bash"
+    command_pattern: 'tsc\s+--noEmit'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0

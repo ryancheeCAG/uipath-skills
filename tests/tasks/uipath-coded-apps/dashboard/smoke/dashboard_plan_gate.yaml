@@ -1,0 +1,50 @@
+task_id: uipath-coded-apps-dashboard-plan-gate
+description: >
+  Validates the approval gate: agent must show a plain-language plan with
+  [SDK] or [Insights] labels before writing any files. No scaffold, no
+  npm ci, no widget files until the user confirms.
+tags: [uipath-coded-apps, smoke, dashboard, feature:approval-gate]
+
+sandbox:
+  driver: tempdir
+  node: {}
+
+initial_prompt: |
+  I want a dashboard showing agent error rates and active queue depth.
+
+  Do NOT confirm or approve the plan — wait for the user to respond.
+  Before starting, load the uipath-coded-apps skill and follow its workflow.
+
+success_criteria:
+  # Agent must show a plan in chat — no files written yet
+  - type: command_executed
+    description: "Agent did NOT run npm ci before approval (no scaffold before plan)"
+    tool_name: "Bash"
+    command_pattern: 'npm\s+ci'
+    min_count: 0
+    max_count: 0
+    weight: 3.0
+    pass_threshold: 1.0
+
+  # Plan must label each widget
+  - type: agent_response
+    description: "Plan contains [Insights] or [SDK] routing label"
+    pattern: '\[Insights\]|\[SDK\]'
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # Plan must name the metrics
+  - type: agent_response
+    description: "Plan references error rate or queue depth"
+    pattern: 'error|queue'
+    match_flags: IGNORECASE
+    weight: 1.5
+    pass_threshold: 1.0
+
+  # No widget files written before approval
+  - type: file_exists
+    description: "package.json NOT created before approval"
+    path: "package.json"
+    expected: false
+    weight: 2.0
+    pass_threshold: 1.0

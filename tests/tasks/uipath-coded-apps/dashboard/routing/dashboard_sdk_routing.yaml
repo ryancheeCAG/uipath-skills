@@ -1,0 +1,69 @@
+task_id: uipath-coded-apps-dashboard-sdk-routing
+description: >
+  Validates that metrics with SDK signals (queue items, running jobs, pending tasks)
+  are routed to SDK calls, not to the Insights RTM API. A widget using
+  useInsights for these metrics is a routing bug.
+tags: [uipath-coded-apps, integration, dashboard, feature:routing]
+
+sandbox:
+  driver: tempdir
+  node: {}
+
+initial_prompt: |
+  Build a dashboard showing:
+  - Current active queue items by folder
+  - Running and pending jobs count
+  - Pending Action Center tasks
+
+  Do NOT ask for approval, confirmation, or feedback.
+  Do NOT pause between planning and implementation.
+  Before starting, load the uipath-coded-apps skill and follow its workflow.
+
+success_criteria:
+  # Queue items must use SDK
+  - type: file_contains
+    description: "Queue widget uses SDK QueueItems (not Insights)"
+    path: "src/widgets"
+    pattern: "QueueItems"
+    weight: 3.0
+    pass_threshold: 1.0
+
+  # Jobs must use SDK
+  - type: file_contains
+    description: "Jobs widget uses SDK Jobs (not Insights)"
+    path: "src/widgets"
+    pattern: "Jobs\\.getAll|jobs\\.getAll"
+    weight: 3.0
+    pass_threshold: 1.0
+
+  # Tasks must use SDK
+  - type: file_contains
+    description: "Tasks widget uses SDK Tasks (not Insights)"
+    path: "src/widgets"
+    pattern: "Tasks\\.getAll|tasks\\.getAll"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # None of the above should use Insights jobs.* endpoints
+  - type: file_contains
+    description: "No widget misroutes operational data to Insights jobs API"
+    path: "src/widgets"
+    pattern: "jobs\\.getCompletedTimeline|jobs\\.getSummary|jobs\\.getTopFailures"
+    expected: false
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # Scaffold valid
+  - type: file_exists
+    description: "project scaffold created"
+    path: "package.json"
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "tsc --noEmit ran"
+    tool_name: "Bash"
+    command_pattern: 'tsc\s+--noEmit'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
