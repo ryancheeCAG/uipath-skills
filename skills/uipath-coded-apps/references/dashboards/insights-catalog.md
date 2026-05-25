@@ -78,6 +78,192 @@ DataFabric entity records, Maestro instance lists, Action Center task counts.
 
 ---
 
+## Widget Recipes
+
+Pre-written patterns for the 10 most common widgets. For each widget in the approved plan, find the matching recipe, copy the block into the widget file, and fill in only `<COMPONENT_NAME>` and `<TITLE>`. No cross-referencing required.
+
+**How to use:** The `useInsights` line goes at the top of the component function. The `chartData` / `rows` / `value` line goes immediately after. `X_KEY` / `Y_KEY` are filled into the template's `dataKey` props.
+
+---
+
+### Recipe 1 — Agent Error Trend
+**Triggers:** "error rate", "errors over time", "error trend", "agent failures", "which agents are failing"
+**Template:** `line-chart.tsx`
+```tsx
+const { data, loading, error } = useInsights<{ data: Array<{ name: string; value: number; date: string }> }>(
+  'agents.getErrors', { startTime: SEVEN_DAYS_AGO }
+)
+const chartData = (data as any)?.data ?? []
+// X_KEY: "date"   Y_KEY: "value"
+// Note: data has one row per agent per day — this plots total across all agents
+```
+
+---
+
+### Recipe 2 — Invocation / Activity Timeline
+**Triggers:** "invocation volume", "how busy", "activity over time", "run count", "agent calls"
+**Template:** `area-chart.tsx`
+```tsx
+const { data, loading, error } = useInsights<{ data: Array<{ timeSlice: string; aguConsumption: number }> }>(
+  'agents.getConsumptionTimeline', { startTime: ONE_DAY_AGO }
+)
+const chartData = (data as any)?.data ?? []
+// X_KEY: "timeSlice"   Y_KEY: "aguConsumption"
+// timeSlice is ISO string — format with toLocaleTimeString() for readability
+```
+
+---
+
+### Recipe 3 — Active Agents Count (KPI)
+**Triggers:** "active agents", "fleet size", "how many agents", "agent count"
+**Template:** `kpi-card.tsx`
+```tsx
+const { data, loading, error } = useInsights<{ data: { agents: Array<{ agentId: string }> } }>(
+  'agents.getAgents', { startTime: THIRTY_DAYS_AGO }
+)
+const value = String((data as any)?.data?.agents?.length ?? '—')
+// TITLE: "Active Agents"
+```
+
+---
+
+### Recipe 4 — Success Rate KPI
+**Triggers:** "success rate", "pass rate", "health score", "how well are agents doing"
+**Template:** `kpi-card.tsx`
+```tsx
+const { data, loading, error } = useInsights<{
+  data: { currentPeriodSummary: { successRate: number; totalJobs: number; averageDurationSeconds: number } }
+}>('agents.getSummaryV2', { startTime: THIRTY_DAYS_AGO })
+const value = (() => {
+  const s = (data as any)?.data?.currentPeriodSummary
+  return s ? `${s.successRate.toFixed(1)}%` : '—'
+})()
+// TITLE: "Success Rate (30 days)"
+```
+
+---
+
+### Recipe 5 — Avg Duration KPI
+**Triggers:** "average duration", "how long do agents take", "avg execution time"
+**Template:** `kpi-card.tsx`
+```tsx
+const { data, loading, error } = useInsights<{
+  data: { currentPeriodSummary: { averageDurationSeconds: number } }
+}>('agents.getSummaryV2', { startTime: THIRTY_DAYS_AGO })
+const value = (() => {
+  const secs = (data as any)?.data?.currentPeriodSummary?.averageDurationSeconds
+  return secs != null ? `${(secs / 60).toFixed(1)}m` : '—'
+})()
+// TITLE: "Avg Duration (30 days)"
+```
+
+---
+
+### Recipe 6 — Top Erroring Agents (Bar)
+**Triggers:** "top erroring agents", "most failures", "error leaderboard", "which agents fail most"
+**Template:** `bar-chart.tsx`
+```tsx
+const { data, loading, error } = useInsights<{
+  totalErrors: number; data: Array<{ name: string; count: number }>
+}>('agents.getTopErroredAgents', { startTime: SEVEN_DAYS_AGO })
+const chartData = (data as any)?.data ?? []
+// X_KEY: "name"   Y_KEY: "count"
+```
+
+---
+
+### Recipe 7 — P95 Latency Trend (Line)
+**Triggers:** "latency", "response time", "P95", "P50", "how fast are agents", "slowest agents"
+**Template:** `line-chart.tsx`
+```tsx
+const { data, loading, error } = useInsights<{
+  data: Array<{ name: 'P50' | 'P95'; value: number; date: string }>
+}>('agents.getLatencyTimeline', { startTime: SEVEN_DAYS_AGO })
+const chartData = (data as any)?.data?.filter((d: { name: string }) => d.name === 'P95') ?? []
+// X_KEY: "date"   Y_KEY: "value"
+// To show both P50 and P95: remove the filter and add a second <Line dataKey="value" />
+// grouped by name — or split into two separate chart components
+```
+
+---
+
+### Recipe 8 — Incident Type Distribution (Donut)
+**Triggers:** "incident types", "error vs escalation", "incident breakdown", "what kind of failures"
+**Template:** `donut-chart.tsx`
+```tsx
+const { data, loading, error } = useInsights<{
+  data: { errorCount: number; escalationCount: number; policyCount: number }
+}>('agents.getIncidentDistribution', { startTime: THIRTY_DAYS_AGO })
+const chartData = [
+  { name: 'Errors',      value: (data as any)?.data?.errorCount      ?? 0 },
+  { name: 'Escalations', value: (data as any)?.data?.escalationCount  ?? 0 },
+  { name: 'Policy',      value: (data as any)?.data?.policyCount      ?? 0 },
+].filter(d => d.value > 0)
+// DATA_KEY: "value"   NAME_KEY: "name"
+```
+
+---
+
+### Recipe 9 — Agent Fleet Table
+**Triggers:** "agent list", "fleet overview", "all agents", "agent status table", "health scores"
+**Template:** `data-table.tsx`
+```tsx
+const { data, loading, error } = useInsights<{
+  data: { agents: Array<{ agentName: string; healthScore: number; unitsQuantity: number; lastRun: string }> }
+}>('agents.getAgents', { startTime: THIRTY_DAYS_AGO })
+const rows = [...((data as any)?.data?.agents ?? [])].sort((a, b) => b.unitsQuantity - a.unitsQuantity)
+// COLUMNS: [
+//   { key: 'agentName',    label: 'Agent' },
+//   { key: 'healthScore',  label: 'Health' },
+//   { key: 'unitsQuantity', label: 'Units Used' },
+//   { key: 'lastRun',      label: 'Last Run' },
+// ]
+```
+
+---
+
+### Recipe 10 — Top Agents by Consumption (Bar)
+**Triggers:** "top consumers", "most expensive agents", "highest usage", "who uses the most AGU"
+**Template:** `bar-chart.tsx`
+```tsx
+const { data, loading, error } = useInsights<{
+  data: { agents: Array<{ agentName: string; consumedQuantity: number }> }
+}>('agents.getConsumption', { startTime: THIRTY_DAYS_AGO })
+const chartData = (data as any)?.data?.agents ?? []
+// X_KEY: "agentName"   Y_KEY: "consumedQuantity"
+```
+
+---
+
+### Recipe 11 — Job Completion Timeline
+**Triggers:** "job trend", "completed jobs over time", "automation volume", "job history"
+**Template:** `area-chart.tsx`
+```tsx
+const { data, loading, error } = useInsights<{ data: Array<{ date: string; count: number }> }>(
+  'jobs.getCompletedTimeline', { startTime: SEVEN_DAYS_AGO }
+)
+const chartData = (data as any)?.data ?? []
+// X_KEY: "date"   Y_KEY: "count"
+// Note: confirm field names with Insights team — jobs API response shape not yet fully documented
+```
+
+---
+
+### Recipe 12 — Memory Usage Timeline (Traceview)
+**Triggers:** "memory usage", "agent memory", "in-memory traces", "context retention"
+**Template:** `area-chart.tsx`
+```tsx
+const { data, loading, error } = useInsights<{
+  data: Array<{ timeSlice: string; inMemoryCount: number; totalCount: number }>
+}>('traceview.getMemoryTimeline', { startTime: SEVEN_DAYS_AGO })
+const chartData = (data as any)?.data ?? []
+// X_KEY: "timeSlice"   Y_KEY: "inMemoryCount"
+```
+
+---
+
+**No matching recipe?** Derive from scratch using the Routing Table in `data-router.md` and the Key response fields in the tables above.
+
 ## Suggested Dashboard Packages
 
 | Dashboard                | Primary endpoints                                                                  |
