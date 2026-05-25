@@ -1,0 +1,21 @@
+task_id: uipath-coded-apps-dashboard-disambiguate
+description: >
+  Validates that an ambiguous prompt triggers the Apps vs Dashboards
+  disambiguation question before any action is taken.
+tags: [uipath-coded-apps, activation, dashboard]
+
+sandbox:
+  driver: tempdir
+  node: {}
+
+initial_prompt: |
+  I need to create something to track my automation performance.
+
+success_criteria:
+  - type: command_executed
+    description: "Agent asks disambiguation question before any action"
+    tool_name: "AskUserQuestion"
+    command_pattern: '.*'
+    min_count: 1
+    weight: 2.0
+    pass_threshold: 1.0

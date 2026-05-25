@@ -1,0 +1,42 @@
+task_id: uipath-coded-apps-dashboard-incremental
+description: >
+  Validates that adding a widget to an existing dashboard only writes the
+  new widget file and does not re-scaffold the entire project.
+tags: [uipath-coded-apps, smoke, dashboard]
+
+sandbox:
+  driver: tempdir
+  node: {}
+  setup: |
+    mkdir -p src/widgets
+    echo '{"name":"my-dashboard","version":"1.0.0"}' > package.json
+    echo 'export {}' > src/widgets/index.ts
+
+initial_prompt: |
+  Add a widget to my existing dashboard showing governance violations
+  over the last 30 days. The dashboard is at the current directory.
+
+  Do NOT ask for approval, confirmation, or feedback.
+  Before starting, load the uipath-coded-apps skill and follow its workflow.
+
+success_criteria:
+  - type: file_exists
+    description: "New governance widget file created in src/widgets"
+    path: "src/widgets"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "New widget uses governance Insights endpoint"
+    path: "src/widgets"
+    pattern: "governance\\.get"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "tsc --noEmit ran after adding widget"
+    tool_name: "Bash"
+    command_pattern: 'tsc\s+--noEmit'
+    min_count: 1
+    weight: 1.0
+    pass_threshold: 1.0
