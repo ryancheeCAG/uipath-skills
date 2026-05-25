@@ -240,15 +240,21 @@ Single Bash call — copies template, writes env vars, installs deps, inits shad
 ```bash
 cp -r assets/templates/dashboard/scaffold/. <PROJECT_DIR>/ && \
 cd <PROJECT_DIR> && \
-printf "VITE_SDK_BASE_URL=https://cloud.uipath.com/<ORG_NAME>/<TENANT_NAME>\nVITE_INSIGHTS_RTM_BASE_URL=https://cloud.uipath.com/<ORG_NAME>/<TENANT_NAME>/insightsrtm_\nVITE_INSIGHTS_TENANT_ID=<TENANT_UUID>\n" > .env.local && \
+printf "VITE_UIPATH_BASE_URL=<API_BASE_URL>\nVITE_UIPATH_ORG=<ORG_NAME>\nVITE_UIPATH_TENANT=<TENANT_NAME>\nVITE_INSIGHTS_TENANT_ID=<TENANT_UUID>\n" > .env.local && \
 echo ".env.local" >> .gitignore && \
 npm install && \
 npx shadcn@latest init --defaults
 ```
 
-`<ORG_NAME>`, `<TENANT_NAME>`, and `<TENANT_UUID>` are substituted from auth-context
-resolution (Phase 2) before this command runs. `<TENANT_UUID>` comes from the `.auth`
-file read in auth-context Step 3. Never interpolate values from user input directly.
+Values substituted from auth-context resolution (Phase 2) before this command runs:
+- `<API_BASE_URL>` — detected from the active cloud environment in `uip login status`:
+  - URL contains `alpha`   → `https://alpha.api.uipath.com`
+  - URL contains `staging` → `https://staging.api.uipath.com`
+  - Otherwise              → `https://api.uipath.com`
+- `<ORG_NAME>`, `<TENANT_NAME>` — from `accountName` / `tenantName` in login status
+- `<TENANT_UUID>` — from `uip` CLI `.auth` file (auth-context Step 3)
+
+Never interpolate any of these from user-supplied input.
 
 This replaces ~30 individual Write calls. Scaffold provides:
 `package.json`, `vite.config.ts`, `tailwind.config.ts`, `tsconfig.json`,
@@ -526,12 +532,16 @@ export class InsightsClient {
 
 ```typescript
 import { InsightsClient } from './insights-client';
-// orgName, tenantName, tenantId resolved from auth-context
-export const insightsClient = new InsightsClient(
-  `${import.meta.env.VITE_INSIGHTS_RTM_BASE_URL}`,   // .../insightsrtm_
-  `${import.meta.env.VITE_SDK_BASE_URL}`,             // base for Jobs /api/v1.0/InsightsJobs/...
-  getToken
-);
+
+const base    = import.meta.env.VITE_UIPATH_BASE_URL;   // https://api.uipath.com (env-specific)
+const org     = import.meta.env.VITE_UIPATH_ORG;
+const tenant  = import.meta.env.VITE_UIPATH_TENANT;
+
+// All service URLs derived from the single base:
+const rtmBase  = `${base}/${org}/${tenant}/insightsrtm_`;  // Agents, Traceview, Governance
+const jobsBase = `${base}/${org}/${tenant}`;               // Jobs: /api/v1.0/InsightsJobs/...
+
+export const insightsClient = new InsightsClient(rtmBase, jobsBase, getToken);
 ```
 
 ## useInsights Hook (in hooks/useInsights.ts)
@@ -570,13 +580,25 @@ export function useInsights<T>(key: InsightsKey, params: InsightsParams, deps: u
 
 ## .env.local (written during scaffold Phase 6 — see build/impl.md Phase 6)
 ```
-VITE_SDK_BASE_URL=https://cloud.uipath.com/<ORG>/<TENANT>
-VITE_INSIGHTS_RTM_BASE_URL=https://cloud.uipath.com/<ORG>/<TENANT>/insightsrtm_
+# Single base URL — environment-specific (detected from uip login status):
+#   alpha:   https://alpha.api.uipath.com
+#   staging: https://staging.api.uipath.com
+#   prod:    https://api.uipath.com
+VITE_UIPATH_BASE_URL=https://api.uipath.com
+
+VITE_UIPATH_ORG=<ORG_NAME>
+VITE_UIPATH_TENANT=<TENANT_NAME>
 VITE_INSIGHTS_TENANT_ID=<TENANT_UUID>   # read from uip .auth file, not user input
 ```
-`<TENANT_UUID>` is read from the `uip` CLI `.auth` file (see auth-context.md Step 3).
-`VITE_INSIGHTS_TENANT_ID` is injected into `useAuth()` return value so widgets never
-hard-reference it directly.
+
+All service URLs are constructed at runtime from these vars:
+```typescript
+// sdk-client.ts
+const sdkBase   = `${import.meta.env.VITE_UIPATH_BASE_URL}/${import.meta.env.VITE_UIPATH_ORG}/${import.meta.env.VITE_UIPATH_TENANT}`;
+const insightsRtmBase = `${sdkBase}/insightsrtm_`;
+```
+
+`VITE_INSIGHTS_TENANT_ID` is exposed via `useAuth()` so widgets never reference it directly.
 
 ## SDK Migration Steps
 1. Replace `InsightsClient` namespaced methods with SDK equivalents in `sdk-client.ts`
@@ -594,7 +616,11 @@ No widget files change — hook interface is stable across migration.
 # Insights Capability Catalog
 
 Source: Confluence "Insights APIs to use for dashboard as code (Draft)"
-Base URL pattern: `https://cloud.uipath.com/<ORG>/<TENANT>/insightsrtm_/<namespace>/<endpoint>`
+Base URL pattern: `<VITE_UIPATH_BASE_URL>/<ORG>/<TENANT>/insightsrtm_/<namespace>/<endpoint>`
+Environment values for VITE_UIPATH_BASE_URL:
+  alpha:   https://alpha.api.uipath.com
+  staging: https://staging.api.uipath.com
+  prod:    https://api.uipath.com
 All calls: POST JSON. All require `tenantId` (UUID) in body. Add `startTime`/`endTime` (ISO 8601) as needed.
 
 ---
