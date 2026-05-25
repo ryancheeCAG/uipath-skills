@@ -36,30 +36,33 @@ Follow approval gate rules in build-plan.md exactly.
 Do not proceed until explicit approval is received.
 
 ## Phase 6 — Scaffold (1 Bash)
-Copy the scaffold template and write env vars. Substitute:
-- `<API_BASE_URL>` from Phase 2 environment detection
-- `<ORG_NAME>` from Phase 2 `accountName`
-- `<TENANT_NAME>` from Phase 2 `tenantName`
-- `<TENANT_UUID>` from Phase 2 `tenantId`
-- `<CLIENT_ID>` — ask user if not already known (point to `../../oauth-client-setup.md` if needed)
+Read PAT and tenantId from `~/.uipath/.auth` (env-file format) as described in `../../primitives/auth-context.md` Step 3. Then copy the scaffold template and write `.env.local`:
 
 ```bash
 SKILL_ASSETS="$(node -e "console.log(require.resolve('@uipath/cli/package.json').replace('/package.json',''))")/../../skills/uipath-coded-apps/assets"
+
+# Read token from .auth file (env-file format)
+PAT=$(grep -m1 '^UIPATH_ACCESS_TOKEN=' ~/.uipath/.auth | cut -d'=' -f2-)
+TENANT_ID=$(grep -m1 '^UIPATH_TENANT_ID=' ~/.uipath/.auth | cut -d'=' -f2-)
+# Fallback: JSON format
+if [ -z "$PAT" ]; then
+  PAT=$(node -e "const a=JSON.parse(require('fs').readFileSync(process.env.HOME+'/.uipath/.auth','utf8')); console.log(a.UIPATH_ACCESS_TOKEN||a.access_token||'')" 2>/dev/null)
+  TENANT_ID=$(node -e "const a=JSON.parse(require('fs').readFileSync(process.env.HOME+'/.uipath/.auth','utf8')); console.log(a.UIPATH_TENANT_ID||a.tenantId||'')" 2>/dev/null)
+fi
+
 cp -r "${SKILL_ASSETS}/templates/dashboard/scaffold/." <PROJECT_DIR>/
 cd <PROJECT_DIR>
-cat > .env.local << 'EOF'
+cat > .env.local << EOF
 VITE_UIPATH_BASE_URL=<API_BASE_URL>
 VITE_UIPATH_ORG_NAME=<ORG_NAME>
 VITE_UIPATH_TENANT_NAME=<TENANT_NAME>
-VITE_UIPATH_CLIENT_ID=<CLIENT_ID>
-VITE_UIPATH_SCOPE=OR.Jobs OR.Queues OR.Tasks OR.DataFabric OR.Folders openid profile
-VITE_INSIGHTS_TENANT_ID=<TENANT_UUID>
+VITE_INSIGHTS_TENANT_ID=${TENANT_ID}
+VITE_UIPATH_PAT=${PAT}
 EOF
-echo ".env.local" >> .gitignore
 npm ci
 ```
 
-> **Note on `npm ci`:** The scaffold template ships a committed `package-lock.json`, so `npm ci` skips version resolution and runs ~2× faster than `npm install`. If the lockfile is absent for any reason, fall back to `npm install`.
+No client ID, no scope, no OAuth setup required. The PAT comes from the active `uip login` session. For production deployment the PAT is stripped before build (failBuildIfPatSet Vite plugin enforces this).
 
 > **Note on SKILL_ASSETS path:** If the path resolution fails, ask the user for the path to the skills repo `assets/` directory and substitute directly.
 

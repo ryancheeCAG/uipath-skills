@@ -1,4 +1,3 @@
 {
-  "scope": "OR.Jobs OR.Queues OR.Tasks OR.DataFabric OR.Folders openid profile",
-  "clientId": ""
+  "name": "UiPath Dashboard"
 }

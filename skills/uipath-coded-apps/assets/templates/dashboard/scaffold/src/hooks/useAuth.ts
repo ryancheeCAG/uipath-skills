@@ -8,30 +8,37 @@ interface AuthContextType {
   isLoading: boolean
   sdk: UiPath
   tenantId: string
-  login: () => Promise<void>
-  logout: () => void
   getToken: () => Promise<string>
   error: string | null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Module-level token cache for Insights API calls.
-// Safe: single-page app, single session, in-memory only.
-let _cachedToken: string | null = null
+function resolveConfig(): UiPathSDKConfig {
+  const base = {
+    baseUrl: import.meta.env.VITE_UIPATH_BASE_URL as string,
+    orgName: import.meta.env.VITE_UIPATH_ORG_NAME as string,
+    tenantName: import.meta.env.VITE_UIPATH_TENANT_NAME as string,
+  }
+  const pat = import.meta.env.VITE_UIPATH_PAT as string | undefined
+  if (pat && pat.length > 0) {
+    // Dev mode: use session PAT from ~/.uipath/.auth
+    return { ...base, secret: pat }
+  }
+  // Production (FP surface): ActionCenterTokenManager handles auth via postMessage.
+  // The SDK union type requires secret or OAuth fields, but the FP host injects the
+  // token manager at runtime. Cast through unknown to satisfy the discriminated union.
+  return base as unknown as UiPathSDKConfig
+}
 
-export const AuthProvider: React.FC<{ children: ReactNode; config: UiPathSDKConfig }> = ({
-  children,
-  config,
-}) => {
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [sdk] = useState<UiPath>(() => new UiPath(config))
+  const [sdk] = useState<UiPath>(() => new UiPath(resolveConfig()))
   const didInit = useRef(false)
 
   useEffect(() => {
-    // Guard against React Strict Mode double-invoke — OAuth codes are single-use.
     if (didInit.current) return
     didInit.current = true
 
@@ -39,10 +46,7 @@ export const AuthProvider: React.FC<{ children: ReactNode; config: UiPathSDKConf
       setIsLoading(true)
       setError(null)
       try {
-        if (sdk.isInOAuthCallback()) {
-          await sdk.completeOAuth()
-          window.history.replaceState({}, document.title, window.location.pathname)
-        }
+        await sdk.initialize()
         setIsAuthenticated(sdk.isAuthenticated())
       } catch (err) {
         setError(err instanceof UiPathError ? err.message : 'Authentication failed')
@@ -50,42 +54,16 @@ export const AuthProvider: React.FC<{ children: ReactNode; config: UiPathSDKConf
         setIsLoading(false)
       }
     }
-
     void init()
   }, [sdk])
 
-  const login = useCallback(async () => {
-    await sdk.login()
-  }, [sdk])
-
-  const logout = useCallback(() => {
-    _cachedToken = null
-    sdk.logout()
-    setIsAuthenticated(false)
-  }, [sdk])
-
-  // getToken: used by InsightsClient for raw bearer token access.
-  // The SDK stores its OAuth token in sessionStorage after completeOAuth().
-  // Find the key containing 'access_token' and return its value.
   const getToken = useCallback(async (): Promise<string> => {
-    if (_cachedToken) return _cachedToken
-    const keys = Object.keys(sessionStorage)
-    const tokenKey = keys.find(
-      (k) => k.includes('access_token') || k.includes('accessToken')
-    )
-    if (tokenKey) {
-      const raw = sessionStorage.getItem(tokenKey)
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as { value?: string; access_token?: string }
-          _cachedToken = parsed.value ?? parsed.access_token ?? raw
-        } catch {
-          _cachedToken = raw
-        }
-        if (_cachedToken) return _cachedToken
-      }
-    }
-    throw new Error('Access token not available — ensure user is authenticated')
+    // In dev mode, PAT is available directly from env
+    const pat = import.meta.env.VITE_UIPATH_PAT as string | undefined
+    if (pat && pat.length > 0) return pat
+    // In production, get token from SDK's internal token manager
+    // The SDK refreshes it automatically via ActionCenterTokenManager
+    throw new Error('Token not available — ensure VITE_UIPATH_PAT is set for local dev')
   }, [])
 
   const value: AuthContextType = {
@@ -93,8 +71,6 @@ export const AuthProvider: React.FC<{ children: ReactNode; config: UiPathSDKConf
     isLoading,
     sdk,
     tenantId: import.meta.env.VITE_INSIGHTS_TENANT_ID as string,
-    login,
-    logout,
     getToken,
     error,
   }

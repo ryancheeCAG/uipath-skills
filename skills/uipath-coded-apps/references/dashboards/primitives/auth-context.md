@@ -8,7 +8,7 @@ uip login status --output json
 ```
 If `isLoggedIn` is false → stop, tell user to run `uip login`.
 
-## Step 2 — Extract fields
+## Step 2 — Extract org / tenant
 ```json
 {
   "isLoggedIn": true,
@@ -18,38 +18,38 @@ If `isLoggedIn` is false → stop, tell user to run `uip login`.
 }
 ```
 
-## Step 3 — Resolve tenantId (UUID)
-Insights RTM endpoints require `tenantId` (UUID) in every POST body — NOT the tenant name string.
-Read from the `uip` CLI `.auth` file:
+## Step 3 — Read PAT and tenantId from ~/.uipath/.auth
+
+The `.auth` file is env-file format (`KEY=VALUE` lines, not JSON):
+```bash
+# Read access token (used as VITE_UIPATH_PAT in .env.local)
+PAT=$(grep -m1 '^UIPATH_ACCESS_TOKEN=' ~/.uipath/.auth | cut -d'=' -f2-)
+
+# Read tenant UUID (used as VITE_INSIGHTS_TENANT_ID)
+TENANT_ID=$(grep -m1 '^UIPATH_TENANT_ID=' ~/.uipath/.auth | cut -d'=' -f2-)
+```
+
+If the file is JSON (some CLI versions): parse with node:
+```bash
+PAT=$(node -e "const a=JSON.parse(require('fs').readFileSync(process.env.HOME+'/.uipath/.auth','utf8')); console.log(a.UIPATH_ACCESS_TOKEN||a.access_token||'')")
+TENANT_ID=$(node -e "const a=JSON.parse(require('fs').readFileSync(process.env.HOME+'/.uipath/.auth','utf8')); console.log(a.UIPATH_TENANT_ID||a.tenantId||'')")
+```
+
+Try the env-file approach first; fall back to JSON if `$PAT` is empty.
+
+## Step 4 — Detect environment from login URL
+
 ```bash
 uip login status --output json
 ```
-The output includes a `tenantId` field. If not present in that command, read the raw auth file:
-```bash
-cat ~/.uipath/.auth | node -e \
-  "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); \
-   console.log(d.tenantId || d.TenantId)"
+Inspect the `url` or `cloudUrl` field:
 ```
-Cache the resolved tenantId in memory for the session — never write to disk.
-Write it to `.env.local` during scaffold Phase 6 so the React app can use it at runtime.
-
-## Step 4 — Construct base URLs
-
-Detect environment from the cloud URL returned by login status:
-```
-URL contains "alpha"   → VITE_UIPATH_BASE_URL=https://alpha.api.uipath.com
-URL contains "staging" → VITE_UIPATH_BASE_URL=https://staging.api.uipath.com
-Otherwise              → VITE_UIPATH_BASE_URL=https://api.uipath.com
-```
-
-All service URLs are derived at runtime in the React app:
-```
-SDK base:     ${VITE_UIPATH_BASE_URL}/${VITE_UIPATH_ORG_NAME}/${VITE_UIPATH_TENANT_NAME}
-Insights RTM: ${VITE_UIPATH_BASE_URL}/${VITE_UIPATH_ORG_NAME}/${VITE_UIPATH_TENANT_NAME}/insightsrtm_
-Jobs base:    ${VITE_UIPATH_BASE_URL}/${VITE_UIPATH_ORG_NAME}/${VITE_UIPATH_TENANT_NAME}
+contains "alpha"   → VITE_UIPATH_BASE_URL=https://alpha.api.uipath.com
+contains "staging" → VITE_UIPATH_BASE_URL=https://staging.api.uipath.com
+otherwise          → VITE_UIPATH_BASE_URL=https://api.uipath.com
 ```
 
 ## Error handling
-- 401 → token expired → re-run `uip login`, retry once
-- Missing accountName/tenantName → tell user: "Run `uip login` and try again"
-- Cannot resolve tenantId → fall back to reading `~/.uipath/.auth` directly
+- `isLoggedIn: false` → tell user to run `uip login`, stop
+- `PAT` is empty after both parse attempts → tell user to re-run `uip login`, stop
+- `TENANT_ID` is empty → use empty string for now; Insights calls will 400 but SDK calls still work
