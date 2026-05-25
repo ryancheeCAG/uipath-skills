@@ -235,14 +235,19 @@ Here's what I'll build. Confirm to proceed, or tell me what to change.
 
 ### Scaffold Phase (Phase 6)
 
-Single Bash call — copies template, installs deps, inits shadcn:
+Single Bash call — copies template, writes env vars, installs deps, inits shadcn:
 
 ```bash
 cp -r assets/templates/dashboard/scaffold/. <PROJECT_DIR>/ && \
 cd <PROJECT_DIR> && \
+printf "VITE_SDK_BASE_URL=https://cloud.uipath.com/<ORG_NAME>/<TENANT_NAME>\nVITE_INSIGHTS_BASE_URL=https://cloud.uipath.com/<ORG_NAME>/<TENANT_NAME>/insights_/api\n" > .env.local && \
+echo ".env.local" >> .gitignore && \
 npm install && \
 npx shadcn@latest init --defaults
 ```
+
+`<ORG_NAME>` and `<TENANT_NAME>` are substituted from auth-context resolution (Phase 2)
+before this command runs. Never interpolate them from user input directly.
 
 This replaces ~30 individual Write calls. Scaffold provides:
 `package.json`, `vite.config.ts`, `tailwind.config.ts`, `tsconfig.json`,
