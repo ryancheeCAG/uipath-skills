@@ -269,11 +269,77 @@ the entire project, wiping user customizations and taking 2-5 minutes unnecessar
 | startTime constants not inline math | `dashboard_starttime` | integration |
 | Full 8-phase pipeline end-to-end | `dashboard_full_e2e` | e2e |
 | Incremental widget add | `dashboard_incremental` | e2e |
+| Deploy CLI commands in correct order | `dashboard_deploy_smoke` | smoke |
+| Fresh deploy: folder picker + state write | `dashboard_deploy_state` | integration |
+| Upgrade deploy: routing name preserved + version bump | `dashboard_deploy_upgrade` | integration |
 | Skill triggers on dashboard prompts | activation prompts 051–060 | activation |
+
+---
+
+## Deploy Tests (`deploy/`)
+
+These tests validate the deploy pipeline documented in `plugins/deploy/impl.md`.
+Commands are run against the real CLI but will fail with auth errors in CI — what's
+tested is that the agent runs the **correct commands with the correct flags**.
+
+### `dashboard_deploy_smoke`
+**What it tests:** Correct CLI command sequence and flag usage for deploy.
+
+**Setup:** Pre-seeded `state.json` with routing name and folder key already resolved.
+
+**What passes:**
+- `uip codedapp pack dist -n <routing-slug> -v <semver>` ran
+- `uip codedapp publish -n <routing-slug> -v <semver>` ran
+- `uip codedapp deploy -n <display-name> --routing-name <slug> --folder-key <key>` ran
+- `-t Action` was NOT passed (dashboards are Web apps)
+- state.json was read before deploying
+
+**Why it matters:** The `-n` flag means different things on pack/publish (routing slug)
+vs deploy (display name). Using it wrong deploys under the wrong name or fails silently.
+`-t Action` is a governance-portal specific flag that breaks Web app deploys.
+
+---
+
+### `dashboard_deploy_state`
+**What it tests:** Fresh deploy path — folder picker runs when `folderKey` is null,
+version is incremented from state.json, and state.json is updated after deploy.
+
+**Setup:** `state.json` with `systemName: null` and `folderKey: null` (never deployed).
+
+**What passes:**
+- `uip or folders list --all` ran (required for folder resolution, `--all` bypasses 50-item cap)
+- Version incremented from `1.0.0` to `1.0.1` or higher
+- pack → publish → deploy all ran
+- `state.json.app.semver` bumped after deploy
+
+**Why it matters:** `--all` is required for folder list — without it the 50-item default
+cap may hide the target folder. Version must be bumped to avoid publish 409 conflicts.
+
+---
+
+### `dashboard_deploy_upgrade`
+**What it tests:** Upgrade deploy path — existing `systemName` means no folder picker,
+existing `routingName` is preserved, existing `folderKey` is reused.
+
+**Setup:** `state.json` with `systemName: "govdash-agent-health-x7k2"`, `semver: "1.0.3"`,
+`folderKey: "abc123-folder-key"` (previously deployed).
+
+**What passes:**
+- `uip or folders list` NOT run (folderKey already known)
+- Existing routing name `agent-health-x7k2` used throughout
+- Version incremented past `1.0.3`
+- `--folder-key abc123-folder-key` passed to deploy
+- `state.json.app.semver` bumped after deploy
+
+**Why it matters:** On upgrades, re-running folder picker is unnecessary and confusing.
+Reusing the routing name ensures the update lands on the correct existing deployment.
+
+---
 
 ## Known Limitations
 
-- Tests do not make live Insights API calls — widget routing is verified by checking
-  endpoint names in generated code, not by running the app
+- Tests do not make live Insights API or Automation Cloud deploy calls — correctness
+  is verified through command invocations, flag usage, and state.json mutations
 - The incremental test uses a pre-seeded template, not a real previously-built dashboard
-- Deploy flow (`plugins/deploy/impl.md`) is not yet covered by automated tests
+- Routing-name collision retry and publish transient-error retry logic are not directly
+  testable in CI (requires a real conflicting deployment to trigger)
