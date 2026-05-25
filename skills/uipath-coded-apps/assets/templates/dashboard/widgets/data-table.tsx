@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-// IMPORT: import { useInsights } from '../hooks/useInsights'
+import { useInsights } from '../hooks/useInsights'
 
 // COLUMNS format: [{ key: 'fieldName', label: 'Column Header' }, ...]
 const COLUMNS: { key: string; label: string }[] = <COLUMNS>

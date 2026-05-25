@@ -1,6 +1,6 @@
 import React from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-// IMPORT: import { useInsights } from '../hooks/useInsights'
+import { useInsights } from '../hooks/useInsights'
 
 export function <COMPONENT_NAME>() {
   const { data, loading, error } = <DATA_HOOK>

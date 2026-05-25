@@ -1,6 +1,6 @@
 import React from 'react'
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-// IMPORT: import { useInsights } from '../hooks/useInsights'
+import { useInsights } from '../hooks/useInsights'
 
 const COLORS = [
   'hsl(var(--primary))',

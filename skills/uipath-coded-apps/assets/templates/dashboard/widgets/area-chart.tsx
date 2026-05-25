@@ -1,6 +1,6 @@
 import React from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-// IMPORT: import { useInsights } from '../hooks/useInsights'
+import { useInsights } from '../hooks/useInsights'
 
 export function <COMPONENT_NAME>() {
   const { data, loading, error } = <DATA_HOOK>

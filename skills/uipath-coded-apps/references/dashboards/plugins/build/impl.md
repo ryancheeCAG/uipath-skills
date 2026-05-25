@@ -5,6 +5,27 @@ Full pipeline: NLP prompt → plan approval → scaffold → widgets → validat
 ## Tool-Use Budget
 ≤ 14 tool calls for a 6-widget dashboard. Never exceed 20 total.
 
+## Narration Rules — What Users See
+
+This skill serves end users, not developers. Never show npm output, TypeScript errors, file paths, bash commands, or technical logs.
+
+**Show exactly these messages at these moments:**
+
+| When | Show |
+|------|------|
+| User approves the plan (before Phase 6) | `⚙ Building your dashboard — this usually takes about 30 seconds…` |
+| Phase 6 running | *(silence — do not narrate commands or output)* |
+| Phase 7 running | *(silence — do not narrate file writes)* |
+| tsc passes (Phase 8) | Show the final summary immediately — see Summary Format below |
+
+**If tsc fails:** Fix errors silently (max 2 attempts). Never mention TypeScript to the user. If you cannot fix after 2 attempts, say: "I ran into a configuration issue — please run `npm install` in your project folder and try again."
+
+**If npm ci fails:** Say: "Dependencies are downloading — this can take a moment on first run." Retry once with `npm install`. Do not show npm output.
+
+**If the dev server fails to start:** Include in the summary: "(Note: run `npm run dev` to start the local preview.)" — do not diagnose it further.
+
+**Never say:** "Writing widget files", "Running tsc --noEmit", "Phase 6", "scaffold", "package.json", "useInsights", or any other implementation detail.
+
 ## Phase 1 — Boot (1 tool-use block)
 Read ALL the following in a single parallel message:
 - `../../primitives/auth-context.md`
@@ -107,19 +128,30 @@ If errors → fix them before proceeding. Common fixes:
 - Type mismatch on `data` → add `as <ExpectedType>` cast
 
 ```bash
-cd <PROJECT_DIR> && npm run dev &
-sleep 4 && curl -s http://localhost:5173 | grep -q "root" && echo "SERVER_OK" && kill %1
+# Verify Vite can start (dry-run check only — don't actually start server)
+cd <PROJECT_DIR> && npx vite --version > /dev/null 2>&1 && echo "VITE_OK"
 ```
 
-Show summary:
+## Summary Format (shown after tsc passes)
+
+Write the summary as follows — no technical language, no file paths:
+
 ```
-Dashboard ready. Run `npm run dev` to preview at http://localhost:5173.
+✨ Your **[Dashboard Title]** is ready.
 
-Widgets:
-1. <Widget 1 name> — <one sentence description>
-...
+**Preview:** Run `npm run dev` in the project folder, then open http://localhost:5173
 
-To deploy: say "deploy this dashboard" and I'll run the pack → publish → deploy pipeline.
+**What's inside:**
+[For each widget, write one bullet using this pattern:]
+• **[Widget Title]** — [Plain-English description of what this shows and why it matters to the user. Focus on the business insight, not the data source.]
+
+**Example bullets (use as a guide for tone):**
+• **Active Agents** — How many agents are currently running in your fleet at a glance
+• **Invocation Volume** — How busy your agents were over the past 24 hours, charted by hour
+• **Error Rate Trend** — Whether your error rate is improving or worsening this week
+• **Top Agents by Performance** — Which agents are handling the most work and how fast they respond
+
+When you're ready to publish to Automation Cloud, say **"deploy this dashboard"**.
 ```
 
 ## Incremental Mode (existing dashboard)
