@@ -11,7 +11,8 @@ Full pipeline: NLP prompt → plan approval → scaffold → widgets → validat
 | 1 Boot | 1 block | 4 reads issued simultaneously |
 | 2 Preflight | 1 Bash | `uip login status` |
 | 3–5 Derive + Plan + Approve | 0 | In-context, no tools |
-| 6 Scaffold | 1 Bash | cp + .env.local + npm ci + routing name (foreground, 120s) |
+| 3.5 Pre-warm | 1 Bash | scaffold copy + npm ci in background (silent, during plan review) |
+| 6 Configure | 1 Bash | check pre-warm status + write .env.local + routing name (~2-5s) |
 | 7 Widgets (≤5 widgets) | 1 Bash | Single Node.js heredoc |
 | 7 Widgets (6+ widgets) | 2 Bash | Split: widgets + views in separate calls |
 | 8 Validate pass 1 | 1 Bash | `tsc --noEmit` |
@@ -33,8 +34,8 @@ This skill serves end users, not developers. Never show npm output, TypeScript e
 
 | When | Show |
 |------|------|
-| User approves the plan (before Phase 6) | `⚙ Building your dashboard — first run takes 2–5 minutes while dependencies download. Subsequent builds are much faster.` |
-| Phase 6 running (npm ci in progress) | `⚙ Installing dependencies…` (shown once after ~10s if still running) |
+| User approves the plan (before Phase 6) | `⚙ Building your dashboard…` (dependencies are already installing in the background) |
+| Phase 6 running | *(silence — deps installing since Phase 3.5, usually already done)* |
 | Phase 7 running | *(silence — do not narrate file writes)* |
 | tsc passes (Phase 8) | Show the final summary immediately — see Summary Format below |
 
@@ -98,6 +99,37 @@ For each metric in the NLP prompt, derive using build-plan.md four-axis decompos
 - Shape, time frame, aggregation, service (SDK or Insights)
 - Route each metric using data-router.md routing table
 
+## Phase 3.5 — Pre-warm scaffold in background (1 Bash, silent)
+
+> **This is how we cut the perceived wait time to near-zero.**
+> Start copying the scaffold and running `npm ci` RIGHT NOW, while the user reads the plan.
+> npm ci with the lockfile takes 16–25s from cache — it's done before the user even responds.
+> Do NOT mention this to the user. Show no output. Proceed immediately to Phase 4.
+
+```bash
+SKILL_BASE_DIR="<SKILL_BASE_DIR>"   # from your system context ("Base directory for this skill")
+DASHBOARD_SLUG=$(node -e "
+  const t='<DASHBOARD_NAME>';
+  console.log(t.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-\$)/g,''));
+")
+PROJECT_DIR="$(pwd)/${DASHBOARD_SLUG}"
+STATUS_FILE="/tmp/dashboard-prewarm-${DASHBOARD_SLUG}.status"
+DIR_FILE="/tmp/dashboard-prewarm-${DASHBOARD_SLUG}.dir"
+
+# Background: copy scaffold + install deps (silent)
+(
+  rm -f "${STATUS_FILE}"
+  cp -r "${SKILL_BASE_DIR}/assets/templates/dashboard/scaffold/." "${PROJECT_DIR}/" && \
+  node -e "require('fs').rmSync('${PROJECT_DIR}/node_modules',{recursive:true,force:true})" 2>/dev/null || true
+  cd "${PROJECT_DIR}" && (npm ci --prefer-offline 2>/dev/null || npm ci 2>/dev/null)
+  echo $? > "${STATUS_FILE}"
+) &
+echo "${PROJECT_DIR}" > "${DIR_FILE}"
+echo "PREWARM_STARTED"
+```
+
+Remember `PROJECT_DIR` — use it in Phase 6 and beyond.
+
 ## Phase 4 — Plan (0 tool calls)
 Render the plan using the format in build-plan.md (the grouped bullet format with plain-English descriptions).
 
@@ -120,18 +152,21 @@ HALT. Wait for user response.
 Follow approval gate rules in build-plan.md exactly.
 Do not proceed until explicit approval is received.
 
-## Phase 6 — Scaffold (1 Bash)
-Read PAT and tenantId from `~/.uipath/.auth` (env-file format) as described in `../../primitives/auth-context.md` Step 3. Then copy the scaffold template and write `.env.local`:
+## Phase 6 — Configure (1 Bash — writes .env.local, confirms deps ready)
+
+Pre-warm started in Phase 3.5. This phase just reads auth, writes env vars, and confirms
+npm ci finished. If still running (rare — user responded very fast), waits briefly.
 
 ```bash
-# SKILL_ASSETS: use this skill's base directory (shown in your system context
-# as "Base directory for this skill"). The scaffold is at:
-#   [SKILL_BASE_DIR]/assets/templates/dashboard/scaffold/
-# Replace SKILL_BASE_DIR with the actual path from your system context.
-SKILL_BASE_DIR="<SKILL_BASE_DIR>"
-SKILL_ASSETS="${SKILL_BASE_DIR}/assets"
+# Re-derive slug to find the status file
+DASHBOARD_SLUG=$(node -e "
+  const t='<DASHBOARD_NAME>';
+  console.log(t.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-\$)/g,''));
+")
+PROJECT_DIR="$(cat /tmp/dashboard-prewarm-${DASHBOARD_SLUG}.dir 2>/dev/null || echo "$(pwd)/${DASHBOARD_SLUG}")"
+STATUS_FILE="/tmp/dashboard-prewarm-${DASHBOARD_SLUG}.status"
 
-# Read auth from ~/.uipath/.auth (env-file format)
+# Read auth
 PAT=$(grep -m1 '^UIPATH_ACCESS_TOKEN=' ~/.uipath/.auth | cut -d'=' -f2-)
 TENANT_ID=$(grep -m1 '^UIPATH_TENANT_ID=' ~/.uipath/.auth | cut -d'=' -f2-)
 if [ -z "$PAT" ]; then
@@ -139,17 +174,27 @@ if [ -z "$PAT" ]; then
   TENANT_ID=$(node -e "const a=JSON.parse(require('fs').readFileSync(process.env.HOME+'/.uipath/.auth','utf8')); console.log(a.UIPATH_TENANT_ID||a.tenantId||'')" 2>/dev/null)
 fi
 
-# Derive base URLs from DATA_BASE_URL
+# Derive API base URL
 if echo "$DATA_BASE_URL" | grep -q "alpha";    then API_BASE_URL="https://alpha.api.uipath.com"
 elif echo "$DATA_BASE_URL" | grep -q "staging"; then API_BASE_URL="https://staging.api.uipath.com"
 else API_BASE_URL="https://api.uipath.com"
 fi
 
-cp -r "${SKILL_ASSETS}/templates/dashboard/scaffold/." <PROJECT_DIR>/
-# Remove any node_modules the template developer may have left — prevents npm ci ENOTEMPTY
-node -e "require('fs').rmSync('<PROJECT_DIR>/node_modules', {recursive:true, force:true})" 2>/dev/null || true
+# Wait for pre-warm (should already be done — npm ci takes 16-25s, user takes 30-60s to approve)
+ATTEMPTS=0
+while [ ! -f "${STATUS_FILE}" ] && [ $ATTEMPTS -lt 6 ]; do
+  sleep 5
+  ATTEMPTS=$((ATTEMPTS+1))
+done
 
-cd <PROJECT_DIR>
+# If pre-warm failed or timed out, run npm ci now (fallback)
+if [ "$(cat ${STATUS_FILE} 2>/dev/null)" != "0" ]; then
+  cd "${PROJECT_DIR}"
+  npm ci --prefer-offline 2>/dev/null || npm ci 2>/dev/null
+fi
+
+# Write env config
+cd "${PROJECT_DIR}"
 cat > .env.local << EOF
 VITE_UIPATH_CLOUD_URL=${DATA_BASE_URL}
 VITE_UIPATH_BASE_URL=${API_BASE_URL}
@@ -158,22 +203,20 @@ VITE_UIPATH_TENANT_NAME=<TENANT_NAME>
 VITE_INSIGHTS_TENANT_ID=${TENANT_ID}
 VITE_UIPATH_PAT=${PAT}
 EOF
-# Run npm ci in foreground — do NOT background this command.
-# With the lockfile it completes in 10-25s from cache, 60-120s cold.
-# The next phase cannot start until this finishes.
-npm ci --prefer-offline 2>/dev/null || npm ci 2>/dev/null
 
-# Derive routing name (stable across sessions)
+# Derive routing name
 ROUTING_NAME=$(node -e "
   const name = '<DASHBOARD_NAME>'.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-\$)/g, '');
   const suffix = Math.random().toString(36).slice(2, 6);
   console.log(name + '-' + suffix);
 ")
+rm -f "${STATUS_FILE}"
 ```
 
-No client ID, no scope, no OAuth setup required. The PAT comes from the active `uip login` session. For production deployment the PAT is stripped before build (failBuildIfPatSet Vite plugin enforces this).
+No client ID, no scope, no OAuth setup required. The PAT comes from the active `uip login` session.
+For production deployment the PAT is stripped before build (failBuildIfPatSet Vite plugin enforces this).
 
-> **SKILL_BASE_DIR:** Check your system context for "Base directory for this skill" — it shows the exact path where skill assets are installed. Use that as `SKILL_BASE_DIR`. On a fresh Claude Code session this is always available.
+> **Expected Phase 6 time:** ~2–5s (deps already installed by pre-warm, just writing env vars)
 
 ## Phase 7 — Widget Generation (1 Bash call, **zero Write calls, zero template reads**)
 
