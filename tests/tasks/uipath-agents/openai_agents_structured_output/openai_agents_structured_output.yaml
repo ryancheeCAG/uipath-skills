@@ -28,8 +28,7 @@ initial_prompt: |
   The agent takes a product review as input and returns the sentiment
   (positive, negative, or neutral), a confidence score (0.0–1.0), and a
   one-sentence summary. Name the input model `ReviewInput` (with a
-  `review_text` field) and the output model `ReviewOutput`, and set it as
-  the agent's `output_type`.
+  `review_text` field) and the output model `ReviewOutput`.
 
   Run it with this input:
   `'{"messages": "Analyze this review", "review_text": "This product is absolutely amazing — best purchase I have made in years."}'`
