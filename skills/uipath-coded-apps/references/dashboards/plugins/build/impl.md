@@ -143,6 +143,13 @@ VITE_INSIGHTS_TENANT_ID=${TENANT_ID}
 VITE_UIPATH_PAT=${PAT}
 EOF
 npm ci --prefer-offline 2>/dev/null || npm ci 2>/dev/null
+
+# Derive routing name (stable across sessions)
+ROUTING_NAME=$(node -e "
+  const name = '<DASHBOARD_NAME>'.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-\$)/g, '');
+  const suffix = Math.random().toString(36).slice(2, 6);
+  console.log(name + '-' + suffix);
+")
 ```
 
 No client ID, no scope, no OAuth setup required. The PAT comes from the active `uip login` session. For production deployment the PAT is stripped before build (failBuildIfPatSet Vite plugin enforces this).
@@ -320,6 +327,30 @@ If errors → fix them before proceeding. Common fixes:
 # Start the dev server and open browser automatically
 # --open launches the browser; server stays running for HMR
 cd <PROJECT_DIR> && npm run dev -- --open
+```
+
+## Phase 8b — Write state.json (0 tool calls, included in Bash)
+
+After tsc passes, write the state file as part of the validation Bash call:
+
+```bash
+node << 'SCRIPT'
+const fs = require('fs'), path = require('path');
+const stateDir = path.join(process.env.PROJECT_DIR, '.dashboard');
+fs.mkdirSync(stateDir, { recursive: true });
+const state = {
+  app: { name: process.env.DASHBOARD_NAME, routingName: process.env.ROUTING_NAME, semver: '1.0.0' },
+  env: process.env.ENV,
+  org: process.env.ORG,
+  tenant: process.env.TENANT,
+  cloudUrl: process.env.CLOUD_URL,
+  widgets: process.env.WIDGET_NAMES.split(','),
+  deployment: { systemName: null, folderKey: null, appUrl: null, lastDeployedAt: null }
+};
+const tmp = path.join(stateDir, 'state.json.tmp');
+fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
+fs.renameSync(tmp, path.join(stateDir, 'state.json'));
+SCRIPT
 ```
 
 ## Summary Format (shown after tsc passes)
