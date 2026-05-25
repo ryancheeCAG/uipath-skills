@@ -12,19 +12,19 @@ All calls: POST JSON body. All require `tenantId` (UUID). Add `startTime`/`endTi
 
 ## Agents namespace — POST /Agents/...
 
-| Method                         | Route suffix                       | Key metrics                                    | Shape       |
-|--------------------------------|------------------------------------|------------------------------------------------|-------------|
-| `agents.getSummaryV2`          | Agents/summaryV2                   | Success rate, failure rate, avg duration, Δ    | kpi, table  |
-| `agents.getErrors`             | Agents/errors                      | Error count over time per agent                | area, line  |
-| `agents.getTopErroredAgents`   | Agents/topErroredAgents            | Top-N erroring agents leaderboard              | bar, table  |
-| `agents.getIncidents`          | Agents/incidents                   | Paged incident table                           | table       |
-| `agents.getIncidentDistribution` | Agents/incidentDistribution      | Error / Escalation / Policy split              | donut, kpi  |
-| `agents.getConsumption`        | Agents/consumption                 | Top agents by AGU/PLTU                         | bar, table  |
-| `agents.getConsumptionTimeline`| Agents/consumptionTimeline         | AGU burn-rate over time                        | area, line  |
-| `agents.getLatencyTimeline`    | Agents/latencyTimeline             | P50 / P95 latency per agent                    | line        |
-| `agents.getAgents`             | Agents/agents                      | Fleet list with healthScore                    | table       |
-| `agents.getUnitConsumption`    | Agents/summary/unit-consumption    | AGU/PLTU by complete vs incomplete jobs        | kpi, bar    |
-| `agents.getNames`              | Agents/names                       | Agent name list (filter dropdowns)             | filter only |
+| Method                         | Route suffix                       | Key metrics                                    | Shape       | Key response fields |
+|--------------------------------|------------------------------------|------------------------------------------------|-------------|---------------------|
+| `agents.getSummaryV2`          | Agents/summaryV2                   | Success rate, failure rate, avg duration, Δ    | kpi, table  | `data.currentPeriodSummary.{ totalJobs, successfulJobs, successRate, averageDurationSeconds }` · per-agent: `agents[].{ processKey, successRate, averageDurationSeconds, lastJobStatus }` |
+| `agents.getErrors`             | Agents/errors                      | Error count over time per agent                | area, line  | `data[].{ name (agentName), value (errorCount), date (ISO) }` · x_key=`date` y_key=`value` series=`name` |
+| `agents.getTopErroredAgents`   | Agents/topErroredAgents            | Top-N erroring agents leaderboard              | bar, table  | `{ totalErrors, data[].{ agentId, name (agentName), count } }` · x_key=`name` y_key=`count` |
+| `agents.getIncidents`          | Agents/incidents                   | Paged incident table                           | table       | `{ totalErrorCount, pagination, data[].{ type, description, agentId, agentName, firstSeen, count, folderPath } }` · columns: `agentName`, `type`, `description`, `count`, `firstSeen` |
+| `agents.getIncidentDistribution` | Agents/incidentDistribution      | Error / Escalation / Policy split              | donut, kpi  | `{ data.{ errorCount, escalationCount, policyCount } }` · convert to array: `[{name:'Errors',value:errorCount},…]` |
+| `agents.getConsumption`        | Agents/consumption                 | Top agents by AGU/PLTU                         | bar, table  | `{ data.{ totalConsumed, totalAGUConsumed, totalPLTUConsumed, agents[].{ agentId, agentName, consumedQuantity, consumedAGUQuantity } } }` |
+| `agents.getConsumptionTimeline`| Agents/consumptionTimeline         | AGU burn-rate / invocation proxy over time     | area, line  | `data[].{ timeSlice (ISO), aguConsumption (number) }` · x_key=`timeSlice` y_key=`aguConsumption` |
+| `agents.getLatencyTimeline`    | Agents/latencyTimeline             | P50 / P95 latency per agent                    | line        | `data[].{ name ('P50'|'P95'), value (seconds), date (ISO) }` · filter by `name` for each series |
+| `agents.getAgents`             | Agents/agents                      | Fleet list with healthScore                    | table       | `{ data.{ agents[].{ agentId, agentName, folderPath, lastRun, healthScore, lastIncidentType, unitsQuantity, quantityAGU } } }` · columns: `agentName`, `healthScore`, `unitsQuantity`, `lastRun` |
+| `agents.getUnitConsumption`    | Agents/summary/unit-consumption    | AGU/PLTU by complete vs incomplete jobs        | kpi, bar    | `{ data.currentPeriodSummary.{ totalAgentUnitConsumption.{ completeJobs, incompleteJobs }, totalPlatformUnitConsumption.{ completeJobs, incompleteJobs } } }` |
+| `agents.getNames`              | Agents/names                       | Agent name list (filter dropdowns)             | filter only | `{ agents: string[] }` |
 
 Not for MVP: `agents.getProcessEscalations`
 
@@ -32,14 +32,14 @@ Not for MVP: `agents.getProcessEscalations`
 
 ## Traceview namespace — POST /Traceview/...
 
-| Method                           | Route suffix                   | Key metrics                              | Shape      |
-|----------------------------------|--------------------------------|------------------------------------------|------------|
-| `traceview.getLatencyTimeline`   | Traceview/latencyTimeline      | P50/P95 trace latency over time          | line       |
-| `traceview.getErrorsTimeline`    | Traceview/errorsTimeline       | Trace errors per agent per bucket        | area, line |
-| `traceview.getMemoryTimeline`    | Traceview/memoryTimeline       | In/out/enabled/disabled memory counts    | area       |
-| `traceview.getMemoryCallsTimeline` | Traceview/memoryCallsTimeline | Memory API calls over time               | bar        |
-| `traceview.getTopMemorySpaces`   | Traceview/topMemorySpaces      | Most-active memory spaces                | bar, table |
-| `traceview.getUnitConsumption`   | Traceview/unitConsumption      | Per-agent AIU + PLTU from traces         | table, bar |
+| Method                           | Route suffix                   | Key metrics                              | Shape      | Key response fields |
+|----------------------------------|--------------------------------|------------------------------------------|------------|---------------------|
+| `traceview.getLatencyTimeline`   | Traceview/latencyTimeline      | P50/P95 trace latency over time          | line       | `data[].{ name ('P50'|'P95'), value (seconds), date (ISO) }` · same shape as agents.getLatencyTimeline |
+| `traceview.getErrorsTimeline`    | Traceview/errorsTimeline       | Trace errors per agent per bucket        | area, line | `data[].{ name (agentName), value (count), date (ISO) }` |
+| `traceview.getMemoryTimeline`    | Traceview/memoryTimeline       | In/out/enabled/disabled memory counts    | area       | `data[].{ timeSlice (ISO), inMemoryCount, notInMemoryCount, totalCount, enabledMemoryCount, disabledMemoryCount }` |
+| `traceview.getMemoryCallsTimeline` | Traceview/memoryCallsTimeline | Memory API calls over time               | bar        | `data[].{ timeSlice (ISO), memoryCallsCount }` |
+| `traceview.getTopMemorySpaces`   | Traceview/topMemorySpaces      | Most-active memory spaces                | bar, table | (response structure TBD — see Insights team) |
+| `traceview.getUnitConsumption`   | Traceview/unitConsumption      | Per-agent AIU + PLTU from traces         | table, bar | `data[].{ agentId, folderKey, agentVersion, agentUnitsConsumed, platformUnitsConsumed }` |
 
 Not for MVP: `traceview.getSpansByTraceId`, `traceview.getSpansByReferenceId`
 

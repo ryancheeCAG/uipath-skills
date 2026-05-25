@@ -84,14 +84,17 @@ export class InsightsClient {
 ```typescript
 import { InsightsClient } from './insights-client';
 
-const base   = import.meta.env.VITE_UIPATH_BASE_URL;
-const org    = import.meta.env.VITE_UIPATH_ORG_NAME;
-const tenant = import.meta.env.VITE_UIPATH_TENANT_NAME;
+// VITE_UIPATH_CLOUD_URL = Data.BaseUrl from uip login (e.g. https://alpha.uipath.com)
+// VITE_UIPATH_BASE_URL  = API base with "api." subdomain (e.g. https://alpha.api.uipath.com)
+const cloudUrl = import.meta.env.VITE_UIPATH_CLOUD_URL;
+const apiUrl   = import.meta.env.VITE_UIPATH_BASE_URL;
+const org      = import.meta.env.VITE_UIPATH_ORG_NAME;
+const tenant   = import.meta.env.VITE_UIPATH_TENANT_NAME;
 
 export function createInsightsClient(getToken: () => Promise<string>): InsightsClient {
   return new InsightsClient(
-    `${base}/${org}/${tenant}/insightsrtm_`,
-    `${base}/${org}/${tenant}`,
+    `${cloudUrl}/${org}/${tenant}/insightsrtm_`,  // Insights RTM: uses cloud URL, not api. subdomain
+    `${apiUrl}/${org}/${tenant}`,                 // Jobs API: uses api. subdomain
     getToken
   );
 }

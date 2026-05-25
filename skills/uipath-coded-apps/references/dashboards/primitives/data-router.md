@@ -26,6 +26,9 @@ All Insights API calls are POST JSON with body `{ "tenantId": "<UUID>", "startTi
 | AGU burn-rate over time                                  | Insights | `agents.getConsumptionTimeline` → POST `/Agents/consumptionTimeline` |
 | P50 / P95 latency per agent over time                    | Insights | `agents.getLatencyTimeline` → POST `/Agents/latencyTimeline` |
 | agent fleet list, health score, stale agents             | Insights | `agents.getAgents` → POST `/Agents/agents`                 |
+| agent invocation count, run volume, agent calls over time | Insights | `agents.getConsumptionTimeline` → POST `/Agents/consumptionTimeline` |
+| active agent count, how many agents, fleet size            | Insights | `agents.getAgents` → count `data.agents` array length              |
+| agent health overview, important metrics, agent summary    | Insights | `agents.getSummaryV2` (KPIs) + `agents.getAgents` (fleet list)    |
 | AGU/PLTU split by complete vs incomplete jobs            | Insights | `agents.getUnitConsumption` → POST `/Agents/summary/unit-consumption` |
 | trace latency P50/P95 over time (trace-level)            | Insights | `traceview.getLatencyTimeline` → POST `/Traceview/latencyTimeline` |
 | trace errors by agent over time                          | Insights | `traceview.getErrorsTimeline` → POST `/Traceview/errorsTimeline` |
@@ -44,6 +47,9 @@ All Insights API calls are POST JSON with body `{ "tenantId": "<UUID>", "startTi
 - P50/P95/P99 latency → Insights `agents.getLatencyTimeline` (fleet) or `traceview.getLatencyTimeline` (trace)
 - "agent health" snapshot → Insights `agents.getAgents` (has `healthScore`); "success rate over time" → `agents.getSummaryV2`
 - `governance.getPolicySummary` requires `policy` (UUID) in body in addition to `tenantId`
+- "invocation volume" / "run count" / "calls over time" → agents.getConsumptionTimeline (returns time-bucketed aguConsumption; interpret as activity proxy until a dedicated invocation-count endpoint is available)
+- "important metrics" / "key metrics" / "overview" with no other qualifier → agents.getSummaryV2 for success/duration KPIs + agents.getAgents for fleet health
+- getSummaryV2 is AGGREGATE-ONLY (returns a single summary object for the period, not a time-series array). Never use it as the data source for area, line, or bar charts. Use getErrors, getConsumptionTimeline, or getLatencyTimeline for time-series charts.
 
 ## SDK Import Pattern
 ```typescript
