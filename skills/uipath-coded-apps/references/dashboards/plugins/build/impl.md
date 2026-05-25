@@ -56,11 +56,12 @@ VITE_UIPATH_SCOPE=OR.Jobs OR.Queues OR.Tasks OR.DataFabric OR.Folders openid pro
 VITE_INSIGHTS_TENANT_ID=<TENANT_UUID>
 EOF
 echo ".env.local" >> .gitignore
-npm install
-npx shadcn@latest init --defaults --force
+npm ci
 ```
 
-> **Note:** If the SKILL_ASSETS path resolution fails, ask the user for the path to the skills repo `assets/` directory and substitute directly.
+> **Note on `npm ci`:** The scaffold template ships a committed `package-lock.json`, so `npm ci` skips version resolution and runs ~2× faster than `npm install`. If the lockfile is absent for any reason, fall back to `npm install`.
+
+> **Note on SKILL_ASSETS path:** If the path resolution fails, ask the user for the path to the skills repo `assets/` directory and substitute directly.
 
 ## Phase 7 — Widget Generation (1 parallel Write block)
 Read the appropriate widget template files from `../../assets/templates/dashboard/widgets/`.
@@ -106,7 +107,7 @@ If a `<PROJECT_DIR>/src/widgets/` directory already exists:
 4. Run `tsc --noEmit` after addition
 
 ## Error Handling
-- `npm install` fails → check Node version (needs ≥ 18)
-- `shadcn init` fails → skip shadcn, continue with plain Tailwind classes
+- `npm ci` fails with "missing package-lock.json" → fall back to `npm install`
+- `npm ci` fails with 401/403 → check `GH_NPM_REGISTRY_TOKEN` is set (needed for `@uipath/uipath-typescript`)
 - `tsc --noEmit` errors → fix; max 2 fix attempts before asking user
 - Dev server fails → still report success with `tsc` passing; note server issue
