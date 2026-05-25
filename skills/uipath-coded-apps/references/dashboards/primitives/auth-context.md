@@ -6,16 +6,30 @@ Read BEFORE any SDK or Insights API call.
 ```bash
 uip login status --output json
 ```
-If `isLoggedIn` is false → stop, tell user to run `uip login`.
+Check `Data.Status == "Logged in"`. If not → stop, tell user to run `uip login`.
 
-## Step 2 — Extract org / tenant
+Actual output shape:
 ```json
 {
-  "isLoggedIn": true,
-  "accountName": "<ORG_NAME>",
-  "tenantName": "<TENANT_NAME>",
-  "userId": "<USER_UUID>"
+  "Result": "Success",
+  "Data": {
+    "Status": "Logged in",
+    "BaseUrl": "https://alpha.uipath.com",
+    "Organization": "<ORG_NAME>",
+    "Tenant": "<TENANT_NAME>",
+    "Expiration Date": "2026-05-25T13:35:25.000Z"
+  }
 }
+```
+Fields: `Data.Organization` → ORG, `Data.Tenant` → TENANT, `Data.BaseUrl` → cloud URL.
+There is **no `tenantId` in this output** — read it from `~/.uipath/.auth` in Step 3.
+
+## Step 2 — Extract ORG and TENANT
+```bash
+STATUS=$(uip login status --output json)
+ORG=$(echo "$STATUS"    | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).Data.Organization)")
+TENANT=$(echo "$STATUS" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).Data.Tenant)")
+DATA_BASE_URL=$(echo "$STATUS" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).Data.BaseUrl)")
 ```
 
 ## Step 3 — Read PAT and tenantId from ~/.uipath/.auth
@@ -29,27 +43,37 @@ PAT=$(grep -m1 '^UIPATH_ACCESS_TOKEN=' ~/.uipath/.auth | cut -d'=' -f2-)
 TENANT_ID=$(grep -m1 '^UIPATH_TENANT_ID=' ~/.uipath/.auth | cut -d'=' -f2-)
 ```
 
-If the file is JSON (some CLI versions): parse with node:
+Fallback — some CLI versions write JSON:
 ```bash
-PAT=$(node -e "const a=JSON.parse(require('fs').readFileSync(process.env.HOME+'/.uipath/.auth','utf8')); console.log(a.UIPATH_ACCESS_TOKEN||a.access_token||'')")
-TENANT_ID=$(node -e "const a=JSON.parse(require('fs').readFileSync(process.env.HOME+'/.uipath/.auth','utf8')); console.log(a.UIPATH_TENANT_ID||a.tenantId||'')")
+if [ -z "$PAT" ]; then
+  PAT=$(node -e "const a=JSON.parse(require('fs').readFileSync(process.env.HOME+'/.uipath/.auth','utf8')); console.log(a.UIPATH_ACCESS_TOKEN||a.access_token||'')" 2>/dev/null)
+  TENANT_ID=$(node -e "const a=JSON.parse(require('fs').readFileSync(process.env.HOME+'/.uipath/.auth','utf8')); console.log(a.UIPATH_TENANT_ID||a.tenantId||'')" 2>/dev/null)
+fi
 ```
 
-Try the env-file approach first; fall back to JSON if `$PAT` is empty.
+Try env-file first; fall back to JSON if `$PAT` is empty.
 
-## Step 4 — Detect environment from login URL
+## Step 4 — Derive base URLs from Data.BaseUrl
+
+Two separate base URLs are needed (Insights RTM ≠ SDK API):
 
 ```bash
-uip login status --output json
+# Cloud URL: used for Insights RTM  (e.g. https://alpha.uipath.com)
+CLOUD_BASE_URL="${DATA_BASE_URL}"
+
+# API URL: used for TS SDK calls — insert "api." subdomain
+if echo "$DATA_BASE_URL" | grep -q "alpha";   then API_BASE_URL="https://alpha.api.uipath.com"
+elif echo "$DATA_BASE_URL" | grep -q "staging"; then API_BASE_URL="https://staging.api.uipath.com"
+else API_BASE_URL="https://api.uipath.com"
+fi
 ```
-Inspect the `url` or `cloudUrl` field:
-```
-contains "alpha"   → VITE_UIPATH_BASE_URL=https://alpha.api.uipath.com
-contains "staging" → VITE_UIPATH_BASE_URL=https://staging.api.uipath.com
-otherwise          → VITE_UIPATH_BASE_URL=https://api.uipath.com
-```
+
+| Env var | Value | Used for |
+|---|---|---|
+| `VITE_UIPATH_CLOUD_URL` | `https://alpha.uipath.com` | Insights RTM base (`/ORG/TENANT/insightsrtm_`) |
+| `VITE_UIPATH_BASE_URL` | `https://alpha.api.uipath.com` | TS SDK base URL |
 
 ## Error handling
-- `isLoggedIn: false` → tell user to run `uip login`, stop
+- `Data.Status != "Logged in"` → tell user to run `uip login`, stop
 - `PAT` is empty after both parse attempts → tell user to re-run `uip login`, stop
-- `TENANT_ID` is empty → use empty string for now; Insights calls will 400 but SDK calls still work
+- `TENANT_ID` is empty → Insights calls will 400 but SDK calls still work; warn user

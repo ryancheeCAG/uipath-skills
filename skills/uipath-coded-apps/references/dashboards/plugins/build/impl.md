@@ -16,9 +16,15 @@ Read ALL the following in a single parallel message:
 ```bash
 uip login status --output json
 ```
-Extract: `accountName` → ORG, `tenantName` → TENANT, `tenantId` → UUID.
-Detect environment from cloud URL (see auth-context.md Step 4).
-If not logged in → stop, tell user to run `uip login`.
+Check `Data.Status == "Logged in"`. If not → stop, tell user to run `uip login`.
+
+Extract from response (fields are under `Data.`, not top-level):
+- `Data.Organization` → ORG
+- `Data.Tenant` → TENANT
+- `Data.BaseUrl` → CLOUD_BASE_URL (e.g. `https://alpha.uipath.com`)
+
+**No `tenantId` in this output.** Read PAT and TENANT_ID from `~/.uipath/.auth`
+as described in `../../primitives/auth-context.md` Steps 3–4.
 
 ## Phase 3 — Metric Derivation (0 tool calls)
 For each metric in the NLP prompt, derive using build-plan.md four-axis decomposition:
@@ -50,10 +56,17 @@ if [ -z "$PAT" ]; then
   TENANT_ID=$(node -e "const a=JSON.parse(require('fs').readFileSync(process.env.HOME+'/.uipath/.auth','utf8')); console.log(a.UIPATH_TENANT_ID||a.tenantId||'')" 2>/dev/null)
 fi
 
+# Derive API base URL (insert "api." subdomain) from DATA_BASE_URL
+if echo "$DATA_BASE_URL" | grep -q "alpha";    then API_BASE_URL="https://alpha.api.uipath.com"
+elif echo "$DATA_BASE_URL" | grep -q "staging"; then API_BASE_URL="https://staging.api.uipath.com"
+else API_BASE_URL="https://api.uipath.com"
+fi
+
 cp -r "${SKILL_ASSETS}/templates/dashboard/scaffold/." <PROJECT_DIR>/
 cd <PROJECT_DIR>
 cat > .env.local << EOF
-VITE_UIPATH_BASE_URL=<API_BASE_URL>
+VITE_UIPATH_CLOUD_URL=${DATA_BASE_URL}
+VITE_UIPATH_BASE_URL=${API_BASE_URL}
 VITE_UIPATH_ORG_NAME=<ORG_NAME>
 VITE_UIPATH_TENANT_NAME=<TENANT_NAME>
 VITE_INSIGHTS_TENANT_ID=${TENANT_ID}

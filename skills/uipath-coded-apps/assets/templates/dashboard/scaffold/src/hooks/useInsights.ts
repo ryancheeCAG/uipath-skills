@@ -28,12 +28,15 @@ export function useInsights<T>(
     setLoading(true)
     setError(null)
 
-    const base   = import.meta.env.VITE_UIPATH_BASE_URL as string
-    const org    = import.meta.env.VITE_UIPATH_ORG_NAME as string
-    const tenant = import.meta.env.VITE_UIPATH_TENANT_NAME as string
+    // VITE_UIPATH_CLOUD_URL = Data.BaseUrl from uip login (e.g. https://alpha.uipath.com)
+    // VITE_UIPATH_BASE_URL  = API base with "api." subdomain (e.g. https://alpha.api.uipath.com)
+    const cloudUrl = import.meta.env.VITE_UIPATH_CLOUD_URL as string
+    const apiUrl   = import.meta.env.VITE_UIPATH_BASE_URL as string
+    const org      = import.meta.env.VITE_UIPATH_ORG_NAME as string
+    const tenant   = import.meta.env.VITE_UIPATH_TENANT_NAME as string
     const client = new InsightsClient(
-      `${base}/${org}/${tenant}/insightsrtm_`,
-      `${base}/${org}/${tenant}`,
+      `${cloudUrl}/${org}/${tenant}/insightsrtm_`,  // Insights RTM: alpha.uipath.com/org/tenant/insightsrtm_
+      `${apiUrl}/${org}/${tenant}`,                 // Jobs API: alpha.api.uipath.com/org/tenant
       getToken
     )
 
