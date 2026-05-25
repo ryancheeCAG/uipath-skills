@@ -34,3 +34,5 @@ name: uipath-coded-apps/dashboards
 - [primitives/data-router.md](primitives/data-router.md) — SDK vs Insights routing
 - [primitives/insights-client.md](primitives/insights-client.md) — Insights HTTP client
 - [insights-catalog.md](insights-catalog.md) — Insights capability catalog
+- [aesthetic/layout-patterns.md](aesthetic/layout-patterns.md) — Dashboard layout rules (10 rules, widget row ordering)
+- [aesthetic/charting.md](aesthetic/charting.md) — Chart type selection, colors, DeltaBadge direction guide
