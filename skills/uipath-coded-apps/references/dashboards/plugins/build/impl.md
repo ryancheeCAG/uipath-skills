@@ -21,7 +21,7 @@ Check `Data.Status == "Logged in"`. If not → stop, tell user to run `uip login
 Extract from response (fields are under `Data.`, not top-level):
 - `Data.Organization` → ORG
 - `Data.Tenant` → TENANT
-- `Data.BaseUrl` → CLOUD_BASE_URL (e.g. `https://alpha.uipath.com`)
+- `Data.BaseUrl` → DATA_BASE_URL (e.g. `https://alpha.uipath.com`)
 
 **No `tenantId` in this output.** Read PAT and TENANT_ID from `~/.uipath/.auth`
 as described in `../../primitives/auth-context.md` Steps 3–4.
@@ -45,24 +45,31 @@ Do not proceed until explicit approval is received.
 Read PAT and tenantId from `~/.uipath/.auth` (env-file format) as described in `../../primitives/auth-context.md` Step 3. Then copy the scaffold template and write `.env.local`:
 
 ```bash
-SKILL_ASSETS="$(node -e "console.log(require.resolve('@uipath/cli/package.json').replace('/package.json',''))")/../../skills/uipath-coded-apps/assets"
+# SKILL_ASSETS: use this skill's base directory (shown in your system context
+# as "Base directory for this skill"). The scaffold is at:
+#   [SKILL_BASE_DIR]/assets/templates/dashboard/scaffold/
+# Replace SKILL_BASE_DIR with the actual path from your system context.
+SKILL_BASE_DIR="<SKILL_BASE_DIR>"
+SKILL_ASSETS="${SKILL_BASE_DIR}/assets"
 
-# Read token from .auth file (env-file format)
+# Read auth from ~/.uipath/.auth (env-file format)
 PAT=$(grep -m1 '^UIPATH_ACCESS_TOKEN=' ~/.uipath/.auth | cut -d'=' -f2-)
 TENANT_ID=$(grep -m1 '^UIPATH_TENANT_ID=' ~/.uipath/.auth | cut -d'=' -f2-)
-# Fallback: JSON format
 if [ -z "$PAT" ]; then
   PAT=$(node -e "const a=JSON.parse(require('fs').readFileSync(process.env.HOME+'/.uipath/.auth','utf8')); console.log(a.UIPATH_ACCESS_TOKEN||a.access_token||'')" 2>/dev/null)
   TENANT_ID=$(node -e "const a=JSON.parse(require('fs').readFileSync(process.env.HOME+'/.uipath/.auth','utf8')); console.log(a.UIPATH_TENANT_ID||a.tenantId||'')" 2>/dev/null)
 fi
 
-# Derive API base URL (insert "api." subdomain) from DATA_BASE_URL
+# Derive base URLs from DATA_BASE_URL
 if echo "$DATA_BASE_URL" | grep -q "alpha";    then API_BASE_URL="https://alpha.api.uipath.com"
 elif echo "$DATA_BASE_URL" | grep -q "staging"; then API_BASE_URL="https://staging.api.uipath.com"
 else API_BASE_URL="https://api.uipath.com"
 fi
 
 cp -r "${SKILL_ASSETS}/templates/dashboard/scaffold/." <PROJECT_DIR>/
+# Remove any node_modules the template developer may have left — prevents npm ci ENOTEMPTY
+node -e "require('fs').rmSync('<PROJECT_DIR>/node_modules', {recursive:true, force:true})" 2>/dev/null || true
+
 cd <PROJECT_DIR>
 cat > .env.local << EOF
 VITE_UIPATH_CLOUD_URL=${DATA_BASE_URL}
@@ -72,12 +79,12 @@ VITE_UIPATH_TENANT_NAME=<TENANT_NAME>
 VITE_INSIGHTS_TENANT_ID=${TENANT_ID}
 VITE_UIPATH_PAT=${PAT}
 EOF
-npm ci
+npm ci 2>/dev/null
 ```
 
 No client ID, no scope, no OAuth setup required. The PAT comes from the active `uip login` session. For production deployment the PAT is stripped before build (failBuildIfPatSet Vite plugin enforces this).
 
-> **Note on SKILL_ASSETS path:** If the path resolution fails, ask the user for the path to the skills repo `assets/` directory and substitute directly.
+> **SKILL_BASE_DIR:** Check your system context for "Base directory for this skill" — it shows the exact path where skill assets are installed. Use that as `SKILL_BASE_DIR`. On a fresh Claude Code session this is always available.
 
 ## Phase 7 — Widget Generation (1 parallel Write block)
 Read the appropriate widget template files from `../../assets/templates/dashboard/widgets/`.

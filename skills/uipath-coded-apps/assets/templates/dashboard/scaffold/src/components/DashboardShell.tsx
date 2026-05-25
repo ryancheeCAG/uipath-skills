@@ -10,7 +10,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Overview', id: 'overview' },
 ]
 
-export default function DashboardShell() {
+export default function DashboardShell({ children }: { children?: React.ReactNode }) {
   const [active, setActive] = React.useState('overview')
 
   return (
@@ -37,7 +37,7 @@ export default function DashboardShell() {
 
       {/* Main */}
       <main className="flex-1 overflow-auto p-6">
-        <WidgetGrid />
+        <WidgetGrid>{children}</WidgetGrid>
       </main>
     </div>
   )
