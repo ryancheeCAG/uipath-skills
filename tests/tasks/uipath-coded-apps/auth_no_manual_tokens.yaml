@@ -6,7 +6,7 @@ tags: [uipath-coded-apps, smoke, "lifecycle:validate"]
 
 sandbox:
   driver: tempdir
-  python: {}
+  node: {}
 
 initial_prompt: |
   Before starting, load the uipath-coded-apps skill and follow its workflow.
