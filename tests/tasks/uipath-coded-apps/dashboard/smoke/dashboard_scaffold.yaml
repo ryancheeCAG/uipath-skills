@@ -1,8 +1,8 @@
 task_id: uipath-coded-apps-dashboard-scaffold
 description: >
-  Validates that a minimal 2-widget dashboard produces a structurally
-  correct scaffold: package.json, all required .env.local vars, a
-  src/widgets/ directory, and a passing tsc --noEmit.
+  Validates that a minimal 2-widget dashboard writes the correct file
+  structure and env vars. Smoke-tier: checks CLI behaviour and file
+  content only — does not run npm ci or tsc (those belong in e2e).
 tags: [uipath-coded-apps, smoke, dashboard, feature:scaffold]
 
 sandbox:
@@ -18,7 +18,7 @@ initial_prompt: |
   Before starting, load the uipath-coded-apps skill and follow its workflow.
 
 success_criteria:
-  # Core scaffold files
+  # ── Core scaffold files ───────────────────────────────────────────────
   - type: file_exists
     description: "package.json created"
     path: "package.json"
@@ -37,7 +37,7 @@ success_criteria:
     weight: 1.5
     pass_threshold: 1.0
 
-  # All required env vars present
+  # ── Required env vars (all 6 must be present) ────────────────────────
   - type: file_contains
     description: ".env.local has VITE_UIPATH_CLOUD_URL (Insights RTM base)"
     path: ".env.local"
@@ -66,9 +66,9 @@ success_criteria:
     weight: 2.0
     pass_threshold: 1.0
 
-  # Widget output
+  # ── Widget output ─────────────────────────────────────────────────────
   - type: file_exists
-    description: "src/widgets/ directory exists"
+    description: "src/widgets/ directory created"
     path: "src/widgets"
     weight: 1.5
     pass_threshold: 1.0
@@ -79,22 +79,25 @@ success_criteria:
     weight: 1.0
     pass_threshold: 1.0
 
-  # TypeScript clean
-  - type: command_executed
-    description: "tsc --noEmit ran and passed"
-    tool_name: "Bash"
-    command_pattern: 'tsc\s+--noEmit'
-    min_count: 1
+  - type: file_contains
+    description: "Widget files use useInsights hook"
+    path: "src/widgets"
+    pattern: "useInsights"
     weight: 2.0
     pass_threshold: 1.0
 
-  # Outcome validation via check script
-  - type: run_command
-    description: "check_dashboard.py validates structure and env vars"
-    command: >
-      python3 $SKILLS_REPO_PATH/tests/tasks/uipath-coded-apps/dashboard/_shared/check_dashboard.py
-      --min-widgets 1 --require-insights --no-tsc
-    timeout: 30
-    expected_exit_code: 0
-    weight: 3.0
+  # ── Routing labels in plan (agent showed plan before building) ────────
+  - type: command_executed
+    description: "Agent ran npm ci (scaffold executed)"
+    tool_name: "Bash"
+    command_pattern: 'npm\s+ci'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "App.tsx imports widgets"
+    path: "src/App.tsx"
+    pattern: "widgets"
+    weight: 1.0
     pass_threshold: 1.0
