@@ -108,6 +108,6 @@ If a `<PROJECT_DIR>/src/widgets/` directory already exists:
 
 ## Error Handling
 - `npm ci` fails with "missing package-lock.json" → fall back to `npm install`
-- `npm ci` fails with 401/403 → check `GH_NPM_REGISTRY_TOKEN` is set (needed for `@uipath/uipath-typescript`)
+- `npm ci` fails with network error → retry once; if still failing check internet connectivity
 - `tsc --noEmit` errors → fix; max 2 fix attempts before asking user
 - Dev server fails → still report success with `tsc` passing; note server issue
