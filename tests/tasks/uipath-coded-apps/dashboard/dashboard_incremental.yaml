@@ -2,7 +2,7 @@ task_id: uipath-coded-apps-dashboard-incremental
 description: >
   Validates that adding a widget to an existing dashboard only writes the
   new widget file and does not re-scaffold the entire project.
-tags: [uipath-coded-apps, smoke, dashboard]
+tags: [uipath-coded-apps, smoke, dashboard, mode:build]
 
 sandbox:
   driver: tempdir

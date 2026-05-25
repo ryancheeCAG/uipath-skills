@@ -4,7 +4,7 @@ description: >
   rather than inline Date.now() arithmetic. Inline arithmetic in each widget
   is a code smell that causes inconsistent time ranges and subtle bugs when
   widgets are generated at slightly different times during the same session.
-tags: [uipath-coded-apps, integration, dashboard, feature:recipes]
+tags: [uipath-coded-apps, integration, dashboard, feature:recipes, mode:build]
 
 sandbox:
   driver: tempdir

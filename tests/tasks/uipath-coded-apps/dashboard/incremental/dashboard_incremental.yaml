@@ -4,7 +4,7 @@ description: >
   the new widget file — no re-scaffolding of package.json or node_modules,
   no overwriting of the existing ActiveAgentsKpi widget, and index.ts updated
   to export the new component.
-tags: [uipath-coded-apps, e2e, dashboard, feature:incremental]
+tags: [uipath-coded-apps, e2e, dashboard, feature:incremental, mode:build]
 
 agent:
   type: claude-code

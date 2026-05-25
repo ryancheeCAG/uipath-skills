@@ -3,7 +3,7 @@ description: >
   Validates that Insights-routed metrics use the correct namespace and
   endpoint. Checks that agent errors use agents.getErrors, latency uses
   agents.getLatencyTimeline, and not a misrouted traceview or wrong endpoint.
-tags: [uipath-coded-apps, integration, dashboard, feature:routing]
+tags: [uipath-coded-apps, integration, dashboard, feature:routing, mode:build]
 
 sandbox:
   driver: tempdir

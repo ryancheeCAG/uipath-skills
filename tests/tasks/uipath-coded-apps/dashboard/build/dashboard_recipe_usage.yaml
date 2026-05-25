@@ -4,7 +4,7 @@ description: >
   inventing custom patterns. Recipe usage is indicated by correct endpoint
   names, typed response interfaces, and the DATA_SELECTOR extraction pattern
   matching the catalog's documented response shapes.
-tags: [uipath-coded-apps, integration, dashboard, feature:recipes]
+tags: [uipath-coded-apps, integration, dashboard, feature:recipes, mode:build]
 
 sandbox:
   driver: tempdir

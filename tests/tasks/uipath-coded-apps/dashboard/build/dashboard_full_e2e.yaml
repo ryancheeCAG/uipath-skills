@@ -5,7 +5,7 @@ description: >
   complete 8-phase pipeline — plan shown, scaffold created, all env vars
   written from the active uip login session, widgets generated with correct
   routing, tsc passes, and the final summary is user-facing (no technical output).
-tags: [uipath-coded-apps, e2e, dashboard, feature:scaffold, feature:routing, feature:recipes]
+tags: [uipath-coded-apps, e2e, dashboard, feature:scaffold, feature:routing, feature:recipes, mode:build]
 
 agent:
   type: claude-code

@@ -2,7 +2,7 @@ task_id: uipath-coded-apps-dashboard-disambiguate
 description: >
   Validates that an ambiguous prompt triggers the Apps vs Dashboards
   disambiguation question before any action is taken.
-tags: [uipath-coded-apps, activation, dashboard]
+tags: [uipath-coded-apps, smoke, dashboard, mode:build]
 
 sandbox:
   driver: tempdir

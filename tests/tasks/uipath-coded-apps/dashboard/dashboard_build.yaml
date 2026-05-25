@@ -3,7 +3,7 @@ description: >
   Validates that the dashboard capability generates a plan before scaffolding,
   routes agent metrics to Insights and queue items to SDK, and produces a
   TypeScript-clean project.
-tags: [uipath-coded-apps, smoke, dashboard]
+tags: [uipath-coded-apps, smoke, dashboard, mode:build]
 
 sandbox:
   driver: tempdir

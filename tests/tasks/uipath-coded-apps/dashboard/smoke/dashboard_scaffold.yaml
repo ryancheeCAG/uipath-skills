@@ -3,7 +3,7 @@ description: >
   Validates that a minimal 2-widget dashboard writes the correct file
   structure and env vars. Smoke-tier: checks CLI behaviour and file
   content only — does not run npm ci or tsc (those belong in e2e).
-tags: [uipath-coded-apps, smoke, dashboard, feature:scaffold]
+tags: [uipath-coded-apps, smoke, dashboard, feature:scaffold, mode:build]
 
 sandbox:
   driver: tempdir

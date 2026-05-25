@@ -4,7 +4,7 @@ description: >
   widgets generated in a single parallel block, index.ts exports all
   components, App.tsx imports them, and tsc --noEmit passes across the
   entire project. Exercises the tool-use budget with a real workload.
-tags: [uipath-coded-apps, integration, dashboard, feature:scaffold]
+tags: [uipath-coded-apps, integration, dashboard, feature:scaffold, mode:build]
 
 sandbox:
   driver: tempdir

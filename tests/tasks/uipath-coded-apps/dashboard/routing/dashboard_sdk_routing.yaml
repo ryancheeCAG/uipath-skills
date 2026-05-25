@@ -3,7 +3,7 @@ description: >
   Validates that metrics with SDK signals (queue items, running jobs, pending tasks)
   are routed to SDK calls, not to the Insights RTM API. A widget using
   useInsights for these metrics is a routing bug.
-tags: [uipath-coded-apps, integration, dashboard, feature:routing]
+tags: [uipath-coded-apps, integration, dashboard, feature:routing, mode:build]
 
 sandbox:
   driver: tempdir
