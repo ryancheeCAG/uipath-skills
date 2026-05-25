@@ -1,6 +1,6 @@
 ---
 name: uipath-coded-apps
-description: "UiPath Coded Web Apps, Action Apps (app.config.json, action-schema.json), and admin dashboards. Build and deploy apps via uip codedapp + TS SDK. Generate analytics/KPI/observability dashboards from NLP using Insights RTM API. For .cs/XAML→uipath-rpa, Python→uipath-agents, .flow→uipath-maestro-flow."
+description: "UiPath Coded Web Apps, Action Apps (app.config.json, action-schema.json), and NLP-driven dashboards. Build apps via uip codedapp + TS SDK. Generate agent-health, error-rate, invocation, latency, KPI, or observability dashboards from natural-language prompts using Insights RTM API. For .cs/XAML→uipath-rpa, Python→uipath-agents, .flow→uipath-maestro-flow."
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, AskUserQuestion
 ---
 
@@ -18,6 +18,8 @@ Build, debug, and deploy UiPath Coded Web Applications and Coded Action Apps usi
 - User wants to **push/pull source** between local and Studio Web
 - User wants to use the `@uipath/uipath-typescript` SDK from a coded app
 - User wants to run the **full pipeline** (build → pack → publish → deploy)
+- User wants to **generate a dashboard** from a natural-language description — e.g. "build me a dashboard showing agent health, error rates, invocation volume, latency, active agents, KPIs, governance metrics, or consumption trends"
+- User says "build/create/generate a dashboard", describes metrics to visualize, or asks for an agent observability, operations, or cost view
 
 ## App Types
 
