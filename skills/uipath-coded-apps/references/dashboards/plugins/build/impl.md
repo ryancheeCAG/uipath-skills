@@ -80,8 +80,20 @@ For each metric in the NLP prompt, derive using build-plan.md four-axis decompos
 - Route each metric using data-router.md routing table
 
 ## Phase 4 — Plan (0 tool calls)
-Render the plan in chat using the format in build-plan.md.
-Show [SDK] or [Insights] label + method for each widget.
+Render the plan using the format in build-plan.md (the grouped bullet format with plain-English descriptions).
+
+**Do NOT show in the plan:**
+- `[Insights]` / `[SDK]` labels
+- API method names (`getAgents`, `getSummaryV2`, etc.)
+- Chart type labels ("KPI card", "area chart")
+- Any technical implementation detail
+
+**Do show:**
+- Widget name + time range
+- One sentence per widget: what it shows + why it matters to the user
+- Theme groupings when there are 4+ widgets (Overview / Trends / Detail / etc.)
+- A "What you can do" block with 3–4 example edits
+
 Do NOT write any files yet.
 
 ## Phase 5 — Approval Gate (0 tool calls)
