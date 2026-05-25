@@ -38,7 +38,10 @@ This skill serves end users, not developers. Never show npm output, TypeScript e
 
 **If npm ci fails:** Say: "Dependencies are downloading — this can take a moment on first run." Retry once with `npm install`. Do not show npm output.
 
-**If the dev server fails to start:** Include in the summary: "(Note: run `npm run dev` to start the local preview.)" — do not diagnose it further.
+**After tsc passes:** Show the summary (see Summary Format below) FIRST, then run `npm run dev -- --open`.
+The summary appears before the server starts so the user sees it immediately.
+The browser opens automatically — user sees the live dashboard.
+Server runs in foreground with HMR; Ctrl+C to stop.
 
 **Never say:** "Writing widget files", "Running tsc --noEmit", "Phase 6", "scaffold", "package.json", "useInsights", or any other implementation detail.
 
@@ -148,18 +151,110 @@ No client ID, no scope, no OAuth setup required. The PAT comes from the active `
 
 ## Phase 7 — Widget Generation (1 Bash call, **zero Write calls, zero template reads**)
 
-> **Use Bash + Node.js heredoc to write all files at once.** This keeps the user's session
-> clean — one compact Bash line instead of N Write calls showing code previews.
-> Do NOT use the `Write` tool for widget files. Do NOT read template files.
+> **Use Bash + Node.js heredoc to write all files at once.** Single Bash call keeps
+> the user's session clean — no code previews. Do NOT use the Write tool for widget files.
+> Do NOT read widget template files.
 
-### Step 1 — Compose widget code in memory (0 tool calls)
-Use Widget Recipes from `insights-catalog.md` (already loaded in Phase 1) to write each
-widget's full TypeScript source. For each widget: pick the matching recipe, set the
-component name and title, adapt startTime constant.
+### Files to generate per widget (N widgets → 4N + 2 files total)
 
-Response Unwrapping reference (use when no recipe matches exactly):
+For each widget in the approved plan, generate:
 
-| Response shape | Extraction |
+| File | Purpose |
+|---|---|
+| `src/dashboard/widgets/<Name>.tsx` | Widget card with 6-part anatomy (icon, title, desc, headline, delta, chart, ViewAllLink) |
+| `src/dashboard/views/<Name>View.tsx` | Detail view with DetailViewShell + RecordsTable |
+
+Plus two shared files (always written once):
+| File | Purpose |
+|---|---|
+| `src/dashboard/Dashboard.tsx` | Composes all widgets with proper layout (KPI row / chart row / table row) |
+| `src/dashboard/widgets/index.ts` | Barrel export of all widget components |
+
+**App.tsx route injection (1 Edit call after Bash):** Edit `src/App.tsx` to replace the `GENERATED_IMPORTS_START/END` and `GENERATED_ROUTES_START/END` markers with the actual imports and routes.
+
+### Widget file anatomy (use Widget Recipes from insights-catalog.md)
+
+Each widget file MUST include all 6 parts (from the templates in `assets/templates/dashboard/widgets/`):
+1. **Card wrapper** — `cursor-pointer hover:shadow-md transition-shadow` + `onClick={() => navigate('<DETAIL_ROUTE>')}`
+2. **CardHeader** — icon (`lucide-react`) + title + description + `<ViewAllLink to="<DETAIL_ROUTE>" />`
+3. **Inline headline** — `text-3xl font-semibold tabular-nums` extracted value + `<DeltaBadge direction="..." text="..." />`
+4. **Chart/KPI body** — Recharts chart or KPI value
+5. **Import chrome** — `import { DeltaBadge, ViewAllLink, LoadingState, EmptyState } from '../dashboard/chrome'`
+6. **Import shadcn** — `import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'`
+
+### Detail view anatomy
+
+```tsx
+import { DetailViewShell } from '@/dashboard/chrome/DetailViewShell'
+import { RecordsTable, type ColumnDef } from '@/dashboard/chrome/RecordsTable'
+import { useInsights } from '../hooks/useInsights'
+
+const COLUMNS: ColumnDef<Record<string, unknown>>[] = [
+  { key: '<field1>', label: '<Label 1>' },
+  { key: '<field2>', label: '<Label 2>', align: 'right' },
+  // ...
+]
+
+export function <Name>View() {
+  const { data, loading, error } = useInsights('<namespace.method>', { startTime: <CONSTANT> })
+  const rows = <DATA_SELECTOR_FOR_ROWS>
+
+  if (loading) return <DetailViewShell title="<TITLE>" description="<DESCRIPTION>"><LoadingState height="h-96" /></DetailViewShell>
+  if (error) return <DetailViewShell title="<TITLE>" description="<DESCRIPTION>"><EmptyState message={error.message} /></DetailViewShell>
+
+  return (
+    <DetailViewShell title="<TITLE>" description="<DESCRIPTION>">
+      <RecordsTable rows={rows} columns={COLUMNS} defaultSortKey="<field1>" />
+    </DetailViewShell>
+  )
+}
+```
+
+### Dashboard.tsx layout
+
+```tsx
+import { Header } from '@/dashboard/chrome/Header'
+import { WidgetBoundary } from '@/dashboard/chrome/WidgetBoundary'
+// WIDGET_IMPORTS
+
+export function Dashboard() {
+  return (
+    <div className="min-h-screen bg-background text-foreground p-4 lg:p-8">
+      <Header title="<Dashboard Title>" description="<Dashboard description>" />
+      
+      {/* KPI row — 1–4 tiles */}
+      <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* KPI widgets */}
+      </div>
+      
+      {/* Chart row — 2-up grid */}
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Chart widgets */}
+      </div>
+      
+      {/* Full-width table */}
+      <div className="mt-6">
+        {/* Table widgets */}
+      </div>
+    </div>
+  )
+}
+```
+
+Wrap every widget in `<WidgetBoundary label="<Widget Name>">`.
+
+### Step 1 — Compose all code in memory (0 tool calls)
+
+Use Widget Recipes from `insights-catalog.md`. For each widget derive:
+- Component name (PascalCase), detail route (kebab), icon from lucide-react
+- `<DATA_HOOK>` — `useInsights<ResponseType>('namespace.method', { startTime })`
+- `<DATA_SELECTOR>` — response unwrapping expression
+- `<HEADLINE_EXPR>` — extract the main number/value
+- `<DELTA_DIR>` / `<DELTA_TEXT>` — direction + vs-yesterday text (use `neutral` if unknown)
+- Detail view columns derived from `insights-catalog.md` Key response fields
+
+Response Unwrapping:
+| Response shape | DATA_SELECTOR |
 |---|---|
 | `data[].{field}` (timelines) | `(data as any)?.data ?? []` |
 | `{ data: { agents[] } }` | `(data as any)?.data?.agents ?? []` |
@@ -169,36 +264,49 @@ Response Unwrapping reference (use when no recipe matches exactly):
 
 ### Step 2 — Write all files in one Bash call (1 tool call)
 
-Issue a single Bash call using a Node.js heredoc. This shows only a one-line confirmation
-to the user — no code previews, no file-by-file noise:
-
 ```bash
 node << 'NODESCRIPT'
 const fs = require('fs'), path = require('path');
 const P = '<PROJECT_DIR>';
 
 const files = {
-  [`${P}/src/widgets/<Component1>.tsx`]: `<full TSX for widget 1 — escape backticks as \\\`, dollar-braces as \\\${>`,
-  [`${P}/src/widgets/<Component2>.tsx`]: `<full TSX for widget 2>`,
-  // one entry per widget...
-  [`${P}/src/widgets/index.ts`]: `export { <Component1> } from './<Component1>'\nexport { <Component2> } from './<Component2>'\n`,
+  // Dashboard layout
+  [`${P}/src/dashboard/Dashboard.tsx`]: `<full Dashboard.tsx content>`,
+  [`${P}/src/dashboard/widgets/index.ts`]: `<barrel exports>`,
+  
+  // Per-widget files (repeat for each widget)
+  [`${P}/src/dashboard/widgets/<Widget1>.tsx`]: `<full widget TSX>`,
+  [`${P}/src/dashboard/views/<Widget1>View.tsx`]: `<full view TSX>`,
+  // ...
 };
 
 for (const [fp, content] of Object.entries(files)) {
   fs.mkdirSync(path.dirname(fp), { recursive: true });
   fs.writeFileSync(fp, content);
 }
-console.log('✓ ' + Object.keys(files).length + ' widget files written');
+console.log('✓ ' + Object.keys(files).length + ' files written');
 NODESCRIPT
 ```
 
-> **Escaping rules inside template literals:**
-> - Backtick `` ` `` → `` \` ``
-> - `${` → `\${`
+> **Escaping:** backtick → `` \` ``, `${` → `\${`
 
-### Step 3 — Wire widgets into App.tsx (1 Edit call)
-Use the `Edit` tool (one call only) to add widget imports and pass them to `<DashboardShell>`.
-Single-file edits are fine — the Edit diff display is compact and expected.
+### Step 3 — Inject routes into App.tsx (1 Edit call)
+
+Replace the marker comments:
+```tsx
+// GENERATED_IMPORTS_START
+import { Dashboard } from './dashboard/Dashboard'
+import { <Widget1>View } from './dashboard/views/<Widget1>View'
+// ...
+// GENERATED_IMPORTS_END
+```
+```tsx
+{/* GENERATED_ROUTES_START */}
+<Route path="/" element={<Dashboard />} />
+<Route path="/<route1>" element={<<Widget1>View />} />
+// ...
+{/* GENERATED_ROUTES_END */}
+```
 
 ## Phase 8 — Validate + Summary (2 Bash)
 ```bash
@@ -209,8 +317,9 @@ If errors → fix them before proceeding. Common fixes:
 - Type mismatch on `data` → add `as <ExpectedType>` cast
 
 ```bash
-# Verify Vite can start (dry-run check only — don't actually start server)
-cd <PROJECT_DIR> && npx vite --version > /dev/null 2>&1 && echo "VITE_OK"
+# Start the dev server and open browser automatically
+# --open launches the browser; server stays running for HMR
+cd <PROJECT_DIR> && npm run dev -- --open
 ```
 
 ## Summary Format (shown after tsc passes)

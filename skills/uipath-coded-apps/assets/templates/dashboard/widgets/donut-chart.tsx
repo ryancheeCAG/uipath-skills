@@ -1,44 +1,50 @@
 import React from 'react'
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { useNavigate } from 'react-router-dom'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import { <ICON> } from 'lucide-react'
 import { useInsights } from '../hooks/useInsights'
+import { ViewAllLink, LoadingState, EmptyState } from '../dashboard/chrome'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 
-const COLORS = [
-  'hsl(var(--primary))',
-  'hsl(215 100% 60%)',
-  'hsl(150 60% 50%)',
-  'hsl(30 100% 60%)',
-]
+const CHART_COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))']
 
 export function <COMPONENT_NAME>() {
+  const navigate = useNavigate()
   const { data, loading, error } = <DATA_HOOK>
+  const chartData = <DATA_SELECTOR>
 
-  if (loading) return <div className="h-64 animate-pulse rounded-lg bg-muted" />
-  if (error) return <div className="rounded-lg border bg-card p-4 text-sm text-destructive">{error.message}</div>
-
-  const chartData = Array.isArray(data)
-    ? data
-    : Object.entries(data as Record<string, number>).map(([name, value]) => ({ name, value }))
+  if (loading) return <LoadingState />
+  if (error) return <EmptyState message={error.message} />
 
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <h3 className="mb-3 text-sm font-medium text-muted-foreground"><TITLE></h3>
-      <ResponsiveContainer width="100%" height={220}>
-        <PieChart>
-          <Pie
-            data={chartData as Record<string, unknown>[]}
-            dataKey="<DATA_KEY>"
-            nameKey="<NAME_KEY>"
-            innerRadius={60}
-            outerRadius={90}
-          >
-            {(chartData as Record<string, unknown>[]).map((_, i) => (
-              <Cell key={i} fill={COLORS[i % COLORS.length]} />
-            ))}
-          </Pie>
-          <Tooltip />
-          <Legend />
-        </PieChart>
-      </ResponsiveContainer>
-    </div>
+    <Card
+      className="cursor-pointer hover:shadow-md transition-shadow"
+      onClick={() => navigate('<DETAIL_ROUTE>')}
+    >
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+        <div className="flex items-start gap-3">
+          <div className="rounded-md bg-muted p-2">
+            <<ICON> className="w-4 h-4 text-muted-foreground" />
+          </div>
+          <div>
+            <CardTitle className="text-base"><TITLE></CardTitle>
+            <CardDescription><DESCRIPTION></CardDescription>
+          </div>
+        </div>
+        <ViewAllLink to="<DETAIL_ROUTE>" />
+      </CardHeader>
+      <CardContent className="pt-0">
+        <ResponsiveContainer width="100%" height={180}>
+          <PieChart>
+            <Pie data={chartData as Record<string, unknown>[]} dataKey="<DATA_KEY>" nameKey="<NAME_KEY>" innerRadius={50} outerRadius={75}>
+              {(chartData as Record<string, unknown>[]).map((_, i) => (
+                <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip />
+          </PieChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
   )
 }

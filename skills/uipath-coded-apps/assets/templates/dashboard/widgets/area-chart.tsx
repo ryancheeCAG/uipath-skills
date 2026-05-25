@@ -1,34 +1,58 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { <ICON> } from 'lucide-react'
 import { useInsights } from '../hooks/useInsights'
+import { DeltaBadge, ViewAllLink, LoadingState, EmptyState } from '../dashboard/chrome'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { fmtNumber } from '@/lib/format'
 
 export function <COMPONENT_NAME>() {
+  const navigate = useNavigate()
   const { data, loading, error } = <DATA_HOOK>
-
-  // Most Insights responses wrap the array: { data: [...] }
-  // Extract with the path from insights-catalog.md Key response fields.
-  // Example: const chartData = (data as any)?.data ?? []
   const chartData: Record<string, unknown>[] = <DATA_SELECTOR>
 
-  if (loading) return <div className="h-64 animate-pulse rounded-lg bg-muted" />
-  if (error) return <div className="rounded-lg border bg-card p-4 text-sm text-destructive">{error.message}</div>
+  if (loading) return <LoadingState />
+  if (error) return <EmptyState message={error.message} />
+
+  const headline = chartData.length > 0 ? fmtNumber(Number((chartData[chartData.length - 1] as Record<string, unknown>)['<Y_KEY>'])) : '—'
 
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <h3 className="mb-3 text-sm font-medium text-muted-foreground"><TITLE></h3>
-      <ResponsiveContainer width="100%" height={220}>
-        <AreaChart data={chartData}>
-          <XAxis dataKey="<X_KEY>" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} />
-          <Tooltip />
-          <Area
-            dataKey="<Y_KEY>"
-            fill="hsl(var(--primary))"
-            stroke="hsl(var(--primary))"
-            fillOpacity={0.2}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
+    <Card
+      className="cursor-pointer hover:shadow-md transition-shadow"
+      onClick={() => navigate('<DETAIL_ROUTE>')}
+    >
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+        <div className="flex items-start gap-3">
+          <div className="rounded-md bg-muted p-2">
+            <<ICON> className="w-4 h-4 text-muted-foreground" />
+          </div>
+          <div>
+            <CardTitle className="text-base"><TITLE></CardTitle>
+            <CardDescription><DESCRIPTION></CardDescription>
+          </div>
+        </div>
+        <ViewAllLink to="<DETAIL_ROUTE>" />
+      </CardHeader>
+      <div className="px-6 pb-2 flex items-baseline gap-3">
+        <span className="text-3xl font-semibold tabular-nums">{headline}</span>
+        <DeltaBadge direction="<DELTA_DIR>" text="<DELTA_TEXT>" />
+      </div>
+      <CardContent className="pt-0">
+        <ResponsiveContainer width="100%" height={180}>
+          <AreaChart data={chartData}>
+            <XAxis dataKey="<X_KEY>" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip />
+            <Area
+              dataKey="<Y_KEY>"
+              fill="hsl(var(--chart-1))"
+              stroke="hsl(var(--chart-1))"
+              fillOpacity={0.2}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
   )
 }
