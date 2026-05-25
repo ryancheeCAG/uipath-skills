@@ -146,32 +146,59 @@ No client ID, no scope, no OAuth setup required. The PAT comes from the active `
 
 > **SKILL_BASE_DIR:** Check your system context for "Base directory for this skill" — it shows the exact path where skill assets are installed. Use that as `SKILL_BASE_DIR`. On a fresh Claude Code session this is always available.
 
-## Phase 7 — Widget Generation (1 parallel Write block, **zero template reads**)
+## Phase 7 — Widget Generation (1 Bash call, **zero Write calls, zero template reads**)
 
-> **Do NOT read widget template files from `assets/templates/dashboard/widgets/`.**
-> The Widget Recipes in `insights-catalog.md` (already loaded in Phase 1) contain
-> copy-paste-ready widget code with typed `useInsights` calls, response interfaces,
-> and extraction patterns. Use those directly — reading templates adds 6–8 sequential
-> file reads (~20-30s) for no benefit.
+> **Use Bash + Node.js heredoc to write all files at once.** This keeps the user's session
+> clean — one compact Bash line instead of N Write calls showing code previews.
+> Do NOT use the `Write` tool for widget files. Do NOT read template files.
 
-For each widget in the approved plan:
-1. Find the matching recipe in `insights-catalog.md` → "Widget Recipes" section
-2. If no exact recipe matches, pick the closest one and adapt the endpoint + title
-3. Write the complete widget file directly — copy the recipe block, set `<COMPONENT_NAME>` and `<TITLE>`
+### Step 1 — Compose widget code in memory (0 tool calls)
+Use Widget Recipes from `insights-catalog.md` (already loaded in Phase 1) to write each
+widget's full TypeScript source. For each widget: pick the matching recipe, set the
+component name and title, adapt startTime constant.
 
-If a metric has no matching recipe, use the Response Unwrapping table below:
+Response Unwrapping reference (use when no recipe matches exactly):
 
-| Pattern | Extraction |
+| Response shape | Extraction |
 |---|---|
-| `data[].{field}` (most timelines) | `(data as any)?.data ?? []` |
-| `{ data: { agents[] } }` (getAgents) | `(data as any)?.data?.agents ?? []` |
-| `{ totalErrors, data[] }` (topErroredAgents) | `(data as any)?.data ?? []` |
-| `{ data: { errorCount, escalationCount } }` (incidentDistribution) | `Object.entries((data as any)?.data ?? {}).map(([name,value]) => ({name,value}))` |
-| KPI from `currentPeriodSummary` | `String((data as any)?.data?.currentPeriodSummary?.successRate?.toFixed(1) + '%' ?? '—')` |
+| `data[].{field}` (timelines) | `(data as any)?.data ?? []` |
+| `{ data: { agents[] } }` | `(data as any)?.data?.agents ?? []` |
+| `{ totalErrors, data[] }` | `(data as any)?.data ?? []` |
+| `{ data: { errorCount, … } }` | `Object.entries((data as any)?.data ?? {}).map(([n,v])=>({name:n,value:v}))` |
+| KPI from `currentPeriodSummary` | `String((data as any)?.data?.currentPeriodSummary?.successRate?.toFixed(1)+'%' ?? '—')` |
 
-Write ALL widget files in a single parallel message (one Write call per widget file).
-Also write `<PROJECT_DIR>/src/widgets/index.ts` exporting all components.
-Update `<PROJECT_DIR>/src/App.tsx` to import widgets and pass them as children to `<DashboardShell>`.
+### Step 2 — Write all files in one Bash call (1 tool call)
+
+Issue a single Bash call using a Node.js heredoc. This shows only a one-line confirmation
+to the user — no code previews, no file-by-file noise:
+
+```bash
+node << 'NODESCRIPT'
+const fs = require('fs'), path = require('path');
+const P = '<PROJECT_DIR>';
+
+const files = {
+  [`${P}/src/widgets/<Component1>.tsx`]: `<full TSX for widget 1 — escape backticks as \\\`, dollar-braces as \\\${>`,
+  [`${P}/src/widgets/<Component2>.tsx`]: `<full TSX for widget 2>`,
+  // one entry per widget...
+  [`${P}/src/widgets/index.ts`]: `export { <Component1> } from './<Component1>'\nexport { <Component2> } from './<Component2>'\n`,
+};
+
+for (const [fp, content] of Object.entries(files)) {
+  fs.mkdirSync(path.dirname(fp), { recursive: true });
+  fs.writeFileSync(fp, content);
+}
+console.log('✓ ' + Object.keys(files).length + ' widget files written');
+NODESCRIPT
+```
+
+> **Escaping rules inside template literals:**
+> - Backtick `` ` `` → `` \` ``
+> - `${` → `\${`
+
+### Step 3 — Wire widgets into App.tsx (1 Edit call)
+Use the `Edit` tool (one call only) to add widget imports and pass them to `<DashboardShell>`.
+Single-file edits are fine — the Edit diff display is compact and expected.
 
 ## Phase 8 — Validate + Summary (2 Bash)
 ```bash
