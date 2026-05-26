@@ -108,15 +108,28 @@ block — do not send the message until all four paths are listed:
 ## Phase 2 — Preflight (1 Bash)
 
 ```bash
-# All auth in ONE command — no split reads
-STATUS=$(uip login status --output json)
-ORG=$(echo "$STATUS" | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).Data.Organization" 2>/dev/null || node -e "process.stdout.write(JSON.parse('$STATUS').Data.Organization)")
-TENANT=$(echo "$STATUS" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); process.stdout.write(d.Data.Tenant)")
-DATA_BASE_URL=$(echo "$STATUS" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); process.stdout.write(d.Data.BaseUrl)")
+# uip login status — output written to file to avoid stdin-piping issues on Windows
+uip login status --output json > /tmp/uip-status.json
+STATUS=$(cat /tmp/uip-status.json)
 
-# Read both PAT and TENANT_ID in one grep — never two separate commands
-eval "$(grep -E '^UIPATH_ACCESS_TOKEN=|^UIPATH_TENANT_ID=' ~/.uipath/.auth | \
-  sed 's/^UIPATH_ACCESS_TOKEN=/PAT=/; s/^UIPATH_TENANT_ID=/TENANT_ID=/')"
+# Extract fields via process.argv — no stdin pipe needed (works on all platforms)
+ORG=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).Data.Organization||'')" "$STATUS")
+TENANT=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).Data.Tenant||'')" "$STATUS")
+DATA_BASE_URL=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).Data.BaseUrl||'')" "$STATUS")
+rm -f /tmp/uip-status.json
+
+# Read PAT and TENANT_ID from .auth file in one Node call (reliable on Windows)
+AUTH_VALS=$(node -e "
+  const fs=require('fs'), home=require('os').homedir();
+  const f=fs.readFileSync(home+'/.uipath/.auth','utf8');
+  const pat=f.match(/^UIPATH_ACCESS_TOKEN=(.+)/m)?.[1]?.trim() ||
+    (() => { try { return JSON.parse(f).UIPATH_ACCESS_TOKEN||''; } catch{return '';} })();
+  const tid=f.match(/^UIPATH_TENANT_ID=(.+)/m)?.[1]?.trim() ||
+    (() => { try { return JSON.parse(f).UIPATH_TENANT_ID||''; } catch{return '';} })();
+  process.stdout.write(pat+'\n'+tid);
+")
+PAT=$(echo "$AUTH_VALS" | head -1)
+TENANT_ID=$(echo "$AUTH_VALS" | tail -1)
 
 # Derive API base URL
 if echo "$DATA_BASE_URL" | grep -q "alpha";    then API_BASE_URL="https://alpha.api.uipath.com"
@@ -142,27 +155,28 @@ Use Widget Recipes from insights-catalog.md (already loaded).
 
 ```bash
 SKILL_BASE_DIR="<SKILL_BASE_DIR>"   # "Base directory for this skill" from system context
-DASHBOARD_SLUG=$(node -e "const t='<DASHBOARD_NAME>'; \
-  process.stdout.write(t.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''))")
-PROJECT_DIR="$(pwd)/${DASHBOARD_SLUG}"
 
-# Pre-warm: Node.js copy (cross-platform) + npm ci in background
-(
-  node -e "
-    const fs=require('fs'),path=require('path');
-    function cp(s,d){
-      fs.mkdirSync(d,{recursive:true});
-      for(const e of fs.readdirSync(s,{withFileTypes:true})){
-        const sp=path.join(s,e.name),dp=path.join(d,e.name);
-        e.isDirectory()?cp(sp,dp):fs.copyFileSync(sp,dp);
-      }
+# Use Node.js to derive paths — process.cwd() returns C:\Work\... on Windows,
+# not the /c/Work/... POSIX path that $(pwd) returns in Git Bash.
+DASHBOARD_SLUG=$(node -e "process.stdout.write('<DASHBOARD_NAME>'.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''))")
+PROJECT_DIR=$(node -e "process.stdout.write(require('path').join(process.cwd(),'${DASHBOARD_SLUG}'))")
+
+# Pre-warm: Node.js copy + npm ci in background
+node -e "
+  const fs=require('fs'),path=require('path');
+  function cp(s,d){
+    fs.mkdirSync(d,{recursive:true});
+    for(const e of fs.readdirSync(s,{withFileTypes:true})){
+      const sp=path.join(s,e.name),dp=path.join(d,e.name);
+      e.isDirectory()?cp(sp,dp):fs.copyFileSync(sp,dp);
     }
-    cp('${SKILL_BASE_DIR}/assets/templates/dashboard/scaffold','${PROJECT_DIR}');
-    try{fs.rmSync('${PROJECT_DIR}/node_modules',{recursive:true,force:true})}catch{}
-  " && cd "${PROJECT_DIR}" && (npm ci --prefer-offline 2>/dev/null || npm ci 2>/dev/null)
-) &
-echo "${PROJECT_DIR}" > "/tmp/dashboard-prewarm-${DASHBOARD_SLUG}.dir"
-echo "PREWARM_STARTED"
+  }
+  cp('${SKILL_BASE_DIR}/assets/templates/dashboard/scaffold','${PROJECT_DIR}');
+  try{fs.rmSync(path.join('${PROJECT_DIR}','node_modules'),{recursive:true,force:true})}catch{}
+  fs.writeFileSync('/tmp/dashboard-prewarm-${DASHBOARD_SLUG}.dir','${PROJECT_DIR}');
+  console.log('SCAFFOLD_COPIED');
+" && (cd "${PROJECT_DIR}" && npm ci --prefer-offline 2>/dev/null || npm ci 2>/dev/null) &
+echo "PREWARM_STARTED: ${PROJECT_DIR}"
 ```
 
 ---
