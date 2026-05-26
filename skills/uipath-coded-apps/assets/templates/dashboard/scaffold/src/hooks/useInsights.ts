@@ -54,7 +54,7 @@ export function useInsights<T>(
 
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps)
+  }, deps.length > 0 ? deps : [key, JSON.stringify(params), tenantId])
 
   return { data, error, loading }
 }

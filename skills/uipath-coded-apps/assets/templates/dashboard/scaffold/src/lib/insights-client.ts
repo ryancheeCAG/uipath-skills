@@ -15,16 +15,26 @@ export class InsightsClient {
 
   private async post<T>(base: string, path: string, body: InsightsParams): Promise<T> {
     const token = await this.getToken()
-    const res = await fetch(`${base}/${path}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    })
-    if (res.status === 401) throw new Error('INSIGHTS_AUTH_EXPIRED')
-    if (!res.ok) throw new Error(`Insights ${res.status}: ${path}`)
+    let res: Response
+    try {
+      res = await fetch(`${base}/${path}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+    } catch {
+      throw new Error('Cannot reach Insights API — check network connection or CORS configuration')
+    }
+    if (res.status === 401) throw new Error('Insights auth expired — sign out and sign in again')
+    if (res.status === 403) throw new Error('Insights access denied — check tenant permissions')
+    if (!res.ok) {
+      let body = ''
+      try { body = await res.text() } catch { /* ignore */ }
+      throw new Error(`Insights ${res.status} error${body ? `: ${body.slice(0, 120)}` : ''}`)
+    }
     return res.json() as Promise<T>
   }
 
