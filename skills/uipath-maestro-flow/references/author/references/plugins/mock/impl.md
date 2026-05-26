@@ -50,4 +50,67 @@ When the resource becomes available, swap the mock for the real resource node: [
 | `$vars.<mockId>.output` is empty downstream | Mock emits only a placeholder object | Expected — wire real logic once the mock is replaced |
 | Mock used where a sibling resource exists | Should have used `--local` discovery | Replace with the in-solution resource node ([planning.md](planning.md)) |
 
-<!-- PHASE 1: append `## Definition — core.logic.mock v1.0 (copy verbatim)` section here -->
+## Definition — `core.logic.mock` v1.0 (copy verbatim)
+
+This is the copy-verbatim registry definition for `definitions[]` — distinct from the example `inputs` snippets above, which you adapt. Copy the entire fenced object exactly; do not edit, trim, elide, or merge it with the snippets. Set the node instance `typeVersion` to the `version` shown here.
+
+> Captured from uip 1.2.0 · node version 1.0 · re-capture on CLI upgrade (see [the staleness fallback](../../../../shared/file-format.md#stale-inlined-definition)).
+
+```json
+{
+  "nodeType": "core.logic.mock",
+  "version": "1.0",
+  "category": "control-flow",
+  "description": "Placeholder node for prototyping",
+  "tags": [
+    "blank",
+    "todo"
+  ],
+  "sortOrder": 20,
+  "display": {
+    "label": "Mock",
+    "icon": "square-dashed"
+  },
+  "handleConfiguration": [
+    {
+      "position": "left",
+      "handles": [
+        {
+          "id": "input",
+          "type": "target",
+          "handleType": "input"
+        }
+      ],
+      "visible": true
+    },
+    {
+      "position": "right",
+      "handles": [
+        {
+          "id": "output",
+          "type": "source",
+          "handleType": "output"
+        }
+      ],
+      "visible": true
+    }
+  ],
+  "model": {
+    "type": "bpmn:Task"
+  },
+  "outputDefinition": {
+    "output": {
+      "type": "object",
+      "description": "Mock output value",
+      "source": "null",
+      "var": "output"
+    }
+  },
+  "runtimeConstraints": {
+    "exclude": [
+      "api-function"
+    ]
+  }
+}
+```
+

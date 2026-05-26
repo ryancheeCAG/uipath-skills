@@ -272,3 +272,576 @@ Chains multiple operations (filter -> map -> groupBy) in a single node. Operatio
 | Collection is null/empty | `collection` was wrapped in `=js:` or set to an inline array literal instead of a plain variable path | Use a path such as `"$vars.loadCatalog.output.catalog"` or `"$vars.catalog"`; keep static arrays in a variable default or upstream node |
 | Map output missing fields | `keepOriginalFields: false` and field not in mappings | Add the field to mappings or set `keepOriginalFields: true` |
 | GroupBy produces empty groups | No items match the group field | Check `groupByField` matches actual field names in the data |
+
+## Definitions — `core.action.transform*` v1.0 (copy verbatim)
+
+These are the copy-verbatim registry definitions for `definitions[]` — distinct from the example `inputs` snippets above, which you adapt. Copy the entire fenced object for each `core.action.transform*` node type you use, exactly; do not edit, trim, elide, or merge with the snippets. Set each node instance's `typeVersion` to the `version` shown.
+
+> Captured from uip 1.2.0 · all four node versions 1.0 · re-capture on CLI upgrade (see [the staleness fallback](../../../../shared/file-format.md#stale-inlined-definition)).
+
+<details>
+<summary><code>core.action.transform</code> v1.0</summary>
+
+```json
+{
+  "nodeType": "core.action.transform",
+  "supportsErrorHandling": true,
+  "version": "1.0",
+  "category": "data-operations",
+  "description": "Reshape and convert data with operations",
+  "tags": [
+    "data",
+    "transformation"
+  ],
+  "sortOrder": 35,
+  "display": {
+    "label": "Transform",
+    "icon": "a-large-small"
+  },
+  "handleConfiguration": [
+    {
+      "position": "left",
+      "handles": [
+        {
+          "id": "input",
+          "type": "target",
+          "handleType": "input"
+        }
+      ]
+    },
+    {
+      "position": "right",
+      "handles": [
+        {
+          "id": "output",
+          "type": "source",
+          "handleType": "output"
+        }
+      ]
+    }
+  ],
+  "debug": {
+    "runtime": "clientScript"
+  },
+  "model": {
+    "type": "bpmn:ScriptTask"
+  },
+  "inputDefinition": {
+    "type": "object",
+    "properties": {
+      "collection": {
+        "type": "string"
+      },
+      "operations": {
+        "type": "array"
+      }
+    }
+  },
+  "inputDefaults": {
+    "collection": "",
+    "operations": []
+  },
+  "outputDefinition": {
+    "output": {
+      "type": "object",
+      "description": "The transformed data result",
+      "source": "=result.response",
+      "var": "output"
+    },
+    "error": {
+      "type": "object",
+      "description": "Error information if the node fails",
+      "source": "=Error",
+      "var": "error",
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "detail",
+          "category",
+          "status"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Error code as a string"
+          },
+          "message": {
+            "type": "string",
+            "description": "High-level error message"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Detailed error description"
+          },
+          "category": {
+            "type": "string",
+            "description": "Error category"
+          },
+          "status": {
+            "type": "integer",
+            "description": "HTTP status code"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "form": {
+    "id": "transform-data-form",
+    "title": "Transform",
+    "sections": [
+      {
+        "defaultExpanded": true,
+        "id": "transform-section",
+        "title": "Operation(s)",
+        "fields": [
+          {
+            "name": "inputs",
+            "type": "custom",
+            "component": "data-transformer-editor",
+            "componentProps": {},
+            "label": "Transform Operations"
+          }
+        ],
+        "collapsible": true
+      }
+    ]
+  },
+  "runtimeConstraints": {
+    "exclude": [
+      "api-function"
+    ]
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><code>core.action.transform.filter</code> v1.0</summary>
+
+```json
+{
+  "nodeType": "core.action.transform.filter",
+  "supportsErrorHandling": true,
+  "version": "1.0",
+  "category": "data-operations",
+  "description": "Filter data by conditions",
+  "tags": [
+    "data",
+    "transformation",
+    "filter"
+  ],
+  "sortOrder": 35,
+  "display": {
+    "label": "Filter",
+    "icon": "list-filter"
+  },
+  "handleConfiguration": [
+    {
+      "position": "left",
+      "handles": [
+        {
+          "id": "input",
+          "type": "target",
+          "handleType": "input"
+        }
+      ]
+    },
+    {
+      "position": "right",
+      "handles": [
+        {
+          "id": "output",
+          "type": "source",
+          "handleType": "output"
+        }
+      ]
+    }
+  ],
+  "debug": {
+    "runtime": "clientScript"
+  },
+  "model": {
+    "type": "bpmn:ScriptTask"
+  },
+  "inputDefinition": {
+    "type": "object",
+    "properties": {
+      "collection": {
+        "type": "string"
+      },
+      "operations": {
+        "type": "array"
+      }
+    }
+  },
+  "inputDefaults": {
+    "collection": "",
+    "operations": []
+  },
+  "outputDefinition": {
+    "output": {
+      "type": "object",
+      "description": "The transformed data result",
+      "source": "=result.response",
+      "var": "output"
+    },
+    "error": {
+      "type": "object",
+      "description": "Error information if the node fails",
+      "source": "=Error",
+      "var": "error",
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "detail",
+          "category",
+          "status"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Error code as a string"
+          },
+          "message": {
+            "type": "string",
+            "description": "High-level error message"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Detailed error description"
+          },
+          "category": {
+            "type": "string",
+            "description": "Error category"
+          },
+          "status": {
+            "type": "integer",
+            "description": "HTTP status code"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "form": {
+    "id": "data-transform-filter-form",
+    "title": "Filter",
+    "sections": [
+      {
+        "defaultExpanded": true,
+        "id": "filter-section",
+        "title": "Filter configuration",
+        "fields": [
+          {
+            "name": "inputs",
+            "type": "custom",
+            "component": "filter-operation-editor",
+            "componentProps": {},
+            "label": "Filter configuration"
+          }
+        ],
+        "collapsible": true
+      }
+    ]
+  },
+  "runtimeConstraints": {
+    "exclude": [
+      "api-function"
+    ]
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><code>core.action.transform.map</code> v1.0</summary>
+
+```json
+{
+  "nodeType": "core.action.transform.map",
+  "supportsErrorHandling": true,
+  "version": "1.0",
+  "category": "data-operations",
+  "description": "Rename and transform fields",
+  "tags": [
+    "data",
+    "transformation",
+    "map"
+  ],
+  "sortOrder": 35,
+  "display": {
+    "label": "Map",
+    "icon": "arrow-right"
+  },
+  "handleConfiguration": [
+    {
+      "position": "left",
+      "handles": [
+        {
+          "id": "input",
+          "type": "target",
+          "handleType": "input"
+        }
+      ]
+    },
+    {
+      "position": "right",
+      "handles": [
+        {
+          "id": "output",
+          "type": "source",
+          "handleType": "output"
+        }
+      ]
+    }
+  ],
+  "debug": {
+    "runtime": "clientScript"
+  },
+  "model": {
+    "type": "bpmn:ScriptTask"
+  },
+  "inputDefinition": {
+    "type": "object",
+    "properties": {
+      "collection": {
+        "type": "string"
+      },
+      "operations": {
+        "type": "array"
+      }
+    }
+  },
+  "inputDefaults": {
+    "collection": "",
+    "operations": []
+  },
+  "outputDefinition": {
+    "output": {
+      "type": "object",
+      "description": "The transformed data result",
+      "source": "=result.response",
+      "var": "output"
+    },
+    "error": {
+      "type": "object",
+      "description": "Error information if the node fails",
+      "source": "=Error",
+      "var": "error",
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "detail",
+          "category",
+          "status"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Error code as a string"
+          },
+          "message": {
+            "type": "string",
+            "description": "High-level error message"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Detailed error description"
+          },
+          "category": {
+            "type": "string",
+            "description": "Error category"
+          },
+          "status": {
+            "type": "integer",
+            "description": "HTTP status code"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "form": {
+    "id": "data-transform-map-form",
+    "title": "Map",
+    "sections": [
+      {
+        "defaultExpanded": true,
+        "id": "map-section",
+        "title": "Map configuration",
+        "fields": [
+          {
+            "name": "inputs",
+            "type": "custom",
+            "component": "map-operation-editor",
+            "componentProps": {},
+            "label": "Map configuration"
+          }
+        ],
+        "collapsible": true
+      }
+    ]
+  },
+  "runtimeConstraints": {
+    "exclude": [
+      "api-function"
+    ]
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><code>core.action.transform.group-by</code> v1.0</summary>
+
+```json
+{
+  "nodeType": "core.action.transform.group-by",
+  "supportsErrorHandling": true,
+  "version": "1.0",
+  "category": "data-operations",
+  "description": "Group data by a field with aggregations",
+  "tags": [
+    "data",
+    "transformation",
+    "group"
+  ],
+  "sortOrder": 35,
+  "display": {
+    "label": "Group By",
+    "icon": "group"
+  },
+  "handleConfiguration": [
+    {
+      "position": "left",
+      "handles": [
+        {
+          "id": "input",
+          "type": "target",
+          "handleType": "input"
+        }
+      ]
+    },
+    {
+      "position": "right",
+      "handles": [
+        {
+          "id": "output",
+          "type": "source",
+          "handleType": "output"
+        }
+      ]
+    }
+  ],
+  "debug": {
+    "runtime": "clientScript"
+  },
+  "model": {
+    "type": "bpmn:ScriptTask"
+  },
+  "inputDefinition": {
+    "type": "object",
+    "properties": {
+      "collection": {
+        "type": "string"
+      },
+      "operations": {
+        "type": "array"
+      }
+    }
+  },
+  "inputDefaults": {
+    "collection": "",
+    "operations": []
+  },
+  "outputDefinition": {
+    "output": {
+      "type": "object",
+      "description": "The transformed data result",
+      "source": "=result.response",
+      "var": "output"
+    },
+    "error": {
+      "type": "object",
+      "description": "Error information if the node fails",
+      "source": "=Error",
+      "var": "error",
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "detail",
+          "category",
+          "status"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Error code as a string"
+          },
+          "message": {
+            "type": "string",
+            "description": "High-level error message"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Detailed error description"
+          },
+          "category": {
+            "type": "string",
+            "description": "Error category"
+          },
+          "status": {
+            "type": "integer",
+            "description": "HTTP status code"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "form": {
+    "id": "data-transform-group-by-form",
+    "title": "Group By",
+    "sections": [
+      {
+        "defaultExpanded": true,
+        "id": "group-by-section",
+        "title": "Group By configuration",
+        "fields": [
+          {
+            "name": "inputs",
+            "type": "custom",
+            "component": "group-by-operation-editor",
+            "componentProps": {},
+            "label": "Group By configuration"
+          }
+        ],
+        "collapsible": true
+      }
+    ]
+  },
+  "runtimeConstraints": {
+    "exclude": [
+      "api-function"
+    ]
+  }
+}
+```
+
+</details>

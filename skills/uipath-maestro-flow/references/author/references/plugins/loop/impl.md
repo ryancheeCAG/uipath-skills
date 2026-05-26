@@ -240,3 +240,219 @@ Key points in this pattern:
 | State variable becomes `NaN` | variableUpdate expression uses `$vars.<loopId>.currentItem` | Loop variables are not available in variableUpdate expressions. Do the computation in the script and reference `$vars.<bodyNodeId>.output` in the variableUpdate |
 | Infinite loop | Edges wired incorrectly | Ensure only `loopBack` creates the cycle, not arbitrary edges |
 | No output after loop | Missing `success` edge | Wire the `success` port to the next downstream node |
+
+## Definition — `core.logic.loop` v1.0 (copy verbatim)
+
+This is the copy-verbatim registry definition for `definitions[]` — distinct from the example `inputs` snippets above, which you adapt. Copy the entire fenced object exactly; do not edit, trim, elide, or merge it with the snippets. Set the node instance `typeVersion` to the `version` shown here.
+
+> Captured from uip 1.2.0 · node version 1.0 · re-capture on CLI upgrade (see [the staleness fallback](../../../../shared/file-format.md#stale-inlined-definition)).
+
+```json
+{
+  "nodeType": "core.logic.loop",
+  "supportsErrorHandling": true,
+  "version": "1.0",
+  "category": "control-flow",
+  "description": "Iterate over a collection of items",
+  "tags": [
+    "control-flow",
+    "loop",
+    "iteration"
+  ],
+  "sortOrder": 20,
+  "display": {
+    "label": "Loop",
+    "icon": "repeat",
+    "description": "Execute a sequence of actions repeatedly for each item in a collection"
+  },
+  "handleConfiguration": [
+    {
+      "position": "left",
+      "customPositionAndOffsets": {
+        "top": 32
+      },
+      "handles": [
+        {
+          "id": "input",
+          "type": "target",
+          "handleType": "input"
+        },
+        {
+          "id": "loopBack",
+          "type": "target",
+          "handleType": "input"
+        }
+      ]
+    },
+    {
+      "position": "right",
+      "customPositionAndOffsets": {
+        "top": -32
+      },
+      "handles": [
+        {
+          "id": "success",
+          "label": "success",
+          "type": "source",
+          "handleType": "output",
+          "visible": true
+        },
+        {
+          "id": "output",
+          "label": "loop",
+          "type": "source",
+          "handleType": "output",
+          "showButton": false
+        }
+      ]
+    }
+  ],
+  "model": {
+    "type": "bpmn:SubProcess"
+  },
+  "inputDefinition": {
+    "type": "object",
+    "properties": {
+      "collection": {
+        "type": "string",
+        "minLength": 1,
+        "errorMessage": "A collection is required for iteration"
+      },
+      "parallel": {
+        "type": "boolean"
+      },
+      "completionCondition": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "collection"
+    ]
+  },
+  "inputDefaults": {
+    "collection": "",
+    "parallel": false,
+    "completionCondition": ""
+  },
+  "outputDefinition": {
+    "currentItem": {
+      "type": "any",
+      "description": "The current item being iterated in the loop",
+      "source": "=loopContext.currentItem",
+      "var": "currentItem",
+      "scope": "internal"
+    },
+    "currentIndex": {
+      "type": "number",
+      "description": "The current iteration index (0-based)",
+      "source": "=loopContext.currentIndex",
+      "var": "currentIndex",
+      "scope": "internal"
+    },
+    "collection": {
+      "type": "array",
+      "description": "The collection being iterated over",
+      "source": "=loopContext.collection",
+      "var": "collection",
+      "scope": "internal"
+    },
+    "output": {
+      "type": "array",
+      "description": "Aggregated results from all loop iterations",
+      "source": "=loopContext.output",
+      "var": "output",
+      "scope": "external"
+    },
+    "error": {
+      "type": "object",
+      "description": "Error information if the node fails",
+      "source": "=Error",
+      "var": "error",
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "detail",
+          "category",
+          "status"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Error code as a string"
+          },
+          "message": {
+            "type": "string",
+            "description": "High-level error message"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Detailed error description"
+          },
+          "category": {
+            "type": "string",
+            "description": "Error category"
+          },
+          "status": {
+            "type": "integer",
+            "description": "HTTP status code"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "form": {
+    "id": "loop-properties",
+    "title": "Loop configuration",
+    "sections": [
+      {
+        "id": "iteration",
+        "title": "Iteration",
+        "fields": [
+          {
+            "name": "inputs.collection",
+            "type": "custom",
+            "component": "code-editor",
+            "label": "Collection",
+            "description": "Array or collection to iterate over (e.g., $vars.scriptTask1.output)",
+            "componentProps": {
+              "singleLine": true,
+              "mode": "expression",
+              "toggleable": false,
+              "placeholder": "e.g., $vars.scriptTask1.output",
+              "showVariableButton": true,
+              "language": "javascript"
+            }
+          },
+          {
+            "name": "inputs.parallel",
+            "type": "switch",
+            "label": "Parallel",
+            "description": "Execute all iterations at the same time."
+          },
+          {
+            "name": "inputs.completionCondition",
+            "type": "custom",
+            "component": "code-editor",
+            "label": "Break on condition",
+            "description": "Exit the loop early when this condition becomes true after an iteration completes.",
+            "componentProps": {
+              "singleLine": true,
+              "mode": "expression",
+              "toggleable": false,
+              "placeholder": "e.g., $vars.processedCount >= 5",
+              "showVariableButton": true,
+              "alwaysIncludeSelf": true,
+              "returnType": "boolean",
+              "language": "javascript"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```

@@ -243,6 +243,12 @@ uip maestro flow registry get core.action.script --output json
 
 Copy the returned node definition object into your `definitions` array. Depending on CLI/plugin version, that object may appear at `Data.Node` or as the top-level object containing fields such as `nodeType`, `version`, and `handleConfiguration`. Do not write definitions by hand — always pull from the registry to ensure schema compliance.
 
+For most built-in `core.*` node types the verbatim definition is **pre-embedded** in that node's plugin `impl.md` (a `## Definition — <type> v<version> (copy verbatim)` section) — copy it from there instead of running `registry get`. This does not apply to `core.action.http` / `core.action.http.v2`, `core.action.queue.*`, connector (`uipath.connector.*`), or resource (`uipath.core.*`, `uipath.*`) nodes, which are still fetched from the registry.
+
+### Stale inlined definition
+
+The embedded definitions are pinned to a `uip` CLI version (stated in each block's caption). If `uip maestro flow validate` reports `Node type <type>:<version> has no matching definition`, the inlined copy is stale for your CLI version — fall back to `uip maestro flow registry get <type> --output json`, copy the fresh `.Data.Node`, and report the drift so the embedded copy can be refreshed.
+
 ## Common node types
 
 | Type | Purpose | Key inputs |

@@ -208,3 +208,105 @@ For the step-by-step procedure, see [Edit/Write: Create a subflow](../../editing
 | Script output is null | Missing inline `outputs` on script node | Add `outputs.output` and `outputs.error` inline on the script node |
 | Missing Start/End node | Subflow lacks required trigger or end | Add `core.trigger.manual` (with `outputs` and `entryPointId`) and `core.control.end` to the subflow |
 | Nesting limit exceeded | Subflow nested more than 3 levels deep | Flatten the structure or use resource nodes for deeper composition |
+
+## Definition — `core.subflow` v1.0 (copy verbatim)
+
+This is the copy-verbatim registry definition for `definitions[]` — distinct from the example `inputs` snippets above, which you adapt. Copy the entire fenced object exactly; do not edit, trim, elide, or merge it with the snippets. Set the node instance `typeVersion` to the `version` shown here.
+
+> Captured from uip 1.2.0 · node version 1.0 · re-capture on CLI upgrade (see [the staleness fallback](../../../../shared/file-format.md#stale-inlined-definition)).
+
+```json
+{
+  "nodeType": "core.subflow",
+  "version": "1.0",
+  "category": "control-flow",
+  "description": "Group steps into a reusable subflow",
+  "tags": [
+    "subflow",
+    "composite",
+    "container",
+    "subprocess"
+  ],
+  "sortOrder": 20,
+  "supportsErrorHandling": true,
+  "display": {
+    "label": "Subflow",
+    "icon": "layers"
+  },
+  "handleConfiguration": [
+    {
+      "position": "left",
+      "handles": [
+        {
+          "id": "input",
+          "type": "target",
+          "handleType": "input"
+        }
+      ],
+      "visible": true
+    },
+    {
+      "position": "right",
+      "handles": [
+        {
+          "id": "output",
+          "type": "source",
+          "handleType": "output"
+        }
+      ],
+      "visible": true
+    }
+  ],
+  "model": {
+    "type": "bpmn:SubProcess"
+  },
+  "outputDefinition": {
+    "error": {
+      "type": "object",
+      "description": "Error information if the node fails",
+      "source": "=Error",
+      "var": "error",
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "detail",
+          "category",
+          "status"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Error code as a string"
+          },
+          "message": {
+            "type": "string",
+            "description": "High-level error message"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Detailed error description"
+          },
+          "category": {
+            "type": "string",
+            "description": "Error category"
+          },
+          "status": {
+            "type": "integer",
+            "description": "HTTP status code"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "drillable": true,
+  "runtimeConstraints": {
+    "exclude": [
+      "api-function"
+    ]
+  }
+}
+```

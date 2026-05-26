@@ -77,3 +77,150 @@ return { hasError: false, data: $vars.httpCall.output.body };
 | Timeout after 30s | Script too expensive | Simplify logic or split into multiple scripts |
 | `console is not defined` | Used `console.log()` | Remove — use `return { debug: val }` instead |
 | `fetch is not defined` | Tried to make HTTP call | Use an HTTP node or connector node instead |
+
+## Definition — `core.action.script` v1.0 (copy verbatim)
+
+This is the copy-verbatim registry definition for `definitions[]` — distinct from the example `inputs` snippets above, which you adapt. Copy the entire fenced object exactly; do not edit, trim, elide, or merge it with the snippets. Set the node instance `typeVersion` to the `version` shown here.
+
+> Captured from uip 1.2.0 · node version 1.0 · re-capture on CLI upgrade (see [the staleness fallback](../../../../shared/file-format.md#stale-inlined-definition)).
+
+```json
+{
+  "nodeType": "core.action.script",
+  "version": "1.0",
+  "category": "data-operations",
+  "description": "Run custom JavaScript code",
+  "tags": [
+    "code",
+    "javascript",
+    "python"
+  ],
+  "sortOrder": 35,
+  "supportsErrorHandling": true,
+  "display": {
+    "label": "Script",
+    "icon": "code"
+  },
+  "handleConfiguration": [
+    {
+      "position": "left",
+      "handles": [
+        {
+          "id": "input",
+          "type": "target",
+          "handleType": "input"
+        }
+      ]
+    },
+    {
+      "position": "right",
+      "handles": [
+        {
+          "id": "success",
+          "type": "source",
+          "handleType": "output"
+        }
+      ]
+    }
+  ],
+  "debug": {
+    "runtime": "clientScript"
+  },
+  "model": {
+    "type": "bpmn:ScriptTask"
+  },
+  "inputDefinition": {
+    "type": "object",
+    "properties": {
+      "script": {
+        "type": "string",
+        "minLength": 1,
+        "errorMessage": "A script function is required",
+        "validationSeverity": "warning"
+      }
+    },
+    "required": [
+      "script"
+    ]
+  },
+  "inputDefaults": {
+    "script": ""
+  },
+  "outputDefinition": {
+    "output": {
+      "type": "object",
+      "description": "The return value of the script",
+      "source": "=result.response",
+      "var": "output"
+    },
+    "error": {
+      "type": "object",
+      "description": "Error information if the node fails",
+      "source": "=Error",
+      "var": "error",
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "detail",
+          "category",
+          "status"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Error code as a string"
+          },
+          "message": {
+            "type": "string",
+            "description": "High-level error message"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Detailed error description"
+          },
+          "category": {
+            "type": "string",
+            "description": "Error category"
+          },
+          "status": {
+            "type": "integer",
+            "description": "HTTP status code"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "form": {
+    "id": "script-properties",
+    "title": "Script configuration",
+    "sections": [
+      {
+        "id": "script",
+        "title": "Script",
+        "collapsible": true,
+        "defaultExpanded": true,
+        "fields": [
+          {
+            "name": "inputs.script",
+            "type": "custom",
+            "component": "script-editor",
+            "componentProps": {
+              "language": "javascript",
+              "returnType": "any",
+              "validationMode": "script",
+              "minHeight": 200,
+              "placeholder": " // Return an object with your result\nreturn {\n  message: \"Web request response\",\n  data: $vars.httpRequest1.output\n                  };"
+            },
+            "label": "Code",
+            "description": "JavaScript expression that returns a result object"
+          }
+        ]
+      }
+    ]
+  }
+}
+```

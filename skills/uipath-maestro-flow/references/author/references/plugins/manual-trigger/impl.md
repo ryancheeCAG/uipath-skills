@@ -50,4 +50,71 @@ To switch a flow from manual to scheduled start, use the Edit/Write recipe [Repl
 | Missing `entryPointId` | Trigger instance has no `inputs.entryPointId` | Add a stable UUID at `inputs.entryPointId` |
 | Trigger not first | Manual trigger wired downstream of another node | The trigger must be the topology's first node |
 
-<!-- PHASE 1: append `## Definition — core.trigger.manual v1.0 (copy verbatim)` section here -->
+## Definition — `core.trigger.manual` v1.0 (copy verbatim)
+
+This is the copy-verbatim registry definition for `definitions[]` — distinct from the example `inputs` snippets above, which you adapt. Copy the entire fenced object exactly; do not edit, trim, elide, or merge it with the snippets. Set the node instance `typeVersion` to the `version` shown here.
+
+> Captured from uip 1.2.0 · node version 1.0 · re-capture on CLI upgrade (see [the staleness fallback](../../../../shared/file-format.md#stale-inlined-definition)).
+
+```json
+{
+  "nodeType": "core.trigger.manual",
+  "version": "1.0",
+  "category": "trigger",
+  "description": "Start workflow manually",
+  "tags": [
+    "trigger",
+    "start",
+    "manual"
+  ],
+  "sortOrder": 40,
+  "display": {
+    "label": "Manual trigger",
+    "icon": "play",
+    "shape": "circle"
+  },
+  "handleConfiguration": [
+    {
+      "position": "right",
+      "handles": [
+        {
+          "id": "output",
+          "type": "source",
+          "handleType": "output",
+          "showButton": true,
+          "constraints": {
+            "forbiddenTargetCategories": [
+              "trigger"
+            ]
+          }
+        }
+      ],
+      "visible": true
+    }
+  ],
+  "model": {
+    "type": "bpmn:StartEvent",
+    "entryPointId": true
+  },
+  "outputDefinition": {
+    "output": {
+      "type": "object",
+      "description": "Data passed when manually triggering the workflow.",
+      "source": "null",
+      "var": "output"
+    }
+  },
+  "toolbarExtensions": {
+    "design": {
+      "actions": [
+        {
+          "id": "change-trigger-type",
+          "icon": "square-mouse-pointer",
+          "label": "Change trigger type"
+        }
+      ]
+    }
+  }
+}
+```
+

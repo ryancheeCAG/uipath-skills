@@ -43,3 +43,51 @@ The Decision node checks `$vars.httpCall.error`, routes to a Script that logs th
 | --- | --- | --- |
 | Terminate has outgoing edges | Wired an edge from Terminate to another node | Remove — Terminate has no output ports |
 | Workflow outputs missing | Expected outputs but hit Terminate | Terminate does not produce outputs — use End for paths that need output mapping |
+
+## Definition — `core.logic.terminate` v1.0 (copy verbatim)
+
+This is the copy-verbatim registry definition for `definitions[]` — distinct from the example `inputs` snippets above, which you adapt. Copy the entire fenced object exactly; do not edit, trim, elide, or merge it with the snippets. Set the node instance `typeVersion` to the `version` shown here.
+
+> Captured from uip 1.2.0 · node version 1.0 · re-capture on CLI upgrade (see [the staleness fallback](../../../../shared/file-format.md#stale-inlined-definition)).
+
+```json
+{
+  "nodeType": "core.logic.terminate",
+  "version": "1.0",
+  "category": "control-flow",
+  "description": "Stop the entire workflow immediately",
+  "tags": [
+    "control-flow",
+    "end",
+    "stop",
+    "terminate"
+  ],
+  "sortOrder": 20,
+  "display": {
+    "label": "Terminate",
+    "icon": "circle-x",
+    "shape": "circle"
+  },
+  "handleConfiguration": [
+    {
+      "position": "left",
+      "handles": [
+        {
+          "id": "input",
+          "type": "target",
+          "handleType": "input"
+        }
+      ]
+    }
+  ],
+  "model": {
+    "type": "bpmn:EndEvent",
+    "eventDefinition": "bpmn:TerminateEventDefinition"
+  },
+  "runtimeConstraints": {
+    "exclude": [
+      "api-function"
+    ]
+  }
+}
+```
