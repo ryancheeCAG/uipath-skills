@@ -256,6 +256,10 @@ for (const widget of planWidgets) {
     DELTA_TEXT: widget.deltaText ?? '',
     SERIES: widget.series ?? '[{key:"value",color:"hsl(var(--chart-1))"}]',
     PIVOT_EXPRESSION: widget.pivotExpression ?? 'rawData',
+    SDK_IMPORT: widget.sdkImport ?? '',
+    SDK_SERVICE: widget.sdkService ?? '',
+    SDK_CALL: widget.sdkCall ?? '',
+    SDK_RESULT_TYPE: widget.sdkResultType ?? '{ items?: Array<Record<string, unknown>> }',
   };
 
   // Generate widget file from template
@@ -403,6 +407,10 @@ process.exit(0);  // exit before server's detached process can throw
  *       "deltaText":     string   — text shown in DeltaBadge
  *       "series":        string   — (multi-line-chart) series array literal
  *       "pivotExpression": string — (multi-line-chart) expression pivoting flat array to series map
+ *       "sdkImport":     string   — (sdk-* templates) npm subpath, e.g. "@uipath/uipath-typescript/jobs"
+ *       "sdkService":    string   — (sdk-* templates) class name, e.g. "Jobs"
+ *       "sdkCall":       string   — (sdk-* templates) method call expression, e.g. "getAll({ state: 'Running' })"
+ *       "sdkResultType": string   — (sdk-* templates) TypeScript type literal, e.g. "{ items?: Array<{ state: string }> }"
  *     }
  *   ],
  *
