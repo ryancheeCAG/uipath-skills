@@ -34,7 +34,6 @@
 
 import { readFileSync, writeFileSync, copyFileSync, mkdirSync, readdirSync, existsSync, renameSync } from 'fs';
 import { join, dirname, resolve } from 'path';
-import { homedir } from 'os';
 import { fileURLToPath } from 'url';
 import { execSync, spawn } from 'child_process';
 
@@ -165,7 +164,7 @@ const {
   cloudUrl,
   apiUrl,
   tenantId,
-  pat: patFromPlan,            // "FROM_AUTH" sentinel or empty → read from .auth file
+  clientId = '',               // external OAuth app client ID
   files = {},                  // { 'relative/path': 'file content' } — agent-authored files
   widgets: planWidgets = [],   // widget config array — script generates TypeScript via templates
   appTsxImports,
@@ -174,20 +173,6 @@ const {
 
 if (!projectDir) fail('plan.projectDir is required');
 if (!routingName) fail('plan.routingName is required');
-
-// PAT — read from ~/.uipath/.auth so plan.json never contains credentials.
-// Agent writes "pat": "FROM_AUTH" (sentinel) or omits the field.
-// Script resolves it here — security classifier never sees PAT in plan.json.
-function readPatFromAuth() {
-  try {
-    const content = readFileSync(join(homedir(), '.uipath', '.auth'), 'utf8');
-    const m = content.match(/^UIPATH_ACCESS_TOKEN=(.+)/m);
-    if (m) return m[1].trim();
-    const parsed = JSON.parse(content);
-    return parsed.UIPATH_ACCESS_TOKEN || parsed.access_token || '';
-  } catch { return ''; }
-}
-const pat = (!patFromPlan || patFromPlan === 'FROM_AUTH') ? readPatFromAuth() : patFromPlan;
 
 const P = resolve(projectDir);
 
@@ -210,8 +195,16 @@ writeAtomic(join(P, '.env.local'), [
   `VITE_UIPATH_ORG_NAME=${orgName}`,
   `VITE_UIPATH_TENANT_NAME=${tenantName}`,
   `VITE_INSIGHTS_TENANT_ID=${tenantId}`,
-  `VITE_UIPATH_PAT=${pat}`,
+  `VITE_UIPATH_CLIENT_ID=${clientId}`,
 ].join('\n'));
+
+// Update uipath.json with clientId from plan
+const uipathJsonPath = join(P, 'uipath.json');
+if (existsSync(uipathJsonPath) && clientId) {
+  const uj = JSON.parse(readFileSync(uipathJsonPath, 'utf8'));
+  uj.clientId = clientId;
+  writeAtomic(uipathJsonPath, JSON.stringify(uj, null, 2));
+}
 
 // Step 3 — npm ci (skip if pre-warm already completed)
 const lockSignal = join(P, 'node_modules', '.package-lock.json');
@@ -388,7 +381,7 @@ process.exit(0);  // exit before server's detached process can throw
  *   "cloudUrl":      string  — from uip login (Data.BaseUrl)
  *   "apiUrl":        string  — derived ("alpha" → https://alpha.api.uipath.com etc.)
  *   "tenantId":      string  — UUID from ~/.uipath/.auth UIPATH_TENANT_ID
- *   "pat":           string  — from ~/.uipath/.auth UIPATH_ACCESS_TOKEN
+ *   "clientId":      string  — external OAuth app client ID (from uip admin external-apps create)
  *
  *   "widgets": [            — PREFERRED: agent provides config, script generates TypeScript
  *     {
