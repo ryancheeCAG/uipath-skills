@@ -117,26 +117,19 @@ a clear explanation.
 - "Add X" → derive the right data source internally (never mention it), append with plain description, re-ask
 - Rejection without edit → ask: "What would you like to change?"
 - Never re-show the full plan after partial edits — show diffs only
+- **Client ID question must be answered before Phase 6.** If the user approves the widget list but does not answer the client ID question, re-ask specifically: "One more thing — do you have an existing non-confidential external app Client ID, or should I create one?" Do not proceed to Phase 6 until both the plan and the client ID question are answered.
 
 ## Standard Time Constants
-**Both `startTime` AND `endTime` are required for all Insights API calls — omitting `endTime` causes 500 errors.**
 
-Use these constants — do not compute date arithmetic inline:
-```typescript
-const NOW             = new Date().toISOString()                            // always required as endTime
-const ONE_DAY_AGO     = new Date(Date.now() -    86_400_000).toISOString() // 24 hours
-const SEVEN_DAYS_AGO  = new Date(Date.now() -   604_800_000).toISOString() // 7 days
-const THIRTY_DAYS_AGO = new Date(Date.now() - 2_592_000_000).toISOString() // 30 days
-const NINETY_DAYS_AGO = new Date(Date.now() - 7_776_000_000).toISOString() // 90 days
-```
+See canonical definitions in `sdk-capabilities.md` (Standard Time Constants section).
 
-Every `useInsights` call must pass both:
-```typescript
-useInsights('agents.getErrors', { startTime: SEVEN_DAYS_AGO, endTime: NOW })
-```
+`build-dashboard.mjs` injects these automatically into every generated widget file.
+Use `SEVEN_DAYS_AGO`, `NOW`, etc. directly in `dataHook` expressions without re-declaring them.
 
-In the plan, map time frames to natural language: ONE_DAY_AGO → "today" or "24h",
-SEVEN_DAYS_AGO → "last 7 days", THIRTY_DAYS_AGO → "last 30 days".
+**Both `startTime` AND `endTime` are required for all Insights calls.** Omitting `endTime` causes 500 errors.
+
+In the plan, map time frames to natural language: `ONE_DAY_AGO` → "today/24h",
+`SEVEN_DAYS_AGO` → "last 7 days", `THIRTY_DAYS_AGO` → "last 30 days".
 
 ## Four-Axis Metric Decomposition (internal only — never shown to user)
 For each metric, derive internally and use to build the description:
