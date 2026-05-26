@@ -145,6 +145,8 @@ jobs:
           BEDROCK_MODEL:            ${{ secrets.BEDROCK_MODEL }}
           ANTHROPIC_API_KEY:        ${{ secrets.ANTHROPIC_API_KEY }}
           TRACES_SMOKE_PROCESS_KEY: ${{ secrets.TRACES_SMOKE_PROCESS_KEY }}
+          E2E_PROCESS_KEY:          ${{ secrets.E2E_PROCESS_KEY }}
+          E2E_LONG_PROCESS_KEY:     ${{ secrets.E2E_LONG_PROCESS_KEY }}
           TASK_GLOBS:               ${{ steps.globs.outputs.globs }}
           TASK_COUNT:               ${{ steps.globs.outputs.count }}
         working-directory: tests
