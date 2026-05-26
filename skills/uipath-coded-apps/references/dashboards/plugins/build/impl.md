@@ -54,6 +54,10 @@ No ordering violations, no cp -r on Windows, no heredoc failures.
    Their APIs are fully documented in this file.
 5. **Use build-dashboard.mjs for all file writes.** Never use Write or Edit tools for widget
    files — put all generated content in plan.json and let the script write it.
+6. **Never invent component imports.** Only import what's documented in the "allowed imports"
+   section of Phase 6 Step 1. `@/components/AreaChart`, `@/components/BarChart`,
+   `@/components/KpiCard`, `@/components/ui/chart` — NONE of these exist in the scaffold.
+7. **View files never contain charts.** Detail views = `DetailViewShell` + `RecordsTable` only.
 
 ---
 
@@ -188,6 +192,64 @@ Using Widget Recipes from insights-catalog.md, derive the full TypeScript source
 - Dashboard layout (`src/dashboard/Dashboard.tsx`)
 - Widget exports (`src/dashboard/widgets/index.ts`)
 - App.tsx import lines and route JSX
+
+#### Widget files — allowed imports
+
+```typescript
+// ✅ These exist in the scaffold:
+import React from 'react'
+import { useNavigate } from 'react-router-dom'
+import { <IconName> } from 'lucide-react'                    // any lucide icon
+import { useInsights } from '@/hooks/useInsights'
+import { useAuth } from '@/hooks/useAuth'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { DeltaBadge, ViewAllLink, LoadingState, EmptyState } from '@/dashboard/chrome'
+import { fmtNumber, fmtPercent, fmtDuration } from '@/lib/format'
+// Recharts primitives (always import from 'recharts', not @/components):
+import { AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+         XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+
+// ❌ NEVER invent these — they DO NOT EXIST:
+// import { KpiCard } from '@/components/KpiCard'     ← doesn't exist
+// import { AreaChart } from '@/components/AreaChart'  ← doesn't exist
+// import { BarChart } from '@/components/BarChart'    ← doesn't exist
+// import { ChartContainer } from '@/components/ui/chart' ← not in scaffold
+```
+
+#### View files — ONLY these imports (no charts ever)
+
+Detail views show raw data tables, NOT charts. The pattern is always: DetailViewShell + RecordsTable.
+
+```typescript
+// ✅ View files can ONLY import:
+import React from 'react'
+import { DetailViewShell } from '@/dashboard/chrome/DetailViewShell'
+import { RecordsTable, type ColumnDef } from '@/dashboard/chrome/RecordsTable'
+import { useInsights } from '@/hooks/useInsights'
+import { useAuth } from '@/hooks/useAuth'
+import { LoadingState, EmptyState } from '@/dashboard/chrome'
+import { fmtNumber, fmtPercent, fmtDuration, fmtTimeAgo } from '@/lib/format'
+
+// ❌ View files NEVER import recharts or any chart component
+// ❌ View files NEVER import Card, AreaChart, BarChart, etc.
+```
+
+**View file canonical shape:**
+```tsx
+export function <Name>View() {
+  const { data, loading, error } = useInsights<ResponseType>('<endpoint>', { startTime, endTime: NOW })
+  const rows: Record<string, unknown>[] = <DATA_SELECTOR>
+  
+  if (loading) return <DetailViewShell title="<Title>" description="<Desc>"><LoadingState height="h-96" /></DetailViewShell>
+  if (error)   return <DetailViewShell title="<Title>" description="<Desc>"><EmptyState message={error.message} /></DetailViewShell>
+  
+  return (
+    <DetailViewShell title="<Title>" description="All <entities> from <time range>.">
+      <RecordsTable rows={rows} columns={COLUMNS} defaultSortKey="<key>" />
+    </DetailViewShell>
+  )
+}
+```
 
 ### Step 2: Write plan.json (1 Write)
 
