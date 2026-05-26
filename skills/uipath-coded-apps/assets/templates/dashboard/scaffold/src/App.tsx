@@ -14,7 +14,18 @@ import { LoadingState } from './dashboard/chrome/LoadingState'
 function AppContent() {
   const { isAuthenticated, isLoading, error, login } = useAuth()
 
-  if (isLoading) {
+  const didTriggerLogin = React.useRef(false)
+
+  React.useEffect(() => {
+    if (isLoading || isAuthenticated || error) return
+    // If the OAuth callback is being processed (code= in URL), useAuth handles it — don't re-redirect
+    const inCallback = window.location.search.includes('code=') || window.location.search.includes('state=')
+    if (inCallback || didTriggerLogin.current) return
+    didTriggerLogin.current = true
+    void login()
+  }, [isLoading, isAuthenticated, error, login])
+
+  if (isLoading || (!isAuthenticated && !error)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <LoadingState height="h-20" />
@@ -28,35 +39,6 @@ function AppContent() {
         <div className="text-center space-y-2">
           <p className="text-destructive font-medium">Authentication error</p>
           <p className="text-sm text-muted-foreground">{error}</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!isAuthenticated) {
-    const platformHosted =
-      document.querySelector('meta[name="uipath:platform-hosted"]')?.getAttribute('content') === 'true'
-
-    if (platformHosted) {
-      return (
-        <div className="min-h-screen bg-background flex items-center justify-center">
-          <p className="text-sm text-muted-foreground">
-            {error || 'Waiting for authentication from host…'}
-          </p>
-        </div>
-      )
-    }
-
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
-          {error && <p className="text-destructive text-sm">{error}</p>}
-          <button
-            onClick={() => void login()}
-            className="rounded-md bg-primary px-6 py-2 text-primary-foreground text-sm font-medium hover:opacity-90"
-          >
-            Sign in with UiPath
-          </button>
         </div>
       </div>
     )

@@ -61,6 +61,7 @@ No ordering violations, no cp -r on Windows, no heredoc failures.
    The script generates TypeScript from pre-tested templates — no invented imports, no wrong props.
 7. **View files never contain charts.** The script generates views automatically as
    `DetailViewShell` + `RecordsTable` — agent never writes view TypeScript.
+8. **Scaffold overwrites on every build.** `build-dashboard.mjs` copies the scaffold fresh into the project dir on every run. Any file the user manually edited in the project dir (e.g. `src/hooks/useAuth.ts`) will be silently overwritten. Fixes to scaffold files must be applied to `assets/templates/dashboard/scaffold/` — not to the generated project. If a user reports a fix they made locally, apply it to the scaffold source.
 
 ---
 
@@ -110,15 +111,16 @@ block — do not send the message until all four paths are listed:
 ## Phase 2 — Preflight (1 Bash)
 
 ```bash
-# uip login status — output written to file to avoid stdin-piping issues on Windows
-uip login status --output json > /tmp/uip-status.json
-STATUS=$(cat /tmp/uip-status.json)
+# uip login status — write to temp file (avoids stdin-piping issues; os.tmpdir() works on Windows)
+TMPFILE=$(node -e "process.stdout.write(require('path').join(require('os').tmpdir(),'uip-status.json'))")
+uip login status --output json > "$TMPFILE"
+STATUS=$(cat "$TMPFILE")
 
 # Extract fields via process.argv — no stdin pipe needed (works on all platforms)
 ORG=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).Data.Organization||'')" "$STATUS")
 TENANT=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).Data.Tenant||'')" "$STATUS")
 DATA_BASE_URL=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).Data.BaseUrl||'')" "$STATUS")
-rm -f /tmp/uip-status.json
+rm -f "$TMPFILE"
 
 # Read PAT and TENANT_ID from .auth file in one Node call (reliable on Windows)
 AUTH_VALS=$(node -e "
@@ -216,12 +218,10 @@ else
   PORTAL_REDIRECT="https://cloud.uipath.com/${ORG}/portal_"
 fi
 
-uip admin external-apps create \
-  --name "UiPath Dashboard - ${DASHBOARD_NAME}" \
-  --type NonConfidential \
-  --redirect-uri "http://localhost:5173" \
-  --redirect-uri "${PORTAL_REDIRECT}" \
-  --scope "OR.Assets OR.Assets.Read OR.Jobs OR.Jobs.Write OR.Folders OR.Folders.Read OR.Buckets OR.Buckets.Read OR.Execution OR.Execution.Read OR.Tasks OR.Tasks.Write OR.Queues OR.Queues.Read OR.Users OR.Users.Read DataFabric.Schema.Read DataFabric.Data.Read DataFabric.Data.Write PIMS Insights.RealTimeData ConversationalAgents Traces.Api openid profile" \
+uip admin external-apps create "UiPath Dashboard - ${DASHBOARD_NAME}" \
+  --non-confidential \
+  --redirect-uri "http://localhost:5173,${PORTAL_REDIRECT}" \
+  --user-scope "OR.Assets,OR.Assets.Read,OR.Jobs,OR.Jobs.Write,OR.Folders,OR.Folders.Read,OR.Buckets,OR.Buckets.Read,OR.Execution,OR.Execution.Read,OR.Tasks,OR.Tasks.Write,OR.Queues,OR.Queues.Read,OR.Users,OR.Users.Read,Insights.RealTimeData" \
   --output json > "${TEMP_DIR}/uip-extapp.json"
 
 CLIENT_ID=$(node -e "

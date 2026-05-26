@@ -15,30 +15,30 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-const SCOPES = 'OR.Assets OR.Assets.Read OR.Jobs OR.Jobs.Write OR.Folders OR.Folders.Read OR.Buckets OR.Buckets.Read OR.Execution OR.Execution.Read OR.Tasks OR.Tasks.Write OR.Queues OR.Queues.Read OR.Users OR.Users.Read DataFabric.Schema.Read DataFabric.Data.Read DataFabric.Data.Write PIMS Insights.RealTimeData ConversationalAgents Traces.Api openid profile'
+const SCOPES = 'OR.Assets OR.Assets.Read OR.Jobs OR.Jobs.Write OR.Folders OR.Folders.Read OR.Buckets OR.Buckets.Read OR.Execution OR.Execution.Read OR.Tasks OR.Tasks.Write OR.Queues OR.Queues.Read OR.Users OR.Users.Read Insights.RealTimeData'
 
 function resolveConfig(): UiPathSDKConfig {
-  const platformHosted =
-    document.querySelector('meta[name="uipath:platform-hosted"]')?.getAttribute('content') === 'true'
-
   return {
     baseUrl:     import.meta.env.VITE_UIPATH_BASE_URL as string,
     orgName:     import.meta.env.VITE_UIPATH_ORG_NAME as string,
     tenantName:  import.meta.env.VITE_UIPATH_TENANT_NAME as string,
     clientId:    import.meta.env.VITE_UIPATH_CLIENT_ID as string,
-    scopes:      SCOPES.split(' '),
+    scope:       SCOPES,
     redirectUri: `${window.location.origin}${window.location.pathname}`,
-    platformHosted,
   }
+}
+
+function isPlatformHosted(): boolean {
+  return document.querySelector('meta[name="uipath:platform-hosted"]')?.getAttribute('content') === 'true'
 }
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [{ config, sdk }] = useState(() => {
+  const [{ sdk }] = useState(() => {
     const config = resolveConfig()
-    return { config, sdk: new UiPath(config) }
+    return { sdk: new UiPath(config) }
   })
   const didInit = useRef(false)
 
@@ -50,10 +50,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsLoading(true)
       setError(null)
       try {
-        if (config.platformHosted) {
-          // FP surface mode: wait for UIP.init from host (no sign-in button).
-          // EmbeddedTokenManager sets isAuthenticated() once UIP.init arrives.
-          // Timeout after 9 seconds (matches SDK's requestHostToken timeout).
+        if (isPlatformHosted()) {
+          // Platform-hosted: wait for token injected by host
           await new Promise<void>((resolve, reject) => {
             let poll: ReturnType<typeof setInterval>
             const timer = setTimeout(() => {
@@ -70,7 +68,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           })
           setIsAuthenticated(true)
         } else {
-          // Local preview mode: OAuth PKCE
+          // Local preview: OAuth PKCE
           if (sdk.isInOAuthCallback()) {
             await sdk.completeOAuth()
             window.history.replaceState({}, document.title, window.location.pathname)
@@ -87,7 +85,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     void init()
     return () => {
       didInit.current = false
-      sdk.destroy()
+      sdk.logout()
     }
   }, [sdk])
 
@@ -98,7 +96,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [sdk])
 
   const login = useCallback(async () => {
-    await sdk.login()
+    await sdk.initialize()
   }, [sdk])
 
   const value: AuthContextType = {
