@@ -37,6 +37,27 @@ Say **"go ahead"** to build, or try:
 • _"replace the table with a bar chart"_
 ```
 
+## External Client Question (append to plan, before approval)
+
+After the plan example, append this block verbatim before asking for approval:
+
+---
+
+**One more thing before I build:**
+
+Your dashboard needs an OAuth app to let users sign in securely.
+
+Do you have an existing non-confidential external app in UiPath?
+- **Yes** — reply with the Client ID and I'll use it
+- **No** — reply "create one" and I'll create one now before building (adds ~30 seconds)
+
+---
+
+This is part of the approval gate interaction. After the user responds to the plan edits AND provides the client ID decision, the agent proceeds. Both responses count as a single "approval."
+
+- If user replies with a Client ID → extract it and proceed to Phase 6 with `clientId` set
+- If user replies "create one" → proceed to Phase 5.5 (external client creation) before Phase 6
+
 **Rules for widget descriptions:**
 - Focus on the business insight, not the data source
 - Include the time range in the name when it's not "live"

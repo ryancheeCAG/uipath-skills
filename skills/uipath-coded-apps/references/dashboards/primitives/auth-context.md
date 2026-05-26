@@ -36,7 +36,7 @@ DATA_BASE_URL=$(echo "$STATUS" | node -e "process.stdout.write(JSON.parse(requir
 
 The `.auth` file is env-file format (`KEY=VALUE` lines, not JSON):
 ```bash
-# Read access token (used as VITE_UIPATH_PAT in .env.local)
+# Read access token (still needed for tenantId context; no longer written to .env.local)
 PAT=$(grep -m1 '^UIPATH_ACCESS_TOKEN=' ~/.uipath/.auth | cut -d'=' -f2-)
 
 # Read tenant UUID (used as VITE_INSIGHTS_TENANT_ID)
@@ -75,5 +75,5 @@ fi
 
 ## Error handling
 - `Data.Status != "Logged in"` → tell user to run `uip login`, stop
-- `PAT` is empty after both parse attempts → tell user to re-run `uip login`, stop
+- `PAT` is empty after both parse attempts → warn user (tenantId may still be available); PAT is no longer required for dashboard auth
 - `TENANT_ID` is empty → Insights calls will 400 but SDK calls still work; warn user

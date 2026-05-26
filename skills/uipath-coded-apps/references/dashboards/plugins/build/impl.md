@@ -17,8 +17,9 @@ Phase 3: metric derivation        ∙ write .env.local
 Phase 3.5: pre-warm (bg)          ∙ write all widget + view files
 Phase 4: show plan                ∙ update App.tsx routes
 Phase 5: approval gate            ∙ tsc --noEmit
-Phase 6: write plan.json          ∙ state.json
-         run build-dashboard.mjs  ∙ start dev server
+Phase 5.5: external client (opt)  ∙ state.json
+Phase 6: write plan.json          ∙ start dev server
+         run build-dashboard.mjs
 Phase 7: show summary from result
 ```
 
@@ -36,6 +37,7 @@ No ordering violations, no cp -r on Windows, no heredoc failures.
 | 2 Preflight | 1 Bash | `uip login status` + read .auth |
 | 3–5 Derive + Plan + Approve | 0 | In-context |
 | 3.5 Pre-warm | 1 Bash | background npm ci (Node.js copy) |
+| 5.5 External client (opt) | 0–1 Bash | `uip admin external-apps create` (only if user chooses "create one") |
 | 6 Build | 1 Write + 1 Bash | write plan.json → run build-dashboard.mjs |
 | 7 Summary | 0 | parse script output |
 | **Total** | **≤ 8** | |
@@ -187,11 +189,51 @@ Render the plan using build-plan.md format. Plain English, no API names.
 
 **STOP if insights-catalog.md is not in context — read it now before showing the plan.**
 
+**After the plan:** Append the External Client Question block from build-plan.md.
+
 ---
 
 ## Phase 5 — Approval Gate (0 tool calls)
 
 HALT. Follow build-plan.md approval gate rules. Do not proceed until explicit approval.
+
+---
+
+## Phase 5.5 — External Client (only if user chooses "create one")
+
+Skip this phase if user provided an existing Client ID — use it directly in Phase 6.
+
+```bash
+# Uses variables set in Phase 2: $DATA_BASE_URL, $ORG. $DASHBOARD_NAME = user's dashboard name from initial prompt.
+TEMP_DIR=$(node -e "process.stdout.write(require('os').tmpdir())")
+
+# Derive portal redirect URL from environment
+if echo "$DATA_BASE_URL" | grep -q "alpha"; then
+  PORTAL_REDIRECT="https://alpha.uipath.com/${ORG}/portal_"
+elif echo "$DATA_BASE_URL" | grep -q "staging"; then
+  PORTAL_REDIRECT="https://staging.uipath.com/${ORG}/portal_"
+else
+  PORTAL_REDIRECT="https://cloud.uipath.com/${ORG}/portal_"
+fi
+
+uip admin external-apps create \
+  --name "UiPath Dashboard - ${DASHBOARD_NAME}" \
+  --type NonConfidential \
+  --redirect-uri "http://localhost:5173" \
+  --redirect-uri "${PORTAL_REDIRECT}" \
+  --scope "OR.Assets OR.Assets.Read OR.Jobs OR.Jobs.Write OR.Folders OR.Folders.Read OR.Buckets OR.Buckets.Read OR.Execution OR.Execution.Read OR.Tasks OR.Tasks.Write OR.Queues OR.Queues.Read OR.Users OR.Users.Read DataFabric.Schema.Read DataFabric.Data.Read DataFabric.Data.Write PIMS Insights.RealTimeData ConversationalAgents Traces.Api openid profile" \
+  --output json > "${TEMP_DIR}/uip-extapp.json"
+
+CLIENT_ID=$(node -e "
+  const d = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'));
+  process.stdout.write(d.ClientId || d.clientId || '');
+" "${TEMP_DIR}/uip-extapp.json")
+rm -f "${TEMP_DIR}/uip-extapp.json"
+
+echo "CLIENT_ID=${CLIENT_ID}"
+```
+
+If `CLIENT_ID` is empty after extraction → report error: "Could not create external app. Check that `uip admin external-apps create` is available."
 
 ---
 
@@ -233,7 +275,7 @@ pre-tested templates and applies substitutions. No TypeScript errors from agent-
   "cloudUrl": "<DATA_BASE_URL>",
   "apiUrl": "<API_BASE_URL>",
   "tenantId": "<TENANT_ID>",
-  "pat": "FROM_AUTH",  // sentinel — script reads PAT from ~/.uipath/.auth (never put token in plan.json)
+  "clientId": "<CLIENT_ID>",   // from Phase 5.5 or user-provided
 
   "widgets": [
     {
@@ -291,7 +333,7 @@ Write this to `<PROJECT_DIR>/plan.json` (it will be cleaned up by the script).
 ```bash
 node "${SKILL_BASE_DIR}/assets/scripts/build-dashboard.mjs" "${PROJECT_DIR}/plan.json"
 BUILD_RESULT=$?
-rm -f "${PROJECT_DIR}/plan.json"   # clean up — no PAT should sit on disk longer than needed
+rm -f "${PROJECT_DIR}/plan.json"   # clean up — plan.json is transient, remove after script completes
 ```
 
 The script handles everything: npm ci check, file writes, App.tsx update, tsc, state.json,
