@@ -1,4 +1,4 @@
-# Handoff Plan: Dashboard Auth Pivot — External Client (Non-Confidential OAuth)
+# Handoff Plan: Dashboard Auth Pivot — External Client + EmbeddedTokenManager
 
 **Date:** 2026-05-26  
 **Branch:** `feat/uipath-dashboards-skill`  
@@ -13,13 +13,147 @@
 
 The dashboard skill currently uses two auth strategies:
 - **Dev preview**: `VITE_UIPATH_PAT` — a session access token from `uip login`
-- **Production (FP surface)**: `ActionCenterTokenManager` — the FP host injects tokens via postMessage
+- **Production (FP surface)**: `ActionCenterTokenManager` — the FP host injects tokens via postMessage using the FP surface's own service-account token
 
-The FP surface approach has a **security issue**: when a dashboard is hosted on UiPath's First Party surfaces (the portal), the host passes its OWN token to the app. That token belongs to the FP surface's service account, not the logged-in user. This means dashboards would act as the FP surface identity rather than the user's identity — a privilege escalation vector.
+The FP surface approach has a **security issue**: the FP host was passing its OWN identity token to the embedded app. That token belongs to the FP surface's service account, not the logged-in user — privilege escalation.
 
-### The Fix
+### The Fix — Two-Mode Auth Model
 
-Switch to **non-confidential external client OAuth (PKCE)**. The dashboard app registers as an OAuth client with specific scopes, and each user authenticates themselves via the standard UiPath OAuth flow. No service tokens, no PAT in environment files.
+The new approach uses the TypeScript SDK's newly added **`EmbeddedTokenManager`** (commit `733dd149` in `uipath-typescript`) combined with a non-confidential external client:
+
+**Mode 1 — FP surface (deployed):** No sign-in button. The FP host sends a `UIP.init` postMessage with the user's own access token. The SDK's `EmbeddedTokenManager` catches this, pins the origin, and handles silent refresh via `UIP.refreshToken`/`UIP.tokenRefreshed`. Set `platformHosted: true` in SDK config.
+
+**Mode 2 — Local preview:** Explore silent auth first (user may already be authenticated in their browser). Fall back to sign-in button only if silent auth fails.
+
+---
+
+## New SDK: EmbeddedTokenManager Protocol (READ THIS CAREFULLY)
+
+Commit `733dd149` in `C:/Work/uipath-typescript` added:
+
+### Event Protocol
+```
+Host → App:  UIP.init             { content: { token: { accessToken, expiresAt } } }
+App → Host:  UIP.refreshToken     { content: { clientId, scope } }
+Host → App:  UIP.tokenRefreshed   { content: { token: { accessToken, expiresAt } } }
+```
+
+### SDK Activation
+```typescript
+// Activate by setting platformHosted: true in SDK config
+const sdk = new UiPath({
+  ...baseConfig,
+  platformHosted: true,   // ← activates EmbeddedTokenManager
+})
+```
+
+OR via HTML meta tag (auto-detected by the SDK):
+```html
+<meta name="uipath:platform-hosted" content="true" />
+```
+
+### How It Works
+1. `platformHosted: true` → SDK creates `EmbeddedTokenManager` instead of ActionCenterTokenManager
+2. Manager listens passively for `UIP.init` on `window`
+3. On `UIP.init` from a valid origin (`*.uipath.com` or `localhost`): pins origin, stores token
+4. On token expiry: posts `UIP.refreshToken` to host, awaits `UIP.tokenRefreshed`
+5. Origin validation is strict — only the first valid `UIP.init` is accepted (pinned)
+6. `sdk.destroy()` removes the listener when app unmounts
+
+### Origin Validation
+Valid origins accepted by `isValidHostOrigin()`:
+- `https://alpha.uipath.com`
+- `https://staging.uipath.com`
+- `https://cloud.uipath.com`
+- `localhost` (any port)
+
+This means local preview CAN receive `UIP.init` from the FP host if the dashboard is opened via a portal link (useful for testing).
+
+---
+
+## Two-Mode Auth in `useAuth.ts`
+
+```typescript
+function resolveConfig(): UiPathSDKConfig {
+  // Check if running inside a FP host via meta tag
+  const platformHosted =
+    document.querySelector('meta[name="uipath:platform-hosted"]')?.getAttribute('content') === 'true'
+
+  return {
+    baseUrl:     import.meta.env.VITE_UIPATH_BASE_URL as string,
+    orgName:     import.meta.env.VITE_UIPATH_ORG_NAME as string,
+    tenantName:  import.meta.env.VITE_UIPATH_TENANT_NAME as string,
+    clientId:    import.meta.env.VITE_UIPATH_CLIENT_ID as string,
+    scopes:      SCOPES.split(' '),
+    redirectUri: `${window.location.origin}${window.location.pathname}`,
+    platformHosted,
+  }
+}
+```
+
+**Init flow branching:**
+
+```typescript
+const init = async () => {
+  setIsLoading(true)
+  try {
+    if (config.platformHosted) {
+      // FP surface mode: wait for UIP.init from host (no sign-in button)
+      // EmbeddedTokenManager fires onTokenRefreshed when UIP.init arrives.
+      // SDK sets isAuthenticated() once the first token is received.
+      // Timeout after 8 seconds (same as SDK's requestHostToken timeout).
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('UIP.init timeout — host did not send token')), 9000)
+        const poll = setInterval(() => {
+          if (sdk.isAuthenticated()) { clearTimeout(timer); clearInterval(poll); resolve() }
+        }, 100)
+      })
+      setIsAuthenticated(true)
+    } else {
+      // Local preview mode
+      if (sdk.isInOAuthCallback()) {
+        await sdk.completeOAuth()
+        window.history.replaceState({}, document.title, window.location.pathname)
+      }
+      setIsAuthenticated(sdk.isAuthenticated())
+    }
+  } catch (err) {
+    setError(err instanceof UiPathError ? err.message : 'Authentication failed')
+  } finally {
+    setIsLoading(false)
+  }
+}
+```
+
+---
+
+## Silent Auth for Local Preview — Exploration Item
+
+The user asked: "If the user is already logged in to a UiPath org, can we perform silent auth in local preview?"
+
+### What to Test
+
+**Option A: `prompt=none` OAuth parameter**
+Many OAuth providers support `prompt=none` which returns immediately without user interaction if a valid session exists. If the UiPath identity server supports this, `sdk.login({ prompt: 'none' })` would silently authenticate users who already have an active browser session at `alpha.uipath.com`.
+
+```typescript
+// In local preview, try silent auth first
+try {
+  await sdk.login({ prompt: 'none' })
+  if (sdk.isAuthenticated()) return  // ← silent success
+} catch {
+  // Silent auth failed (no active session) → show sign-in button
+}
+```
+
+**Option B: Check `isAuthenticated()` before showing sign-in button**
+The SDK may cache the OAuth session. On app reload, `sdk.isAuthenticated()` might return `true` without a new login.
+
+**Option C: Keep PAT for dev-only mode**
+If silent auth doesn't work: add `VITE_UIPATH_PAT` back as an optional dev-only env var. When set, use it as `secret` (bypasses OAuth entirely for local work). Strip it from deployed builds via `failBuildIfPatSet` Vite plugin.
+
+### Decision Needed Before Implementing
+Test Option A first. If UiPath identity server supports `prompt=none`, silent auth is available. If not, decide between Option B (reload from cache) or Option C (PAT fallback for dev).
 
 ---
 
@@ -27,12 +161,14 @@ Switch to **non-confidential external client OAuth (PKCE)**. The dashboard app r
 
 | Component | Before | After |
 |---|---|---|
-| `useAuth.ts` | PAT secret OR ActionCenterTokenManager | OAuth PKCE with clientId + scopes |
+| `useAuth.ts` | PAT OR ActionCenterTokenManager | Two-mode: `platformHosted` (EmbeddedTokenManager) OR OAuth PKCE |
+| `index.html` | No meta tag | Add `<meta name="uipath:platform-hosted" content="true" />` when deploying to FP |
 | `uipath.json` | `{ "name": "..." }` | `{ "name": "...", "scope": "<all scopes>", "clientId": "<id>" }` |
-| `.env.local` | `VITE_UIPATH_PAT=...` | `VITE_UIPATH_CLIENT_ID=...` |
+| `.env.local` | `VITE_UIPATH_PAT=...` | `VITE_UIPATH_CLIENT_ID=...` (PAT removed) |
 | Build Phase 4 (Plan) | No mention of auth | Asks user for existing external client OR creates new one |
-| Build Phase 6 (Config) | Writes PAT to .env.local | Writes CLIENT_ID to .env.local; no PAT anywhere |
-| Deploy flow | No change needed | No change needed |
+| Build Phase 6 (Config) | Writes PAT to .env.local | Writes CLIENT_ID to .env.local |
+| App.tsx | No sign-in button | Show sign-in button ONLY in local mode when not authenticated |
+| Deploy flow | No change | Add meta tag to index.html before pack |
 
 ---
 
@@ -308,25 +444,78 @@ const login = useCallback(async () => {
 
 ### 5. `assets/templates/dashboard/scaffold/src/App.tsx`
 
-**No `sdkConfig` prop needed** (already correct from previous session).  
-**Add a "Sign in" button** since users now need to authenticate:
+**Two loading/auth states:**
+
 ```tsx
-if (!isAuthenticated) {
-  return (
-    <div className="flex h-screen items-center justify-center bg-background">
-      <div className="text-center space-y-4">
-        {error && <p className="text-destructive text-sm">{error}</p>}
-        <button
-          onClick={() => void login()}
-          className="rounded-md bg-primary px-6 py-2 text-primary-foreground text-sm font-medium hover:opacity-90"
-        >
-          Sign in with UiPath
-        </button>
+function AppContent() {
+  const { isAuthenticated, isLoading, login, error } = useAuth()
+
+  if (isLoading) {
+    // Both modes: show loading while waiting for auth
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-muted-foreground text-sm">Connecting…</div>
       </div>
-    </div>
-  )
+    )
+  }
+
+  if (!isAuthenticated) {
+    // Check if running in FP surface (platformHosted)
+    const platformHosted =
+      document.querySelector('meta[name="uipath:platform-hosted"]')?.getAttribute('content') === 'true'
+
+    if (platformHosted) {
+      // FP mode: no sign-in button — host should have sent UIP.init
+      // If we reach here, UIP.init timed out (9s)
+      return (
+        <div className="flex h-screen items-center justify-center bg-background">
+          <p className="text-muted-foreground text-sm">
+            {error || 'Waiting for authentication from host…'}
+          </p>
+        </div>
+      )
+    }
+
+    // Local preview: show sign-in button
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          {error && <p className="text-destructive text-sm">{error}</p>}
+          <button
+            onClick={() => void login()}
+            className="rounded-md bg-primary px-6 py-2 text-primary-foreground text-sm font-medium hover:opacity-90"
+          >
+            Sign in with UiPath
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return <DashboardShell />
 }
 ```
+
+**Also add `sdk.destroy()` cleanup in `useAuth.ts`:**
+```typescript
+useEffect(() => {
+  // ... init logic ...
+  return () => {
+    sdk.destroy()  // removes EmbeddedTokenManager window listener on unmount
+  }
+}, [sdk])
+```
+
+### 5b. `assets/templates/dashboard/scaffold/index.html`
+
+**For FP deployed builds**, the meta tag must be present at deploy time. The `build-dashboard.mjs` script injects it when building for FP surface:
+
+```html
+<!-- Add only for FP surface deploys, not local dev builds -->
+<meta name="uipath:platform-hosted" content="true" />
+```
+
+This is written to `dist/index.html` as part of Step 5 (Production build) in `deploy/impl.md`. Do NOT put it in the template — it should only appear in FP-deployed builds, not local dev.
 
 ### 6. `assets/scripts/build-dashboard.mjs`
 
