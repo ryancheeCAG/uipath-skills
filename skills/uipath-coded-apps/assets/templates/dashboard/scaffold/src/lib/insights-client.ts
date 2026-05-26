@@ -31,9 +31,9 @@ export class InsightsClient {
     if (res.status === 401) throw new Error('Insights auth expired — sign out and sign in again')
     if (res.status === 403) throw new Error('Insights access denied — check tenant permissions')
     if (!res.ok) {
-      let body = ''
-      try { body = await res.text() } catch { /* ignore */ }
-      throw new Error(`Insights ${res.status} error${body ? `: ${body.slice(0, 120)}` : ''}`)
+      let errorBody = ''
+      try { errorBody = await res.text() } catch { /* ignore */ }
+      throw new Error(`Insights ${res.status} error${errorBody ? `: ${errorBody.slice(0, 120)}` : ''}`)
     }
     return res.json() as Promise<T>
   }
