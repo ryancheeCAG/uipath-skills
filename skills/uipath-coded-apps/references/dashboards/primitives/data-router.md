@@ -58,6 +58,40 @@ import { Jobs } from '@uipath/uipath-typescript/jobs';
 // Never root imports — always subpath exports
 ```
 
+## Fallback — When No Route Matches
+
+If the user's metric doesn't match any entry in the Routing Table above:
+
+### Step 1 — Find the closest proxy
+
+| User asks for | Best available proxy | How to note it |
+|---|---|---|
+| "productivity" / "throughput" | `agents.getConsumptionTimeline` (activity proxy) | "I'll show invocation activity as a proxy for productivity" |
+| "error rate %" | `agents.getErrors` (count, not %) + `agents.getSummaryV2` (total) | "I'll show daily error counts — divide by total runs for %" |
+| "memory usage per agent" | Not available | Tell user, suggest `traceview.getMemoryTimeline` as fleet-level alternative |
+| "compare this month vs last month" | `agents.getSummaryV2` with `startTime`/`endTime` twice | Show two KPI cards with different time windows |
+| "real-time agent status" | `agents.getAgents` (last run + healthScore) | "I'll show last-known status — updates when agents run" |
+| "SLA compliance" | `agents.getSummaryV2.successRate` | "I'll show success rate as a proxy for SLA compliance" |
+| Anything with "cost" or "spend" | `agents.getConsumption` (AGU/PLTU) | "UiPath uses AGU/PLTU units — I'll show those instead of currency" |
+
+### Step 2 — NEVER do these
+
+- **Never generate a widget for a non-existent endpoint.** If no route matches and no proxy fits, the widget must be omitted from the plan.
+- **Never guess a field name** that isn't in the Key response fields column of insights-catalog.md.
+- **Never use `traceview.*` for agent-level metrics** — traceview is trace/session level, not agent level.
+
+### Step 3 — State the approximation in the plan
+
+When using a proxy, say so explicitly in the plan description (see build-plan.md graceful degradation wording):
+
+```
+• Agent Productivity (30 days) — I'll show invocation volume as a
+  proxy for productivity; a dedicated productivity metric isn't
+  available in the analytics API
+```
+
+Never silently substitute — the user needs to be able to correct this in the approval step.
+
 ## Insights Hook Pattern
 ```typescript
 import { useInsights } from '@/hooks/useInsights';

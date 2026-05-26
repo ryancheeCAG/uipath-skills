@@ -337,7 +337,129 @@ const items = [
 
 ---
 
-**No matching recipe?** Derive from scratch using the Routing Table in `data-router.md` and the Key response fields in the tables above.
+---
+
+### Recipe 17 — Queue Depth (SDK)
+**Triggers:** "queue depth", "active queue items", "queued transactions", "how full is my queue"
+**Template:** `kpi-card.tsx`
+**Source:** SDK `QueueItems.getAll()` — operational state, not Insights analytics
+```tsx
+import { useAuth } from '@/hooks/useAuth'
+import { QueueItems } from '@uipath/uipath-typescript/queues'
+import { useState, useEffect } from 'react'
+
+export function QueueDepthKpi() {
+  const navigate = useNavigate()
+  const { sdk, isAuthenticated } = useAuth()
+  const [count, setCount] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    const svc = new QueueItems(sdk as never)
+    svc.getAll({ status: 'New,InProgress' })
+      .then(r => setCount(r.items?.length ?? 0))
+      .catch(e => setError(e instanceof Error ? e : new Error(String(e))))
+      .finally(() => setLoading(false))
+  }, [sdk, isAuthenticated])
+
+  // ... card anatomy: title "Active Queue Items", delta neutral
+}
+// VALUE: String(count ?? '—')
+// DELTA_DIR: "neutral"   DETAIL_ROUTE: "/queue-depth"
+```
+
+---
+
+### Recipe 18 — Running Jobs Count (SDK)
+**Triggers:** "running jobs", "active jobs", "jobs in progress", "how many jobs are running"
+**Template:** `kpi-card.tsx`
+**Source:** SDK `Jobs.getAll()` — live operational state
+```tsx
+import { Jobs } from '@uipath/uipath-typescript/jobs'
+
+// Inside useEffect:
+const svc = new Jobs(sdk as never)
+svc.getAll({ state: 'Running,Pending' })
+  .then(r => setCount(r.items?.length ?? 0))
+  ...
+
+// VALUE: String(count ?? '—')
+// DELTA_DIR: "neutral"   DETAIL_ROUTE: "/running-jobs"
+```
+
+---
+
+### Recipe 19 — Pending Action Center Tasks (SDK)
+**Triggers:** "pending tasks", "action center backlog", "tasks waiting for review", "human tasks"
+**Template:** `kpi-card.tsx`
+**Source:** SDK `Tasks.getAll()` — Action Center tasks awaiting human completion
+```tsx
+import { Tasks } from '@uipath/uipath-typescript/tasks'
+
+// Inside useEffect:
+const svc = new Tasks(sdk as never)
+svc.getAll({ status: 'Pending,Unassigned' })
+  .then(r => setCount(r.items?.length ?? 0))
+  ...
+
+// VALUE: String(count ?? '—')
+// DELTA_DIR: "neutral"   DETAIL_ROUTE: "/pending-tasks"
+```
+
+---
+
+### Recipe 20 — Job Success Rate — Today (SDK)
+**Triggers:** "job success rate today", "how are jobs doing", "success vs failure today"
+**Template:** `kpi-card.tsx`
+**Source:** SDK `Jobs.getAll()` — computes success % from state counts
+```tsx
+import { Jobs } from '@uipath/uipath-typescript/jobs'
+
+// Inside useEffect — fetch today's completed jobs and compute rate:
+const svc = new Jobs(sdk as never)
+const since = new Date(Date.now() - 86_400_000).toISOString()
+svc.getAll({ startTime: since, states: 'Successful,Faulted,Stopped' })
+  .then(r => {
+    const items = r.items ?? []
+    const total = items.length
+    const ok = items.filter(j => j.state === 'Successful').length
+    setValue(total > 0 ? `${((ok / total) * 100).toFixed(1)}%` : '—')
+  })
+  ...
+
+// VALUE_EXPRESSION: computed above as `value` state
+// DELTA_DIR: "up-good"   DETAIL_ROUTE: "/job-success-rate"
+```
+
+---
+
+### Recipe 21 — Process / Automation Inventory (SDK)
+**Triggers:** "what processes are deployed", "automation inventory", "list my processes", "what automations do I have"
+**Template:** `data-table.tsx`
+**Source:** SDK `Processes.getAll()` — shows deployed automations
+```tsx
+import { Processes } from '@uipath/uipath-typescript/processes'
+
+// Inside useEffect:
+const svc = new Processes(sdk as never)
+svc.getAll()
+  .then(r => setRows(r.items ?? []))
+  ...
+
+// DATA_SELECTOR: rows (already an array from above)
+// COLUMNS: [{ key: 'name', label: 'Process' }, { key: 'description', label: 'Description' }, { key: 'version', label: 'Version' }]
+// DETAIL_ROUTE: "/process-inventory"
+```
+
+> **SDK widget note:** All 5 SDK recipes use `useAuth().sdk` instead of `useInsights()`.
+> They do NOT need `startTime`/`endTime` or `tenantId` — those are Insights-only requirements.
+> SDK calls use OAuth scopes from the existing `useAuth()` hook.
+
+---
+
+**No matching recipe?** Derive from scratch using the Routing Table in `data-router.md` and the Key response fields in the tables above. If no endpoint matches at all, see the **Fallback** section in `data-router.md`.
 
 ## Suggested Dashboard Packages
 

@@ -43,6 +43,51 @@ Say **"go ahead"** to build, or try:
 - Use "spot", "track", "identify", "compare" — action verbs that explain why this widget matters
 - Never mention: getAgents, getSummaryV2, Insights API, useInsights, KPI card, area chart, donut
 
+## Graceful Degradation — When a Metric Can't Be Built Exactly
+
+When the user's requested metric has no direct API match, use a proxy and say so.
+**Always disclose approximations in the plan — never silently substitute.**
+
+### Wording patterns
+
+| Situation | How to phrase it in the plan |
+|---|---|
+| Using a proxy metric | "• **[Title]** — I'll show [proxy] as an approximation for [requested]; [brief reason why]" |
+| Metric doesn't exist at all | Omit it and explain: "I wasn't able to include [metric] — [brief reason]. I've replaced it with [alternative] which shows [value]." |
+| Derived calculation approximated | "• **[Title]** — [what's shown]; note this is [count/volume], not a [%/rate] — divide by total runs for the percentage" |
+| Time comparison requested | Use two separate KPI cards: "• **[Title] — This Month** and **[Title] — Last Month** (side by side for comparison)" |
+
+### Examples
+
+```
+Here's your Dashboard — 4 widgets. One approximation noted below.
+
+**Overview**
+• **Agent Productivity (30 days)** — How busy your agents have been;
+  I'm using invocation volume as a proxy since a direct productivity
+  score isn't in the analytics API yet
+• **Job Success Rate (today)** — Percentage of today's jobs that completed
+  successfully vs failed; note this reflects completed jobs only
+
+**What you can do:**
+• "Replace productivity with error count instead" — I'll swap it
+• "That's fine, go ahead" — I'll build it with the approximation noted
+```
+
+### When to omit entirely
+
+If a user asks for something the API genuinely cannot provide (e.g., "real-time agent CPU usage",
+"agent cost in dollars", "per-user agent attribution"), omit the widget and explain clearly:
+
+```
+⚠ I couldn't include "agent cost in dollars" — UiPath tracks consumption in
+AGU/PLTU units, not currency. I've added an AGU Consumption widget instead,
+which shows the same underlying usage in platform units.
+```
+
+Never generate a widget for a non-existent endpoint. An empty/broken chart is worse than
+a clear explanation.
+
 ## Approval Gate Rules
 - ANY positive response → proceed to scaffold
   (yes, looks good, do it, go ahead, 👍, confirmed, ship it, build it)
