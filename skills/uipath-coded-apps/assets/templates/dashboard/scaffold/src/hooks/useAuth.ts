@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, createContext, useContext, useCallback } from 'react'
 import type { ReactNode } from 'react'
-import { UiPath, UiPathError } from '@uipath/uipath-typescript/core'
+import { UiPath } from '@uipath/uipath-typescript/core'
 import type { UiPathSDKConfig } from '@uipath/uipath-typescript/core'
 
 interface AuthContextType {
@@ -9,33 +9,37 @@ interface AuthContextType {
   sdk: UiPath
   tenantId: string
   getToken: () => Promise<string>
+  login: () => Promise<void>
   error: string | null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+const SCOPES = 'OR.Assets OR.Assets.Read OR.Jobs OR.Jobs.Write OR.Folders OR.Folders.Read OR.Buckets OR.Buckets.Read OR.Execution OR.Execution.Read OR.Tasks OR.Tasks.Write OR.Queues OR.Queues.Read OR.Users OR.Users.Read DataFabric.Schema.Read DataFabric.Data.Read DataFabric.Data.Write PIMS Insights.RealTimeData ConversationalAgents Traces.Api openid profile'
+
 function resolveConfig(): UiPathSDKConfig {
-  const base = {
-    baseUrl: import.meta.env.VITE_UIPATH_BASE_URL as string,
-    orgName: import.meta.env.VITE_UIPATH_ORG_NAME as string,
-    tenantName: import.meta.env.VITE_UIPATH_TENANT_NAME as string,
+  const platformHosted =
+    document.querySelector('meta[name="uipath:platform-hosted"]')?.getAttribute('content') === 'true'
+
+  return {
+    baseUrl:     import.meta.env.VITE_UIPATH_BASE_URL as string,
+    orgName:     import.meta.env.VITE_UIPATH_ORG_NAME as string,
+    tenantName:  import.meta.env.VITE_UIPATH_TENANT_NAME as string,
+    clientId:    import.meta.env.VITE_UIPATH_CLIENT_ID as string,
+    scopes:      SCOPES.split(' '),
+    redirectUri: `${window.location.origin}${window.location.pathname}`,
+    platformHosted,
   }
-  const pat = import.meta.env.VITE_UIPATH_PAT as string | undefined
-  if (pat && pat.length > 0) {
-    // Dev mode: use session PAT from ~/.uipath/.auth
-    return { ...base, secret: pat }
-  }
-  // Production (FP surface): ActionCenterTokenManager handles auth via postMessage.
-  // The SDK union type requires secret or OAuth fields, but the FP host injects the
-  // token manager at runtime. Cast through unknown to satisfy the discriminated union.
-  return base as unknown as UiPathSDKConfig
 }
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [sdk] = useState<UiPath>(() => new UiPath(resolveConfig()))
+  const [{ config, sdk }] = useState(() => {
+    const config = resolveConfig()
+    return { config, sdk: new UiPath(config) }
+  })
   const didInit = useRef(false)
 
   useEffect(() => {
@@ -46,32 +50,56 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsLoading(true)
       setError(null)
       try {
-        const pat = import.meta.env.VITE_UIPATH_PAT as string | undefined
-        if (pat && pat.length > 0) {
-          // Dev mode: PAT from uip login session — skip OAuth, go straight to dashboard
+        if (config.platformHosted) {
+          // FP surface mode: wait for UIP.init from host (no sign-in button).
+          // EmbeddedTokenManager sets isAuthenticated() once UIP.init arrives.
+          // Timeout after 9 seconds (matches SDK's requestHostToken timeout).
+          await new Promise<void>((resolve, reject) => {
+            let poll: ReturnType<typeof setInterval>
+            const timer = setTimeout(() => {
+              clearInterval(poll)
+              reject(new Error('UIP.init timeout — host did not send token'))
+            }, 9000)
+            poll = setInterval(() => {
+              if (sdk.isAuthenticated()) {
+                clearTimeout(timer)
+                clearInterval(poll)
+                resolve()
+              }
+            }, 100)
+          })
           setIsAuthenticated(true)
         } else {
-          // Production (FP surface): SDK initialises via ActionCenterTokenManager
-          await sdk.initialize()
+          // Local preview mode: OAuth PKCE
+          if (sdk.isInOAuthCallback()) {
+            await sdk.completeOAuth()
+            window.history.replaceState({}, document.title, window.location.pathname)
+          }
           setIsAuthenticated(sdk.isAuthenticated())
         }
       } catch (err) {
-        setError(err instanceof UiPathError ? err.message : 'Authentication failed')
+        setError(err instanceof Error ? err.message : 'Authentication failed')
       } finally {
         setIsLoading(false)
       }
     }
+
     void init()
+    return () => {
+      didInit.current = false
+      sdk.destroy()
+    }
   }, [sdk])
 
   const getToken = useCallback(async (): Promise<string> => {
-    // In dev mode, PAT is available directly from env
-    const pat = import.meta.env.VITE_UIPATH_PAT as string | undefined
-    if (pat && pat.length > 0) return pat
-    // In production, get token from SDK's internal token manager
-    // The SDK refreshes it automatically via ActionCenterTokenManager
-    throw new Error('Token not available — ensure VITE_UIPATH_PAT is set for local dev')
-  }, [])
+    const token = sdk.getToken()
+    if (token) return token
+    throw new Error('Access token not available — please sign in')
+  }, [sdk])
+
+  const login = useCallback(async () => {
+    await sdk.login()
+  }, [sdk])
 
   const value: AuthContextType = {
     isAuthenticated,
@@ -79,6 +107,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     sdk,
     tenantId: import.meta.env.VITE_INSIGHTS_TENANT_ID as string,
     getToken,
+    login,
     error,
   }
 

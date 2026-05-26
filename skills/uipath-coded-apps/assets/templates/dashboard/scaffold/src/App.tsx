@@ -12,7 +12,7 @@ import { LoadingState } from './dashboard/chrome/LoadingState'
 // GENERATED_IMPORTS_END
 
 function AppContent() {
-  const { isAuthenticated, isLoading, error } = useAuth()
+  const { isAuthenticated, isLoading, error, login } = useAuth()
 
   if (isLoading) {
     return (
@@ -28,18 +28,36 @@ function AppContent() {
         <div className="text-center space-y-2">
           <p className="text-destructive font-medium">Authentication error</p>
           <p className="text-sm text-muted-foreground">{error}</p>
-          <p className="text-xs text-muted-foreground mt-2">
-            For local preview: set <code className="bg-muted px-1 rounded">VITE_UIPATH_PAT</code> in <code className="bg-muted px-1 rounded">.env.local</code>
-          </p>
         </div>
       </div>
     )
   }
 
   if (!isAuthenticated) {
+    const platformHosted =
+      document.querySelector('meta[name="uipath:platform-hosted"]')?.getAttribute('content') === 'true'
+
+    if (platformHosted) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <p className="text-sm text-muted-foreground">
+            {error || 'Waiting for authentication from host…'}
+          </p>
+        </div>
+      )
+    }
+
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">Waiting for authentication…</p>
+        <div className="text-center space-y-4">
+          {error && <p className="text-destructive text-sm">{error}</p>}
+          <button
+            onClick={() => void login()}
+            className="rounded-md bg-primary px-6 py-2 text-primary-foreground text-sm font-medium hover:opacity-90"
+          >
+            Sign in with UiPath
+          </button>
+        </div>
       </div>
     )
   }
