@@ -4,11 +4,9 @@
 
 `core.logic.mock`
 
-## Registry Validation
+## Definition source
 
-```bash
-uip maestro flow registry get core.logic.mock --output json
-```
+Copy the verbatim definition from the [Definition section below](#definition--corelogicmock-v10-copy-verbatim) — no CLI call. The embedded `.Data.Node` is the `definitions[]` entry; set the node `typeVersion` to `1.0`.
 
 Confirm: input port `input`, output port `output`, no required inputs. Definition version `1.0`.
 

@@ -4,11 +4,9 @@
 
 `core.logic.delay`
 
-## Registry Validation
+## Definition source
 
-```bash
-uip maestro flow registry get core.logic.delay --output json
-```
+Copy the verbatim definition from the [Definition section below](#definition--corelogicdelay-v10-copy-verbatim) — no CLI call. The embedded `.Data.Node` is the `definitions[]` entry; set the node `typeVersion` to `1.0`.
 
 Confirm: input port `input`, output port `output`, required inputs `timerType` and `timerPreset`.
 
@@ -72,7 +70,7 @@ For step-by-step add, delete, and wiring procedures, see [editing-operations.md]
 | Invalid timer value | Malformed ISO 8601 string | Check format: `P[n]Y[n]M[n]W[n]DT[n]H[n]M[n]S` |
 | Missing `timerValue` | `timerPreset: "custom"` but no `timerValue` | Add `timerValue` with ISO 8601 duration |
 | Missing `timerDate` | `timerType: "timeDate"` but no `timerDate` | Add `timerDate` with ISO 8601 datetime or `=js:` expression |
-| BPMN timer event not emitted | Wrong `core.logic.delay` definition in `definitions[]` | Re-copy from `uip maestro flow registry get core.logic.delay --output json` — the definition carries `model.eventDefinition: "bpmn:TimerEventDefinition"` |
+| BPMN timer event not emitted | Wrong `core.logic.delay` definition in `definitions[]` | Re-copy the verbatim definition from the [Definition section below](#definition--corelogicdelay-v10-copy-verbatim) — it carries `model.eventDefinition: "bpmn:TimerEventDefinition"`. If still wrong, the embedded copy may be stale — fall back to `uip maestro flow registry get core.logic.delay --output json` |
 
 ## Definition — `core.logic.delay` v1.0 (copy verbatim)
 

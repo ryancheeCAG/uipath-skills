@@ -4,11 +4,9 @@
 
 `core.trigger.scheduled`
 
-## Registry Validation
+## Definition source
 
-```bash
-uip maestro flow registry get core.trigger.scheduled --output json
-```
+Copy the verbatim definition from the [Definition section below](#definition--coretriggerscheduled-v11-copy-verbatim) — no CLI call. The embedded `.Data.Node` is the `definitions[]` entry; set the node `typeVersion` to `1.1`.
 
 Confirm: no input port, output port `output`, required inputs `timerType` and `timerPreset`.
 
@@ -75,7 +73,7 @@ For the step-by-step procedure, use [Edit/Write: Replace manual trigger with sch
 | --- | --- | --- |
 | Invalid timer value | Malformed ISO 8601 repeating interval | Check format: `R/P[duration]` (e.g., `R/PT1H`) |
 | Missing `timerValue` | `timerPreset: "custom"` but no `timerValue` | Add `timerValue` with ISO 8601 repeating interval |
-| BPMN timer event not emitted | `core.trigger.scheduled` definition wrong or missing | Re-copy from `uip maestro flow registry get core.trigger.scheduled --output json` — the definition carries `model.eventDefinition: "bpmn:TimerEventDefinition"` |
+| BPMN timer event not emitted | `core.trigger.scheduled` definition wrong or missing | Re-copy the verbatim definition from the [Definition section below](#definition--coretriggerscheduled-v11-copy-verbatim) — it carries `model.eventDefinition: "bpmn:TimerEventDefinition"`. If still wrong, the embedded copy may be stale — fall back to `uip maestro flow registry get core.trigger.scheduled --output json` |
 | Two triggers in flow | Both manual and scheduled triggers exist | Remove one — flows must have exactly one trigger |
 
 ## Definition — `core.trigger.scheduled` v1.1 (copy verbatim)

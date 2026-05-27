@@ -7,14 +7,9 @@
 - `core.action.transform.map` — map only
 - `core.action.transform.group-by` — group-by only
 
-## Registry Validation
+## Definition source
 
-```bash
-uip maestro flow registry get core.action.transform --output json
-uip maestro flow registry get core.action.transform.filter --output json
-uip maestro flow registry get core.action.transform.map --output json
-uip maestro flow registry get core.action.transform.group-by --output json
-```
+Copy the verbatim definition for each `core.action.transform*` node type you use from the [Definitions section below](#definitions--coreactiontransform-v10-copy-verbatim) — no CLI call. Each embedded `.Data.Node` is the `definitions[]` entry; set every node's `typeVersion` to `1.0`.
 
 Confirm: input port `input`, output ports `output` and `error`, required inputs `collection` and `operations`.
 

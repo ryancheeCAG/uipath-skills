@@ -4,13 +4,11 @@
 
 `core.action.script`
 
-## Registry validation
+## Definition source
 
-```bash
-uip maestro flow registry get core.action.script --output json
-```
+Copy the verbatim definition from the [Definition section below](#definition--coreactionscript-v10-copy-verbatim) — no CLI call. The embedded `.Data.Node` is the `definitions[]` entry; set the node `typeVersion` to `1.0`.
 
-Confirm: input port `input`, output port `success`, required input `script` (string, non-empty). See [Action Node Structure — Registry validation](../../../../shared/action-nodes.md#registry-validation) for the shared pattern.
+Confirm: input port `input`, output port `success`, required input `script` (string, non-empty). See [Action Node Structure — Definition contract](../../../../shared/action-nodes.md#definition-contract) for the shared pattern.
 
 ## JSON structure
 

@@ -4,11 +4,9 @@
 
 `core.logic.decision`
 
-## Registry Validation
+## Definition source
 
-```bash
-uip maestro flow registry get core.logic.decision --output json
-```
+Copy the verbatim definition from the [Definition section below](#definition--corelogicdecision-v10-copy-verbatim) — no CLI call. The embedded `.Data.Node` is the `definitions[]` entry; set the node `typeVersion` to `1.0`.
 
 Confirm: input port `input`, output ports `true` and `false`, required input `expression`.
 

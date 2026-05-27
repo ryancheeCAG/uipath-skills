@@ -2,15 +2,14 @@
 
 Reference for the boilerplate shared by every action-node `impl.md` in this skill. Plugin docs should link here for the standard parts and only spell out what is plugin-specific: the registry type string, plugin-specific input fields, plugin-specific rules, debug entries, and node-type configuration workflows.
 
-## Registry validation
+## Definition contract
 
-Every action node should validate its registry contract before authoring:
+Every action node needs its `.Data.Node` definition in `definitions[]`, with the node instance `typeVersion` matching the definition `version`.
 
-```bash
-uip maestro flow registry get <node-type> --output json
-```
+- **In-scope built-in `core.*` nodes** (script, transform, decision, switch, loop, merge, delay, end, terminate, subflow, manual/scheduled triggers, mock): the verbatim definition is **embedded** in that node's plugin `impl.md` (`## Definition — <type> v<version> (copy verbatim)`). Copy it from there — no CLI call.
+- **CLI-fetched nodes** (`core.action.http` / `core.action.http.v2`, `core.action.queue.*`, connector `uipath.connector.*`, resource `uipath.core.*` / `uipath.*`): fetch with `uip maestro flow registry get <node-type> --output json` and copy the returned `.Data.Node`.
 
-Inspect `Data.Node.handleConfiguration` for the input port name, output port name(s), required inputs, and (where applicable) the model `serviceType`. Plugin `impl.md` records what to confirm for that specific node type.
+Either way, inspect `handleConfiguration` for the input port name, output port name(s), required inputs, and (where applicable) the model `serviceType`. Plugin `impl.md` records what to confirm for that specific node type.
 
 ## Standard JSON skeleton
 
@@ -49,7 +48,7 @@ All action nodes share this base shape on the node instance:
 | Direction | Common name(s) | Notes |
 | --- | --- | --- |
 | Input (target) | `input` | Every action node accepts a single input edge on `input`. |
-| Output (success, source) | `output`, `default`, or `success` | Name varies by plugin — `registry get` is authoritative. |
+| Output (success, source) | `output`, `default`, or `success` | Name varies by plugin — the node's definition (embedded block or `registry get`) is authoritative. |
 | Output (error, source) | `error` | Implicit on every action node via `outputs.error`. |
 
 Some plugins add dynamic source ports (e.g., HTTP `branch-{id}` from `inputs.branches`); those are documented in the plugin's own `impl.md`.
