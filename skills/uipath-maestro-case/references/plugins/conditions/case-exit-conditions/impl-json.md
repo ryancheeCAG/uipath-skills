@@ -86,17 +86,17 @@ Build `rule.uipath` per [connector-trigger-common.md § Target: connector-bound 
 ]]
 ```
 
-Valid for both `marksCaseComplete: true` and `false`. The connector binding (`uipath`) is required; `conditionExpression` is optional.
+Valid for both `marksCaseComplete: true` and `false`. The connector configuration (`uipath`) is required; `conditionExpression` is optional.
 
 ## Rule-Type × marksCaseComplete Matrix
 
 | `marksCaseComplete` | `rule` | Required extra field |
 |---|---|---|
 | `true` | `required-stages-completed` | — |
-| `true` | `wait-for-connector` | `uipath` connector binding |
+| `true` | `wait-for-connector` | `uipath` connector configuration |
 | `false` | `selected-stage-completed` | `selectedStageId` |
 | `false` | `selected-stage-exited` | `selectedStageId` |
-| `false` | `wait-for-connector` | `uipath` connector binding |
+| `false` | `wait-for-connector` | `uipath` connector configuration |
 
 `conditionExpression` is optional on every rule — add it to any rule to further gate when it fires. Use bare `=js:<expr>` (no outer parens); combined boolean expressions wrap each sub-clause in parens: `=js:(vars.X === 'foo') && (vars.Y > 5)`. Full per-sink rule: [bindings-and-expressions.md § Canonical form per sink](../../../bindings-and-expressions.md#canonical-form-per-sink).
 

@@ -90,7 +90,7 @@ Build `rule.uipath` per [connector-trigger-common.md § Target: connector-bound 
 ]]
 ```
 
-The connector binding (`uipath`) is required; `conditionExpression` is optional. CLI `validate` does NOT check `rule.uipath` — confirm via Studio Web.
+The connector configuration (`uipath`) is required; `conditionExpression` is optional. CLI `validate` does NOT check `rule.uipath` — confirm via Studio Web.
 
 ### wait-for-user — manual decision gate
 
@@ -117,9 +117,9 @@ Routes the case back to the originating stage.
 | `marksStageComplete` | `rule` | Required extra field |
 |---|---|---|
 | `true` | `required-tasks-completed` | — |
-| `true` | `wait-for-connector` | `uipath` connector binding |
+| `true` | `wait-for-connector` | `uipath` connector configuration |
 | `false` | `selected-tasks-completed` | `selectedTasksIds` (array) |
-| `false` | `wait-for-connector` | `uipath` connector binding |
+| `false` | `wait-for-connector` | `uipath` connector configuration |
 
 `conditionExpression` is optional on every rule — add it to any rule to further gate when it fires. Use bare `=js:<expr>` (no outer parens); for combined boolean expressions wrap each sub-clause in parens: `=js:(vars.X === 'foo') && (vars.Y > 5)`. Full per-sink rule: [bindings-and-expressions.md § Canonical form per sink](../../../bindings-and-expressions.md#canonical-form-per-sink).
 

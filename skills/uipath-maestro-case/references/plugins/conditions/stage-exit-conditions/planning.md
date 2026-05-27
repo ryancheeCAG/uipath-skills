@@ -42,13 +42,13 @@ Allowed `ruleType` values depend on `marks-stage-complete`:
 | Rule type | Extra fields |
 |-----------|--------------|
 | `required-tasks-completed` | — |
-| `wait-for-connector` | connector fields (binds `uipath`); `conditionExpression` optional |
+| `wait-for-connector` | connector fields (fills `uipath`); `conditionExpression` optional |
 
 **When `marks-stage-complete: false` (exit-only, routing):**
 | Rule type | Extra fields |
 |-----------|--------------|
 | `selected-tasks-completed` | `selectedTasksIds` (comma-separated) |
-| `wait-for-connector` | connector fields (binds `uipath`); `conditionExpression` optional |
+| `wait-for-connector` | connector fields (fills `uipath`); `conditionExpression` optional |
 
 ## Ordering
 

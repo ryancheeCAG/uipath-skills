@@ -68,7 +68,7 @@ Fires when an upstream stage exits via a `wait-for-user` exit condition and the 
 
 ### wait-for-connector — bind a connector event
 
-A `wait-for-connector` entry rule MUST carry the connector binding under `rule.uipath`; a bare rule (no `uipath`) is rejected by Studio Web. Build it per [connector-trigger-common.md § Target: connector-bound condition rule](../../../connector-trigger-common.md#target-connector-bound-condition-rule): run the shared `case spec --type trigger` pipeline, write `rule.uipath` with `serviceType: "Intsvc.WaitForEvent"`, mint `elementId = <stageId>-<ruleId>` on inputs/outputs, append root bindings + `bindings_v2` sync.
+A `wait-for-connector` entry rule MUST carry the connector configuration under `rule.uipath`; a bare rule (no `uipath`) is rejected by Studio Web. Build it per [connector-trigger-common.md § Target: connector-bound condition rule](../../../connector-trigger-common.md#target-connector-bound-condition-rule): run the shared `case spec --type trigger` pipeline, write `rule.uipath` with `serviceType: "Intsvc.WaitForEvent"`, mint `elementId = <stageId>-<ruleId>` on inputs/outputs, append root bindings + `bindings_v2` sync.
 
 ```json
 "rules": [[
@@ -87,7 +87,7 @@ A `wait-for-connector` entry rule MUST carry the connector binding under `rule.u
 ]]
 ```
 
-The connector binding (`uipath`) is required; `conditionExpression` is OPTIONAL — an extra payload gate on the event (bare `=js:<expr>`; wrap sub-clauses in parens when combining: `=js:(vars.X === 'foo') && (vars.Y > 5)`; full rule: [bindings-and-expressions.md § Canonical form per sink](../../../bindings-and-expressions.md#canonical-form-per-sink)). Set `isInterrupting: true` on the condition for exception/fraud/escalation flows.
+The connector configuration (`uipath`) is required; `conditionExpression` is OPTIONAL — an extra payload gate on the event (bare `=js:<expr>`; wrap sub-clauses in parens when combining: `=js:(vars.X === 'foo') && (vars.Y > 5)`; full rule: [bindings-and-expressions.md § Canonical form per sink](../../../bindings-and-expressions.md#canonical-form-per-sink)). Set `isInterrupting: true` on the condition for exception/fraud/escalation flows.
 
 ## Rule-Type Catalog
 
@@ -97,7 +97,7 @@ The connector binding (`uipath`) is required; `conditionExpression` is OPTIONAL 
 | `selected-stage-completed` | `selectedStageId` |
 | `selected-stage-exited` | `selectedStageId` |
 | `user-selected-stage` | — |
-| `wait-for-connector` | `uipath` connector binding (see [common](../../../connector-trigger-common.md#target-connector-bound-condition-rule)) |
+| `wait-for-connector` | `uipath` connector configuration (see [common](../../../connector-trigger-common.md#target-connector-bound-condition-rule)) |
 
 `conditionExpression` is optional on every rule — add it to any rule to further gate when it fires.
 

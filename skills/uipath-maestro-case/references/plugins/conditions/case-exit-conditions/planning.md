@@ -32,7 +32,7 @@ Allowed `ruleType` values depend on `marks-case-complete`:
 | Rule type | Meaning | Extra fields |
 |-----------|---------|--------------|
 | `required-stages-completed` | **Preferred.** Case completes when every stage with `isRequired: true` (set in the stage node's `data.isRequired`) has completed. No stage list needed. | — |
-| `wait-for-connector` | Wait for an external connector event to close the case (binds `uipath`). | connector fields; `conditionExpression` optional |
+| `wait-for-connector` | Wait for an external connector event to close the case (fills `uipath`). | connector fields; `conditionExpression` optional |
 
 **When `marks-case-complete: false`** (the case exits without closing):
 
@@ -40,7 +40,7 @@ Allowed `ruleType` values depend on `marks-case-complete`:
 |-----------|---------|--------------|
 | `selected-stage-completed` | Exit triggered by a specific stage completing. | `selectedStageId` |
 | `selected-stage-exited` | Exit triggered by a specific stage being exited (even without completing). | `selectedStageId` |
-| `wait-for-connector` | Wait for an external connector event (binds `uipath`). | connector fields; `conditionExpression` optional |
+| `wait-for-connector` | Wait for an external connector event (fills `uipath`). | connector fields; `conditionExpression` optional |
 
 ## Preferred Pattern
 

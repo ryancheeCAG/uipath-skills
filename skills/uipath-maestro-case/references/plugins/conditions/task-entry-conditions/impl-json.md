@@ -93,7 +93,7 @@ Build `rule.uipath` per [connector-trigger-common.md § Target: connector-bound 
 ]]
 ```
 
-The connector binding (`uipath`) is required; `conditionExpression` is optional. CLI `validate` does NOT check `rule.uipath` — confirm via Studio Web.
+The connector configuration (`uipath`) is required; `conditionExpression` is optional. CLI `validate` does NOT check `rule.uipath` — confirm via Studio Web.
 
 ### runs-sequentially — sequential group with optional parallel siblings
 
@@ -109,7 +109,7 @@ The connector binding (`uipath`) is required; `conditionExpression` is optional.
 |---|---|
 | `current-stage-entered` | — |
 | `selected-tasks-completed` | `selectedTasksIds` (array) |
-| `wait-for-connector` | `uipath` connector binding (see [common](../../../connector-trigger-common.md#target-connector-bound-condition-rule)) |
+| `wait-for-connector` | `uipath` connector configuration (see [common](../../../connector-trigger-common.md#target-connector-bound-condition-rule)) |
 | `adhoc` | — |
 | `runs-sequentially` | — |
 
