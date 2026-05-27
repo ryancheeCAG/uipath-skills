@@ -15,20 +15,20 @@ on:
   workflow_dispatch:
     inputs:
       task_globs:
-        description: 'Space-separated globs under tests/. Leave empty to run the full nightly suite. Examples: "tasks/uipath-test/foo.yaml" (single), "tasks/uipath-agents/**/*.yaml" (folder), "tasks/**/*.yaml" (full — also tick confirm_large_run).'
+        description: 'Tasks to run (empty = full suite). E.g. tasks/uipath-agents/**/*.yaml'
         type: string
         required: false
         default: ''
       confirm_large_run:
-        description: 'Tick to allow runs that match more than 50 tasks. Guardrail against accidental full-suite ($$$). Ignored for scheduled runs.'
+        description: 'Allow >50 tasks (cost guardrail)'
         type: boolean
         default: false
       coder_eval_ref:
-        description: 'coder_eval branch/SHA to install + use.'
+        description: 'coder_eval branch/SHA'
         type: string
         default: main
       cli_version:
-        description: '@uipath/cli tag or pinned version published to GH Packages (e.g. alpha, 0.1.22-alpha.20260520.1234).'
+        description: '@uipath/cli version'
         type: string
         default: alpha
 
