@@ -324,7 +324,7 @@ Conventions (shared with activity):
 
 For **outputs** apply the dedup rule: collect existing output `var` values across every task / trigger already in `caseplan.json`; if a `var` already exists (e.g. `response`, `error` collide across multiple connector tasks/triggers), append a counter starting at 2 (`response2`, `error2`). Update `var`, `id`, `value`, `target` (when present); keep `name`, `displayName`, `source` unchanged.
 
-> **Trigger inputs:** trigger inputs do **not** get `elementId` (different from in-stage task inputs). See each plugin's `impl-json.md` for the target-specific shape.
+> **Trigger-NODE inputs only:** the case-level event-**trigger node** gets no `elementId` on its inputs (different from in-stage task inputs). This does **NOT** apply to connector-bound **condition rules** — a rule's inputs AND outputs BOTH get `elementId = <ownerNodeId>-<ruleId>` (= `root-<ruleId>` for case-exit). See [§ Target: connector-bound condition rule](#target-connector-bound-condition-rule), and each plugin's `impl-json.md` for the target-specific shape.
 
 ---
 

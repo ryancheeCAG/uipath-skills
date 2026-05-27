@@ -67,7 +67,7 @@ Requires `marksCaseComplete: false`. Swap `rule` to `selected-stage-exited` for 
 
 ### wait-for-connector — bind a connector event
 
-Write `rule.uipath` per [connector-trigger-common.md § Target: connector-bound condition rule](../../../connector-trigger-common.md#target-connector-bound-condition-rule) (canonical rule JSON + procedure there) — a bare rule (no `uipath`) is rejected by Studio Web. **Root-scoped: `elementId = root-<ruleId>`** (not a stage id). Valid for both `marksCaseComplete: true` and `false`. `conditionExpression` optional.
+Write `rule.uipath` per [connector-trigger-common.md § Target: connector-bound condition rule](../../../connector-trigger-common.md#target-connector-bound-condition-rule) (canonical rule JSON + procedure there) — a bare rule (no `uipath`) is rejected by Studio Web. **Root-scoped: `elementId = root-<ruleId>` on BOTH `uipath.inputs[]` and `uipath.outputs[]`** (not a stage id; the input `body` gets it too, not only the outputs). Valid for both `marksCaseComplete: true` and `false`. `conditionExpression` optional.
 
 ## Rule-Type × marksCaseComplete Matrix
 
