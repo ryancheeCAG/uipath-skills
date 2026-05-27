@@ -230,7 +230,7 @@ One Read of `caseplan.json` at Step 10 entry. Group `tasks.md §4.7` entries by 
 | Stage entry | one stage | `nodes[stage].data.entryConditions` |
 | Stage exit | one stage | `nodes[stage].data.exitConditions` |
 | Task entry | one task | `data.entryConditions` on the task object |
-| Case exit | root | v19: `root.data.caseExitConditions`; v20: `metadata.caseExitRules` |
+| Case exit | root | v19: `root.caseExitConditions`; v20: `metadata.caseExitRules` |
 
 Skip the re-Read between sibling Edits. One validate at section end. Per-scope composition rules live in the matching plugin's `impl-json.md`:
 
