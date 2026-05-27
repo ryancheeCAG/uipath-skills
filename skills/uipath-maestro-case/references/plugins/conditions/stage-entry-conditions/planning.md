@@ -21,7 +21,7 @@ Every stage with an **Entry Condition** declared in sdd.md gets its own stage-en
 | `is-interrupting` | sdd.md (default `false`) | `true` if the condition interrupts the current stage |
 | `rule-type` | Pick from the catalog below | See §Rule-type catalog |
 | `selected-stage-id` | Required for `selected-stage-*` rule-types | ID of the referenced stage |
-| `connector fields` | Required for `wait-for-connector` rule-type | `connector-key`, `connection-id`, `object-name`, `event-operation`, `event-mode`, `input-values`, optional `filter` — resolved via [connector-trigger-common.md § Planning Pipeline](../../../connector-trigger-common.md#planning-pipeline) |
+| `connector fields` | Required for `wait-for-connector` rule-type | `type-id` (activity-type-id), `connector-key`, `connection-id`, `object-name`, `event-operation`, `event-mode`, `input-values`, optional `filter` — resolved via [connector-trigger-common.md § Planning Pipeline](../../../connector-trigger-common.md#planning-pipeline) |
 | `condition-expression` | Optional on any rule-type | Extra payload gate (`=js:<expr>`) on the event |
 
 ## Rule-Type Catalog (stage-entry scope)
@@ -54,3 +54,5 @@ Stage entry conditions are created **after** all stages exist (Step 7 in impleme
 - order: after T<m>
 - verify: Confirm Result: Success, capture ConditionId
 ```
+
+> `rule-type: wait-for-connector` also needs the connector fields — see [connector-trigger-common.md § tasks.md fields (planning)](../../../connector-trigger-common.md#tasksmd-fields-planning).

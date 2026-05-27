@@ -20,7 +20,7 @@ Every task in sdd.md that declares an **Entry Condition** row gets its own task-
 | `display-name` | sdd.md (optional) | |
 | `rule-type` | From catalog below | |
 | `selected-tasks-ids` | Required for `selected-tasks-completed` | Comma-separated task IDs |
-| `connector fields` | Required for `wait-for-connector` | `connector-key`, `connection-id`, `object-name`, `event-operation`, `event-mode`, `input-values`, optional `filter` — see [connector-trigger-common.md § Planning Pipeline](../../../connector-trigger-common.md#planning-pipeline) |
+| `connector fields` | Required for `wait-for-connector` | `type-id` (activity-type-id), `connector-key`, `connection-id`, `object-name`, `event-operation`, `event-mode`, `input-values`, optional `filter` — see [connector-trigger-common.md § Planning Pipeline](../../../connector-trigger-common.md#planning-pipeline) |
 | `condition-expression` | Optional | Extra payload gate (`=js:<expr>`) |
 
 ## Rule-Type Catalog (task-entry scope)
@@ -50,3 +50,5 @@ Task entry conditions are created **after** all tasks in the stage have been add
 - order: after T<m>
 - verify: Confirm Result: Success, capture ConditionId
 ```
+
+> `rule-type: wait-for-connector` also needs the connector fields — see [connector-trigger-common.md § tasks.md fields (planning)](../../../connector-trigger-common.md#tasksmd-fields-planning).
