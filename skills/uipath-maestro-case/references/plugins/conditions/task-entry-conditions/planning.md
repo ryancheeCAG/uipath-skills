@@ -20,7 +20,7 @@ Every task in sdd.md that declares an **Entry Condition** row gets its own task-
 | `display-name` | sdd.md (optional) | |
 | `rule-type` | From catalog below | |
 | `selected-tasks-ids` | Required for `selected-tasks-completed` | Comma-separated task IDs |
-| `connector fields` | Required for `wait-for-connector` | `type-id` (activity-type-id), `connector-key`, `connection-id`, `object-name`, `event-operation`, `event-mode`, `input-values`, optional `filter` — see [connector-trigger-common.md § Planning Pipeline](../../../connector-trigger-common.md#planning-pipeline) |
+| `connector fields` | SDD **Connector Rule Detail** block | `type-id` (activity-type-id), `connector-key`, `connection-id`, `object-name`, `event-operation`, `event-mode`, `input-values`, optional `filter` — see [connector-trigger-common.md § Planning Pipeline](../../../connector-trigger-common.md#planning-pipeline) |
 | `condition-expression` | Optional | Extra payload gate (`=js:<expr>`) |
 
 ## Rule-Type Catalog (task-entry scope)
