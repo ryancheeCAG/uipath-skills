@@ -29,7 +29,7 @@ Skill for working with UiPath IXP (Intelligent eXtraction Platform) projects —
    └── prompts/      # Instruction update payloads (field_updates.json, group_updates.json, …)
    ```
    At the start of any workflow: `mkdir -p /tmp/ixp/<project-name>/{docs,taxonomies,prompts}`. If the directory already exists from a previous session, **reuse existing files** — do not re-download documents that are already present. Do NOT use the Write tool for `/tmp/ixp/` paths — on Windows it resolves to a different location than bash.
-5. **Use heredocs for `--fields`/`--groups`** — for `update-prompts --fields` and `--groups`, use heredocs (`cat > /tmp/ixp/<project-name>/prompts/field_updates.json << 'EOF' ... EOF`) then `"$(cat /tmp/ixp/<project-name>/prompts/field_updates.json)"`.
+5. **Use heredocs for `--updates`** — for `fields update-prompts --updates` and `groups update-prompts --updates`, use heredocs (`cat > /tmp/ixp/<project-name>/prompts/field_updates.json << 'EOF' ... EOF`) then `"$(cat /tmp/ixp/<project-name>/prompts/field_updates.json)"`.
 6. **Never use `UID` as a variable name** — it is a readonly shell variable. Use `DOC_ID`, `DOCUMENT_ID`, etc.
 7. **Always use the project `Name`, never the `Title`** — the `project list` output has both `Name` (e.g., `my_invoices-f1afa9ef-ixp`) and `Title` (e.g., `My_Invoices`). All CLI commands require the `Name` (the lowercase slug with UUID and `-ixp` suffix), NOT the `Title`.
 8. **Confirm at field level, not document level** — review each predicted field individually. Confirm only the fields that are correct using `labelling confirm --fields`. Fields with wrong predictions are left unannotated. **`--corrections` is ONLY for OCR-mangled values** — the prediction found the right field in the right location and the bytes-on-page are right, but the text was garbled (e.g., `MSIÓÓÓ601020/` → `MSI0601020`). Do NOT use `--corrections` to flip a wrong boolean, fix a wrong inferred/computed value, or change any value where the prediction itself was the wrong answer — those are NOT CONFIRMED. Overriding a non-OCR prediction is manual extraction (forbidden by rule 11).
@@ -71,9 +71,9 @@ If the user provides a taxonomy file, use `--skip-taxonomy` and `import-taxonomy
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Metrics don't change after update-prompts | Re-evaluation hasn't completed | Wait ~2 minutes for retrain. |
+| Metrics don't change after a prompt update | Re-evaluation hasn't completed | Wait ~2 minutes for retrain. |
 | ModelVersion doesn't advance | Retrain still in progress | Any change to model inputs (labellings OR instructions) triggers a full retrain. Wait ~2 min then retry. |
-| Field instructions conflict with label_def instructions | `update-prompts --fields` only edits per-field instructions, NOT the parent label_def instructions | Before iterating, read the label_def `instructions` and ensure they don't contradict your per-field instructions. |
+| Field instructions conflict with label_def instructions | `fields update-prompts` only edits per-field instructions, NOT the parent label_def instructions | Before iterating, read the label_def `instructions` and update them with `groups update-prompts` if they contradict the per-field prompts. |
 
 ## Reference Navigation
 
