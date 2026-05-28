@@ -131,16 +131,17 @@ Test runs require valid `uip` auth on the host (set via `.env` or environment) f
 
 Every new scenario's `task.yaml` MUST satisfy the following.
 
-### `run_limits`
+### Timing limits
 
 ```yaml
-run_limits:
-  task_timeout: 2400
-  max_turns: 60
-  turn_timeout: 1800
+task_timeout: 5400
+max_turns: 60
+turn_timeout: 3600
 ```
 
-Troubleshooting investigations span many turns and produce large intermediate outputs. Lower limits cause spurious timeouts in CI and mask real regressions.
+`task_timeout`, `max_turns`, and `turn_timeout` MUST be top-level scalars on the task — NOT nested under a `run_limits:` block. The coder-eval task Pydantic model has no `run_limits` field; any block by that name is silently dropped and the task falls back to the experiment / agent defaults (typically `task_timeout: 600`, `turn_timeout: 300`, `max_turns: 20`), which clip troubleshoot investigations mid-chain.
+
+Troubleshooting investigations span many turns and produce large intermediate outputs. Use 90-min `task_timeout` (5400s) and 60-min `turn_timeout` (3600s) so the full triage → hypothesis → tester → depth-check → presenter cycle has headroom; observed wall time for proxy-mode runs is 25–55 min.
 
 ### `tags`
 
