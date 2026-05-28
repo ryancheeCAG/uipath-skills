@@ -66,6 +66,7 @@ If the user provides a taxonomy file, use `--skip-taxonomy` and `import-taxonomy
 | "Add / delete / rename / retype a field" | `uip ixp fields {add,delete,rename,change-type} <project-name> --group <name> --field <name> ... --output json` — see [CLI Reference § Fields](references/cli-reference.md#fields). `change-type` deletes annotations and requires `--confirm-data-loss`. |
 | "Mark a field as missing for a document" | `uip ixp labellings mark-missing <project-name> <document-id> --fields <ids> --output json` — confirms the field as having no value and no location. **Only call this for fields where IXP's prediction was also missing/empty.** See Critical Rule 12. |
 | "Undo / unconfirm a wrong confirmation" | `uip ixp labellings unconfirm <project-name> <document-id> --fields <ids> --output json` — rolls back an earlier `confirm` or `mark-missing` for the listed fields. Every other annotation on the document is carried forward. |
+| "Set overall extraction instructions" / "Update project prompt" | `uip ixp projects update-prompt <project-name> --prompt "<text>" --output json` — replaces the taxonomy-wide prompt (the "Overall extraction instructions" field in the IXP UI). Distinct from `fields update-prompts` (per-field) and `groups update-prompts` (per-field-group). |
 
 ## Common Pitfalls
 
