@@ -73,25 +73,24 @@ For **CORRECTED** fields: state the mangled predicted value, the corrected value
 For **MISSING** fields: state that the prediction was empty AND describe how you verified the field is absent (e.g., "no payment-terms section anywhere in the document").
 For **NOT CONFIRMED** fields: state the predicted value, the actual value (if visible) and location. Includes any non-OCR mistake — wrong source, wrong boolean, wrong inferred value, hallucination, value the document doesn't contain. **Do NOT use `--corrections` to fix these** — improve the field's prompt instructions instead.
 
-4. **Build three lists from the table:**
-   - **Confirmed field IDs** — all CONFIRMED + CORRECTED fields
+4. **Build two lists from the table:**
+   - **Submit field IDs** — all CONFIRMED + CORRECTED + MISSING fields (one combined list — the CLI applies the right semantic per field based on IXP's prediction)
    - **Corrections JSON** — only CORRECTED fields: `[{"field_id":"...","value":"corrected text"}]`
-   - **Missing field IDs** — all MISSING fields
 
 ### 2d. Confirm and correct
 
-Submit confirmed and corrected fields for this document.
+Submit confirmed, corrected, and missing fields for this document — all in one `confirm` call.
 
 **If there are corrections:**
 
 ```bash
 uip ixp labellings confirm <project-name> <document-id> \
-  --fields "<all_confirmed_and_corrected_ids>" \
+  --fields "<all_submitted_ids>" \
   --corrections '[{"field_id":"<id>","value":"<corrected_value>"}]' \
   --output json
 ```
 
-The `--fields` list includes both CONFIRMED and CORRECTED field IDs. The `--corrections` JSON overrides the predicted value for corrected fields while keeping their document references (bounding boxes).
+The `--fields` list includes CONFIRMED, CORRECTED, and MISSING field IDs together — the CLI writes the right annotation per field based on IXP's prediction (content → confirm, content with override → correct, empty → missing marker). The `--corrections` JSON overrides the predicted value for corrected fields while keeping their document references (bounding boxes).
 
 **If there are no corrections (all approved fields are exact matches):**
 
@@ -106,14 +105,16 @@ If ALL predicted fields for a document are correct with no corrections needed, y
 uip ixp labellings confirm <project-name> <document-id> --output json
 ```
 
-**If there are missing fields**, submit them AFTER the `confirm` call above:
+**If there are missing fields**, include their IDs in the same `--fields` list as the CONFIRMED and CORRECTED IDs. The `confirm` command applies one uniform rule per listed field: if IXP predicted content, the content is confirmed; if IXP predicted nothing, a missing marker is written. No separate call needed.
 
 ```bash
-uip ixp labellings mark-missing <project-name> <document-id> \
-  --fields "<missing_field_id_1>,<missing_field_id_2>" --output json
+uip ixp labellings confirm <project-name> <document-id> \
+  --fields "<confirmed_id>,<corrected_id>,<missing_id_1>,<missing_id_2>" \
+  --corrections '[{"field_id":"<corrected_id>","value":"<corrected_value>"}]' \
+  --output json
 ```
 
-Order matters: `confirm` runs first (it doesn't carry empty annotations forward), then `mark-missing` writes the empty markers while carrying the just-confirmed annotations forward. If you have no MISSING fields, skip this call.
+**Only include a field in the `--fields` list for the MISSING case when IXP itself predicted nothing for it** — see Critical Rule 12. If IXP predicted a wrong value, omit the field entirely (don't list it). `labellings mark-missing` still exists as a niche fallback for fields that IXP didn't predict at all (rare); prefer the unified `confirm --fields` path above.
 
 ### 2e. Move to the next document
 
