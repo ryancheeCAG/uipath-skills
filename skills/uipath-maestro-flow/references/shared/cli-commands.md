@@ -98,6 +98,30 @@ uip solution resource refresh <SolutionDir> --output json
 
 The argument is the solution directory (containing the `.uipx` file). Defaults to the current directory if omitted.
 
+## uip solution resource add / remove / edit
+
+Atomic single-resource mutations. Use these when you need to add, delete, or change one resource and don't want to scan every project's bindings the way `refresh` does — for example, when a flow needs a new local queue but no `bindings_v2.json` change is involved yet.
+
+```bash
+# Local virtual stub (offline, no auth)
+uip solution resource add --source local --kind Queue --name InvoiceQueue --output json
+
+# Import an existing Orchestrator resource
+uip solution resource add --source remote --kind Queue --name InvoiceQueue --folder-path Sales/CRM --output json
+
+# Delete one resource by key
+uip solution resource remove <KEY> --output json
+
+# Patch an existing resource's spec by key (JSON object is the only input)
+uip solution resource edit <KEY> --patch '{"maxNumberOfRetries":5}' --output json
+uip solution resource edit <KEY> --patch '{"acceptAutomaticallyRetry":false,"retentionPeriod":14}' --output json
+
+# Read the patch from stdin
+echo '{"slaInHours":"4"}' | uip solution resource edit <KEY> --patch - --output json
+```
+
+`add` is idempotent on `(kind, name, folder)` for local and on resource key for remote; a retry returns `Status: "Unchanged"`. `edit` is the only command that mutates an existing resource's spec — `refresh` never overwrites; it skips resources already in the solution. None of these touch `bindings_v2.json` — if a flow node still binds the resource, the next `refresh` will re-import it. See [uipath-solution Step 9–11](/uipath:uipath-solution) for the full contract.
+
 ## uip solution upload
 
 Upload a solution directly to Studio Web. **Requires `uip login`.**
