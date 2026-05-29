@@ -10,7 +10,7 @@ Retrieves a single record from a Data Fabric entity by its ID. Category: **DataS
 | `EntityId` | `InArgument<Guid>` | Yes | — | — | Entity GUID from `EntitiesStore.json` |
 | `RecordId` | `InArgument<Guid>` | Yes | — | Input | GUID of the record to retrieve (validated — null produces error) |
 | `OutputEntity` | `OutArgument<TEntity>` | Yes | — | Output | Variable to receive the retrieved record |
-| `ExpansionDepth` | `InArgument<int>` | No | `2` | Options | Depth of relationship expansion in response (range: 1–3) |
+| `ExpansionDepth` | `InArgument<int>` | No | `2` | Options | Depth of relationship expansion in response (range: 1–3, max `3`). Controls relationship-field shape on the returned record — see [overview § Relationship Fields & ExpansionDepth](../overview.md#relationship-fields--expansiondepth) |
 | `ContinueOnError` | `InArgument<bool>` | No | `false` | Common | Continue workflow on error |
 | `TimeoutInMs` | `InArgument<int>` | No | `30000` | Common | Timeout in milliseconds |
 

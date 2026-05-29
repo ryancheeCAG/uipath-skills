@@ -10,7 +10,7 @@ Deletes a file attachment from a file-type field on an entity record. Category: 
 | `EntityId` | `InArgument<Guid>` | Yes | — | — | Entity GUID from `EntitiesStore.json` |
 | `RecordId` | `InArgument<Guid>` | Yes | — | Input | GUID of the target record (`[RequiredArgument]`) |
 | `Field` | `InArgument<string>` | Yes | — | Input | Name of the file field (`[RequiredArgument]`, `[Browsable(false)]`) |
-| `ExpansionDepth` | `InArgument<int>` | No | `2` | Options | Depth of relationship expansion in response (range: 1–3) |
+| `ExpansionDepth` | `InArgument<int>` | No | `2` | Options | Depth of relationship expansion on the returned entity (range: 1–3, max `3`) — see [overview § Relationship Fields & ExpansionDepth](../overview.md#relationship-fields--expansiondepth) |
 | `OutputEntity` | `OutArgument<TEntity>` | No | — | Output | Receives the updated entity after file deletion |
 | `ContinueOnError` | `InArgument<bool>` | No | `false` | Common | Continue workflow on error |
 | `TimeoutInMs` | `InArgument<int>` | No | `30000` | Common | Timeout in milliseconds |

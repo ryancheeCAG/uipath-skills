@@ -17,7 +17,7 @@ Queries records from a Data Fabric entity with optional filtering, sorting, and 
 | `Skip` | `InArgument<long>` | No | `0` | Pagination | Number of records to skip (pagination offset) |
 | `SortByField` | `InArgument<string>` | No | — | Options | Field name to sort by |
 | `SortAscending` | `InArgument<bool>` | No | `true` | Options | Sort direction |
-| `ExpansionDepth` | `InArgument<int>` | No | `2` | Options | Depth of relationship expansion (range: 1–3) |
+| `ExpansionDepth` | `InArgument<int>` | No | `2` | Options | Depth of relationship expansion (range: 1–3, max `3`). Controls relationship-field shape on returned records and gates dot-notation filterability — see [overview § Relationship Fields & ExpansionDepth](../overview.md#relationship-fields--expansiondepth) |
 | `ContinueOnError` | `InArgument<bool>` | No | `false` | Common | Continue workflow on error |
 | `TimeoutInMs` | `InArgument<int>` | No | `30000` | Common | Timeout in milliseconds |
 

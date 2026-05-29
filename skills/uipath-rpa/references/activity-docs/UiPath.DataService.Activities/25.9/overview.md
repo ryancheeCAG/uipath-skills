@@ -236,6 +236,29 @@ Using `udd:IEntity` produces: `Selected Entity type (UiPath.DataService.Definiti
 | `DATE` | `x:String` | Pass as ISO 8601 date string |
 | `UNIQUEIDENTIFIER` | `x:String` | Pass as GUID string |
 
+## Relationship Fields & `ExpansionDepth`
+
+For activities that read entity records (`QueryEntityRecords`, `GetEntityRecordById`, `CreateEntityRecord`, `UpdateEntityRecord`, `CreateMultipleEntityRecords`, `UpdateMultipleEntityRecords`, `UploadFileToRecordField`, `DeleteFileFromRecordField`), `ExpansionDepth` controls how relationship fields (`FieldDisplayType: "Relationship"`) are returned. Range `1–3`, default `2`. `3` is the max allowed value.
+
+| `ExpansionDepth` | Relationship field shape on the returned entity |
+|---|---|
+| `1` | Nested object containing only `Id` — no other field of the target record is populated |
+| `2` | Target record with all RBAC-accessible fields; any relationship fields inside the target are reduced to `{ Id }` only |
+| `3` | Target record + its related records expanded with all their fields; any further relationship one level deeper appears as `{ Id }` only |
+
+**Filter implication for `QueryEntityRecords`.** Dot-notation filter fields (e.g. `CreatedBy.Name`, `Customer.Country` — see [data-service-filter-builder-guide § Step 3](../../../xaml/data-service-filter-builder-guide.md)) only resolve when the query expands deep enough to materialize the nested record. Use **`ExpansionDepth="2"`** for one-dot paths and increase by one for each additional segment (cap at `3`). JIT/schema lookup advertises `FieldA.FieldB` as filterable with operators inferred from `FieldB`'s `SqlType.Name`, but at insufficient depth the API **rejects the query with an error**.
+
+**Relationship fields on Create / Update — write the target Id GUID only.** In `InputEntityInFieldView` initializers and `RecordState.SelectedFields`, set a relationship field to the target record's Id GUID (a `UNIQUEIDENTIFIER`/`x:String` value), not a nested target object. Writing through this entity's endpoint to modify the related entity's fields is not supported — use the target entity's own Create / Update activity.
+
+```xml
+<!-- Right — relationship field set to target Id -->
+<udam:DynamicEntityField Id="CUSTOMER_FK_FIELD_GUID" IsRequired="False" Name="Customer">
+  <udam:DynamicEntityField.ArgumentValue>
+    <InArgument x:TypeArguments="x:String">[customerIdGuid]</InArgument>
+  </udam:DynamicEntityField.ArgumentValue>
+</udam:DynamicEntityField>
+```
+
 ## FieldDisplayType Values
 
 | FieldDisplayType | Meaning |
@@ -246,6 +269,35 @@ Using `udd:IEntity` produces: `Selected Entity type (UiPath.DataService.Definiti
 | `ChoiceSetSingle` | Single-select choice set |
 | `ChoiceSetMultiple` | Multi-select choice set |
 | `AutoNumber` | Auto-incrementing numeric field |
+
+## Choice Set Fields — Read & Write Shape
+
+Choice-set fields (`FieldDisplayType: "ChoiceSetSingle"` / `"ChoiceSetMultiple"`) are **always primitive scalar values** in both directions — never objects, never the display label. The carried value is the choice's numeric Id.
+
+| FieldDisplayType | XAML type | Read value | Write value (CreateEntityRecord / UpdateEntityRecord / batch variants) |
+|---|---|---|---|
+| `ChoiceSetSingle` | `x:Int32` | The choice's numeric Id (e.g. `5`) | Same — pass the numeric Id |
+| `ChoiceSetMultiple` | `x:String` | A JSON-stringified array of numeric Ids (e.g. `"[1,3,7]"`) — the value is a `String`, not an array | Same — pass the JSON-stringified array as a string |
+
+The display label (e.g. `"Resolved"`, `"High"`) never appears on the wire — translate to / from the numeric Id via the entity's choice-set definition before binding the value. Same shape applies to all read paths (`QueryEntityRecords`, `GetEntityRecordById`, `OutputEntity` on create/update/file activities).
+
+```xml
+<!-- ChoiceSetSingle — set to numeric Id -->
+<udam:DynamicEntityField Id="STATUS_FIELD_GUID" IsRequired="True" Name="Status">
+  <udam:DynamicEntityField.ArgumentValue>
+    <InArgument x:TypeArguments="x:Int32">[5]</InArgument>
+  </udam:DynamicEntityField.ArgumentValue>
+</udam:DynamicEntityField>
+
+<!-- ChoiceSetMultiple — set to JSON-stringified array of numeric Ids -->
+<udam:DynamicEntityField Id="TAGS_FIELD_GUID" IsRequired="False" Name="Tags">
+  <udam:DynamicEntityField.ArgumentValue>
+    <InArgument x:TypeArguments="x:String">["[1,3,7]"]</InArgument>
+  </udam:DynamicEntityField.ArgumentValue>
+</udam:DynamicEntityField>
+```
+
+> Sending the display label (e.g. `"Resolved"`) or a native array literal for ChoiceSetMultiple fails — the API expects the numeric Id in both shapes shown above.
 
 ## Solution Context (Folder vs Tenant Scope)
 

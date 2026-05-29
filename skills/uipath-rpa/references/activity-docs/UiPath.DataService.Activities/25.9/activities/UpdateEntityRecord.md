@@ -16,7 +16,7 @@ Updates an existing record in a Data Fabric entity. Category: **DataService.Enti
 | `State` | `RecordState` | Yes | — | — | Contains `SelectedFields` with field GUIDs and values (Studio card UI reads this) |
 | `InputEntity` | `InArgument<TEntity>` | No | — | Input | Not recommended — Studio never syncs `SelectedFields` to this property, causing desync |
 | `VisibleDynamicPropertiesInfo` | `InArgument<string>` | No | `{x:Null}` | — | Always set to `{x:Null}` |
-| `ExpansionDepth` | `InArgument<int>` | No | `2` | Options | Depth of relationship expansion in response (range: 1–3) |
+| `ExpansionDepth` | `InArgument<int>` | No | `2` | Options | Depth of relationship expansion in response (range: 1–3, max `3`). On write, relationship fields take **only** the target record's Id GUID — see [overview § Relationship Fields & ExpansionDepth](../overview.md#relationship-fields--expansiondepth) |
 | `OutputEntity` | `OutArgument<TEntity>` | No | — | Output | Receives the updated record |
 | `ContinueOnError` | `InArgument<bool>` | No | `false` | Common | Continue workflow on error |
 | `TimeoutInMs` | `InArgument<int>` | No | `30000` | Common | Timeout in milliseconds |
