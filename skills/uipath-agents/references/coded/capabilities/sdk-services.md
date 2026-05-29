@@ -107,9 +107,17 @@ task = sdk.tasks.retrieve(action_key="task-key-123")
 
 ## Context Grounding
 
+> **For any RAG or context grounding work in a coded agent, read
+> [context-grounding.md](context-grounding.md) first — it covers the
+> recommended patterns including `ContextGroundingRetriever` for
+> LangGraph/LangChain integration. The raw SDK methods below are for
+> index management only (create, ingest, delete). For search/retrieval
+> in a LangGraph agent, use `ContextGroundingRetriever` from
+> `uipath_langchain.retrievers` as documented in context-grounding.md.**
+
 ```python
 index = sdk.context_grounding.retrieve(name="KnowledgeBase")
-results = sdk.context_grounding.search(name="KnowledgeBase", query="How do I reset my password?", number_of_results=5)
+results = sdk.context_grounding.search(name="KnowledgeBase", query="How do I reset my password?", number_of_results=5)  # deprecated — prefer ContextGroundingRetriever
 index = sdk.context_grounding.create_index(name="MyIndex", source={"type": "bucket", "bucketName": "docs-bucket"})
 sdk.context_grounding.add_to_index(name="MyIndex", blob_file_path="docs/guide.pdf", source_path="/local/guide.pdf")
 sdk.context_grounding.ingest_data(index=index)
