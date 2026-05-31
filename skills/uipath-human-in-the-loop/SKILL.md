@@ -1,6 +1,6 @@
 ---
 name: uipath-human-in-the-loop
-description: "UiPath Human-in-the-Loop / HITL / Human Task node authoring for Flow, Maestro, or Low-Code Agents. Approval gates, escalations, write-back validation, data enrichment — even without user saying 'HITL'. Designs task schema, writes JSON directly. For operating existing approval/validation tasks in Action Center→uipath-tasks."
+description: "UiPath Human-in-the-Loop / HITL node authoring — building approval gates, escalations, write-back validation, and data enrichment checkpoints in Flow, Maestro, or Coded Agents. NOT for managing, reassigning, or monitoring tasks at runtime (use uipath-tasks for that)."
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 ---
 
@@ -43,6 +43,7 @@ See [references/hitl-patterns.md](references/hitl-patterns.md) for the full busi
 7. **Check existing node IDs before generating a new one.** Read `workflow.nodes[*].id` from the `.flow` file and pick the next available suffix (e.g. `invoiceReview1`, then `invoiceReview2`).
 8. **Never report a failed validation as done.** If `uip maestro flow validate` returns errors, diagnose from the JSON output and fix before reporting to the user.
 9. **Output fields are accessed by `field.id`, not `field.variable`.** The runtime result object uses field IDs as keys — `$vars.<nodeId>.output.<fieldId>`. The `variable` property creates a separate workflow-global variable (`$vars.{variable}`) but does NOT change the key used in the output object.
+10. **Input field bindings must copy the upstream variable name character-for-character.** If a script sets `output.supplierName`, the binding must be `vars.<nodeId>.output.supplierName` — not `suppliername`, not `supplier_name`. Lowercasing or normalizing a key produces a binding to a non-existent path; the HITL form field will be blank at runtime and `flow validate` will not catch it. Read `variables.nodes` and transcribe the `$vars` path exactly as it appears.
 
 ---
 
