@@ -39,6 +39,8 @@ The cache file is `.guardrails-catalog-cache.json` in the current working direct
 
 ### Guardrails List (NEVER cached — tenant-specific)
 
+> **CRITICAL: Always run `uip agent guardrails list` even when the catalog was already fetched.** The catalog shows all guardrails that exist on the platform; the list shows only those available on THIS tenant. Recommending a validator not in the list will fail at runtime. Do not skip this step.
+
 This returns only guardrails available to the current tenant (filtered by entitlements and feature flags). Run it fresh every time:
 
 ```bash
