@@ -5,18 +5,10 @@ description: >
   Validates the agent follows the onboarding workflow from the skill.
 tags: [uipath-admin, e2e, onboarding]
 
-agent:
-  type: claude-code
-  permission_mode: acceptEdits
-  allowed_tools: ["Skill", "Bash", "Read", "Write", "Edit", "Glob", "Grep"]
-
 run_limits:
+  expected_turns: 10
   max_turns: 40
   turn_timeout: 600
-
-sandbox:
-  driver: tempdir
-  python: {}
 
 initial_prompt: |
   Onboard an unattended invoice-processing robot ("smoke-e2e-bot" /
@@ -67,12 +59,12 @@ success_criteria:
 
   - type: run_command
     description: "Robot account 'smoke-e2e-bot' was created and exists"
-    command: "python3 $TASK_DIR/../_shared/check_robot_account.py"
+    command: 'python3 -c "import os,runpy;runpy.run_path(os.path.join(os.environ[''TASK_DIR''],''check_robot_account.py''))"'
     timeout: 30
     expected_exit_code: 0
     weight: 3.0
     pass_threshold: 1.0
 
 post_run:
-  - command: "python3 $TASK_DIR/../_shared/cleanup_robot_account.py"
+  - command: 'python3 -c "import os,runpy;runpy.run_path(os.path.join(os.environ[''SKILLS_REPO_PATH''],''tests'',''tasks'',''uipath-admin'',''cleanup_robot_account.py''))"'
     timeout: 30

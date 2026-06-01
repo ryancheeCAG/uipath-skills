@@ -7,9 +7,8 @@ description: >
   loading the skill.
 tags: [uipath-planner, smoke, lifecycle:plan]
 
-sandbox:
-  driver: docker
-  python: {}
+run_limits:
+  expected_turns: 4
 
 initial_prompt: |
   Help me plan a UiPath solution from scratch — a multi-step process that

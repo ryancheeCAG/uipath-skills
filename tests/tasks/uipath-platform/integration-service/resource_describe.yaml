@@ -6,10 +6,8 @@ description: >
   for field-level detail, and always passing --connection-id.
 tags: [uipath-platform, smoke, integration-service, resources, describe]
 
-sandbox:
-  driver: docker
-  python: {}
-  node: {}
+run_limits:
+  expected_turns: 8
 
 initial_prompt: |
   Before starting, load the uipath-platform skill and follow its workflow.

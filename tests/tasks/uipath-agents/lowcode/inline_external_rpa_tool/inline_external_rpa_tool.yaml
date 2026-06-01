@@ -5,21 +5,13 @@ description: >
   EXTERNAL RPA process deployed to Orchestrator (not inside this
   solution). Verifies the tool resource.json under the inline agent's
   UUID subdirectory uses `type: "process"`, `location: "external"`,
-  real `folderPath`, and that a `uipath.agent.resource.tool.rpa` flow
-  node is wired to the autonomous agent node's `tool` handle.
+  real `folderPath`, and that a `uipath.agent.resource.tool.process.<uuid>`
+  flow node is wired to the autonomous agent node's `tool` handle.
 tags: [uipath-agents, e2e, low-code, inline-flow]
 
-agent:
-  type: claude-code
-  permission_mode: acceptEdits
-  allowed_tools: ["Skill", "Bash", "Read", "Write", "Edit", "Glob", "Grep"]
-
 run_limits:
+  expected_turns: 65
   turn_timeout: 1200
-
-sandbox:
-  driver: tempdir
-  python: {}
 
 initial_prompt: |
   Create a UiPath solution "FibonacciFlowSol" containing a flow project

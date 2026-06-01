@@ -36,6 +36,15 @@ CLI: `uip is --help`
 - [products/integration-service/overview.md](./products/integration-service/overview.md) — Product overview, connectors, connections, and CLI commands
 - [products/integration-service/summary.md](./products/integration-service/summary.md) — All playbooks for Integration Service issues
 
+## LLM Gateway
+
+Service that routes agent / product LLM calls to a model — platform default or tenant-owned (BYO) provider key. Issues here involve BYO LLM product configurations failing at runtime, server-side validation probes failing on `create` / `update`, and routing being bypassed (call hits the platform default despite an active BYO record). LLM Gateway failures often surface through the consuming agent / product (agents, agenthub, jarvis, IXP) or as auth-shaped errors referencing the vendor directly (OpenAI, Azure OpenAI, Bedrock, Vertex, Anthropic). The gateway does **not** expose per-request invocation logs via CLI — diagnosis is current-state + trace-evidence only.
+
+CLI: `uip llm-configuration --help`, `uip traces spans get`, `uip gov aops-policy deployed-policy resolve`
+
+- [products/llm-gateway/overview.md](./products/llm-gateway/overview.md) — Service model, dependencies, CLI surface, and what the CLI does NOT expose
+- [products/llm-gateway/summary.md](./products/llm-gateway/summary.md) — All playbooks for LLM Gateway / BYO LLM issues
+
 ## UI Automation
 
 Activities for interacting with desktop and web application UIs. Robots use selectors (XML descriptors) to find and interact with UI elements. Issues here involve selector failures, element not found exceptions, timeout issues, Healing Agent problems, and data validation errors during UI interactions.
@@ -53,6 +62,25 @@ Namespaces: `UiPath.Core.Activities`
 
 - [activity-packages/system-activities/overview.md](./activity-packages/system-activities/overview.md) — Package overview, activity types, and common failure patterns
 - [activity-packages/system-activities/summary.md](./activity-packages/system-activities/summary.md) — All playbooks for System Activities issues
+
+## Google Workspace Activities
+
+Activities for interacting with Google Workspace including Google Calendar, Google Drive, Google Sheets, Gmail, Google Docs, Google Tasks, and Google Forms. Issues here involve files not found, sheet name conflicts, multiple items name conflicts, emails not found, sheet cell limit exceeded, sheets invalid ranges, upload storage quota exceeded.
+
+Namespaces: `UiPath.GSuite.Activities`
+
+- [activity-packages/gsuite-activities/overview.md](./activity-packages/gsuite-activities/overview.md) — Package overview, activity types, and common failure patterns
+- [activity-packages/gsuite-activities/summary.md](./activity-packages/gsuite-activities/summary.md) — All playbooks for Google Workspace Activities issues
+
+## Microsoft Office 365 Activities
+
+Activities for interacting with Microsoft Office 365 through Graph API. Issues here involve multiple items name conflicts, drive items not found, mail folders not found, emails not matching the filters, already existing item names.
+
+Namespaces: `UiPath.MicrosoftOffice365.Activities`
+
+- [activity-packages/o365-activities/overview.md](./activity-packages/o365-activities/overview.md) — Package overview, activity types, and common failure patterns
+- [activity-packages/o365-activities/summary.md](./activity-packages/o365-activities/summary.md) — All playbooks for Microsoft Office 365 Activities issues
+
 
 ## Playbooks
 

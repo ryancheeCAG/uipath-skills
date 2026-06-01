@@ -4,9 +4,8 @@ description: >
   Tests correct CLI namespace and --output json convention.
 tags: [uipath-admin, smoke, list]
 
-sandbox:
-  driver: docker
-  python: {}
+run_limits:
+  expected_turns: 4
 
 initial_prompt: |
   List all users in my UiPath organization.
@@ -21,3 +20,4 @@ success_criteria:
     min_count: 1
     weight: 2.0
     pass_threshold: 1.0
+

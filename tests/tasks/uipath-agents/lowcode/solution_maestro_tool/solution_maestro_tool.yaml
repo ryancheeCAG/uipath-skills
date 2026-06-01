@@ -7,21 +7,13 @@ description: >
   `folderPath: "solution_folder"`.
 tags: [uipath-agents, e2e, low-code]
 
-agent:
-  type: claude-code
-  permission_mode: acceptEdits
-  allowed_tools: ["Skill", "Bash", "Read", "Write", "Edit", "Glob", "Grep"]
-
 run_limits:
+  expected_turns: 72
   turn_timeout: 1200
-
-sandbox:
-  driver: tempdir
-  python: {}
 
 initial_prompt: |
   Create a UiPath solution "OnboardingSol" containing a low-code agent
-  "OnboardingAgent". The agent should call a Maestro flow called
+  "OnboardingAgent". The agent should call an Agentic process called
   "EmployeeOnboarding" that lives INSIDE this same solution as a
   separate project. Expose it to the agent as a tool resource.
 

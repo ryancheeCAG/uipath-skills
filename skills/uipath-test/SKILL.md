@@ -24,15 +24,15 @@ Manage UiPath Test Manager resources (projects, test cases, test sets, execution
 
 UiPath Test Manager is a web application that manages the testing lifecycle of projects, enabling requirements traceability, test planning, and reporting. Its key business objects are:
 
-- **Requirements** — Defines what needs to be tested.
-- **Test cases** — Defines the scenarios to be tested.
-- **Test sets** — Groups of test cases for execution.
-- **Test executions** — Defining triggers and schedules for unattended execution.
-- **Test case logs** — Logs of a test case in an execution.
-- **Test step logs** — Step-level logs within a test case log.
-- **Test case log assertions** — Assertion steps of a test case log in an execution.
+- **Requirements** - Defines what needs to be tested.
+- **Test cases** - Defines the scenarios to be tested. A testcase can have **teststeps**. A testcase can be executed or run directly.
+- **Test sets** - Groups of test cases for execution.
+- **Test executions** - When a test set or a test case is run, a test execution is created.
+- **Test case logs** - Logs of a **test case** in an execution. A **testcase** can be navigated from **testcaselogs**.
+- **Test step logs** — Step-level logs within a **test case log**.
+- **Test case log assertions** - Assertion steps of a test case log in an execution.
 
-CLI tool for UiPath Test Manager (`uip tm`). Use `uip tm --help` and `uip tm <command> <subcommand> --help` to discover commands and options. **Always pass `--output json`** on every `uip` command (see Critical Rule #2).
+CLI tool for UiPath Test Manager (`uip tm`). Use `uip tm --help` and `uip tm <command> <subcommand> --help` to discover commands and options. **Always pass `--output json`** on every `uip` command.
 
 ## Commands
 
@@ -49,7 +49,7 @@ Common `uip tm` commands organized by resource type.
 | `uip tm project set-default-folder --project-key <PROJECT_KEY> --folder-key <FOLDER_KEY>` | Set the default Orchestrator folder for a project. |
 | `uip tm project clear-default-folder --project-key <PROJECT_KEY>` | Clear the default Orchestrator folder from a project. |
 
-> Get folder keys with `uip or folders list-current-user --output json` — returns all folders visible to the current user. Prefer it over `uip or folders list`, which is a narrower view and may miss folders the user can access.
+> Get folder keys with `uip or folders list -n <name> --all --output json` — returns all folders visible to the current user.
 
 ### Test Cases Commands
 
@@ -64,7 +64,7 @@ Common `uip tm` commands organized by resource type.
 | `uip tm testcases list-automations --project-key <PROJECT_KEY> --folder-key <FOLDER_KEY>` | List test entry points available in an Orchestrator folder (optional: `--package-name <PACKAGE_NAME>` to filter). |
 | `uip tm testcases list-testsets --project-key <PROJECT_KEY> --test-case-key <TEST_CASE_KEY>` | List test sets that contain a given test case. |
 | `uip tm testcases list-steps --project-key <PROJECT_KEY> --test-case-id <TEST_CASE_ID>` | List test steps for a test case. **Uses `--test-case-id <UUID>`, not `--test-case-key`.** |
-| `uip tm testcases list-result-history --project-key <PROJECT_KEY> --test-case-id <TEST_CASE_ID>` | List test case log result history for a specific test case. Optional `--only-failed`, `--filter`, `--top`, `--skip`. |
+| `uip tm testcases list-result-history --project-key <PROJECT_KEY> --test-case-id <TEST_CASE_ID>` | List test case log result history for a specific test case. Optional `--only-failed`, `--filter`, `--limit`, `--offset`. |
 | `uip tm testcases run --project-key <PROJECT_KEY> --test-case-id <TEST_CASE_ID>` | Start a new execution for one or more test cases. **Uses `--test-case-id <UUID>` (space-separated for multiple).** Optional `--async`, `--name`, `--folder-key`, `--robot-user-key`, `--machine-key`. |
 | `uip tm testcases add --test-set-key <TEST_SET_KEY> --test-case-keys <KEY1,KEY2,...>` | Add test cases to a test set (comma-separated keys). |
 | `uip tm testcases remove --test-set-key <TEST_SET_KEY> --test-case-keys <KEY1,KEY2,...>` | Remove test cases from a test set (comma-separated keys). |
@@ -91,12 +91,12 @@ Common `uip tm` commands organized by resource type.
 
 | Command | Purpose |
 |---|---|
-| `uip tm executions list --project-key <PROJECT_KEY>` | List top n executions for a project. Optional `--test-set-id <UUID>` to scope to a test set, `--filter <text>`, `--top`, `--skip`. **Use this for the common case** (one test set or a single project query). |
-| `uip tm executions list-filtered --project-key <PROJECT_KEY>` | Rich-filter variant: `--test-set-id`, `--updated-by`, `--search`, `--labels`, `--test-execution-ids`, `--order-by`, `--top`, `--skip`. **Use only when you need label filtering, multi-execution-id lookup, custom ordering, or `--updated-by` filtering** — features `list` does not expose. |
+| `uip tm executions list --project-key <PROJECT_KEY>` | List top n executions for a project. Optional `--test-set-id <UUID>` to scope to a test set, `--filter <text>`, `--limit`, `--offset`. **Use this for the common case** (one test set or a single project query). |
+| `uip tm executions list-filtered --project-key <PROJECT_KEY>` | Rich-filter variant: `--test-set-id`, `--updated-by`, `--search`, `--labels`, `--test-execution-ids`, `--sort-by`, `--limit`, `--offset`. **Use only when you need label filtering, multi-execution-id lookup, custom ordering, or `--updated-by` filtering** — features `list` does not expose. |
 | `uip tm executions get-stats --execution-id <EXECUTION_ID> --project-key <PROJECT_KEY>` | Get aggregated statistics for a single test execution. |
 | `uip tm executions run --execution-id <EXECUTION_ID> --project-key <PROJECT_KEY> --execution-type <TYPE>` | Re-run an existing test execution. Optional `--test-case-log-ids <UUID...>` to re-run only specific test case logs (space-separated), `--async`. |
 | `uip tm executions retry --execution-id <EXECUTION_ID>` | Retry only the failed test cases of a finished execution. Optional `--project-key`, `--test-set-key`, `--execution-type`. |
-| `uip tm executions testcaselogs list --execution-id <EXECUTION_ID> --project-key <PROJECT_KEY>` | List test case logs of an execution. Optional `--only-failed`, `--filter`, `--top`, `--skip`. **Note the nested subcommand path — this is not a top-level `executions` verb.** |
+| `uip tm executions testcaselogs list --execution-id <EXECUTION_ID> --project-key <PROJECT_KEY>` | List test case logs of an execution. Optional `--only-failed`, `--filter`, `--limit`, `--offset`. **Note the nested subcommand path — this is not a top-level `executions` verb.** |
 
 > **`run` lives under three groups, all distinct:**
 > - `uip tm testcases run` — start a new execution for one or more **test cases** (`--test-case-id` UUIDs, space-separated).
@@ -152,12 +152,14 @@ Common `uip tm` commands organized by resource type.
 1. **Always check login first** — run `uip login status --output json` before any Test Manager operation. If not authenticated, run `uip login` to sign in.
 2. **Probe the CLI surface once per session, before the first `uip tm` command.** Run `uip tm testcases --help --output json` (any flags accepted). Result `Success` → post-rename CLI; use the command tables above as-is. `unknown command` / non-zero exit → pre-rename CLI; translate via the [Pre-rename fallbacks](#pre-rename-fallbacks) table before each call. Re-probe on any later `unknown command` error.
 3. **Always pass `--output json`** to every `uip` command — no exceptions. Structured JSON output is what you need to reason about results reliably, even when you only plan to summarize them back to the user.
-4. **Cap retries at 3** for any failing API call. After 3 failures, stop and report the error to the user.
+4. **Cap retries at 3** for any failing `uip` CLI command. After 3 failures, stop and report the error to the user (see Rule — never fall back to direct REST APIs).
 5. **Handle empty results** — if a list command returns an empty array, stop and inform the user rather than proceeding with a null key.
 6. **Confirm before delete** — always confirm the target resource key with the user before running any `delete` command.
-7. **For operations requiring folder key** — use `uip or folders list-current-user --output json` (run `/uipath-platform` for folder management details).
-8. **Discover before assuming** — never guess automation names, folder keys, project IDs, or test case keys. Always run the matching `list` command first (e.g., `uip tm testcases list-automations`, `uip or folders list-current-user`).
+7. **For operations requiring folder key** — use `uip or folders list -n <folder-name> --all --output json` (run `/uipath-platform` for folder management details).
+8. **Discover before assuming** — never guess automation names, folder keys, project IDs, or test case keys. Always run the matching `list` command first (e.g., `uip tm testcases list-automations`, `uip or folders list -n <folder-name> --all`).
 9. **Narrow `list` calls server-side when the user names an entity.** When the user provides a name, key, label, or tag, check `uip tm <resource> list --help` (or `uip or <resource> list --help`) for the narrowing flag the command exposes and pass it on the `list` call. Never list all results and filter client-side — it wastes tokens and misses paginated entries. Applies to every entity across `uip tm` and `uip or`.
+10. **Set default folder before any `run` command** — `uip tm testcases run` and `uip tm testsets run` both require a default Orchestrator folder on the project. Run `uip tm project set-default-folder --project-key <PROJECT_KEY> --folder-key <FOLDER_KEY> --output json` first. Get folder keys with `uip or folders list -n <folder-name> --all --output json`.
+11. **On any `uip` command failure or ambiguity, STOP and ask the user — do NOT fall back to direct REST API calls.** When a `uip` command errors, returns malformed output, or the right flag/value is unclear (e.g., multiple matching entities, missing identifier, unexpected schema), interrupt and ask the user before proceeding. This overrides any instinct to "try the underlying API instead."
 
 ### Pre-rename fallbacks
 
@@ -190,6 +192,13 @@ If the probe in Rule #2 shows singular subjects, the CLI predates the closed-ver
    ```
   For more authentication details, run `/uipath-platform`.
 
+### Confirm project scope
+  Ask the user for the project name or key before any Test Manager call. For multi-project scenarios, collect ALL names or keys in one prompt. Resolve each to a `PROJECT_KEY`:
+  ```bash
+  uip tm project list --filter <NAME_OR_KEY> --output json
+  ```
+  Zero matches → stop and ask the user. Multiple matches → list candidates and ask the user to pick. Reuse the confirmed `PROJECT_KEY` for every downstream command.
+
 ```bash
   # Get project
   uip tm project list --filter <PROJECT_NAME_OR_KEY> --output json
@@ -201,7 +210,7 @@ If the probe in Rule #2 shows singular subjects, the CLI predates the closed-ver
   uip tm testsets list-testcases --project-key <PROJECT_KEY> --test-set-key <TEST_SET_KEY> --output json
 
   # List recent executions for a test set
-  uip tm executions list --project-key <PROJECT_KEY> --test-set-id <TEST_SET_ID> --top 100 --output json
+  uip tm executions list --project-key <PROJECT_KEY> --test-set-id <TEST_SET_ID> --limit 100 --output json
 
   # List test case logs for an execution (nested subcommand under `executions`)
   uip tm executions testcaselogs list --execution-id <EXECUTION_ID> --project-key <PROJECT_KEY> --output json

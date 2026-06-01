@@ -4,7 +4,7 @@ Capability index for the lifecycle of a flow as a deployed asset. Operate owns e
 
 > **Where you came from / where to go next.** Operate is downstream of Author (build the flow → ship it) and upstream of Diagnose (run faults → diagnose). Build/edit lives in [author/CAPABILITY.md](../author/CAPABILITY.md); fault triage lives in [diagnose/CAPABILITY.md](../diagnose/CAPABILITY.md).
 >
-> **Inherits universal rules from [SKILL.md](../../SKILL.md)** — `--output json`, no `flow debug` without consent, never invoke other skills automatically, AskUserQuestion dropdown pattern, solution layout, **plain-English narration per logical step**, **granular `TodoWrite` list above the trivial threshold**. The rules below are operate-scoped and apply on top.
+> **Inherits universal rules from [SKILL.md](../../SKILL.md)** — `--output json` + prefer `--output-filter` for extraction, no `flow debug` without consent, never invoke other skills automatically, AskUserQuestion dropdown pattern, solution layout, **plain-English narration + granular `TodoWrite` (opt-in — silent by default; engage when the user asks for verbosity)**. The rules below are operate-scoped and apply on top.
 
 ## When to use this capability
 
@@ -20,7 +20,7 @@ Capability index for the lifecycle of a flow as a deployed asset. Operate owns e
 
 1. **Always run `uip solution resource refresh <SolutionDir>` before `solution upload` or `flow debug`.** Stale resource declarations cause runtime binding failures even when the local `.flow` is correct. The refresh syncs connection and process resource declarations from the project's `bindings_v2.json` files into the solution.
 2. **Default to Studio Web when the user says "publish" without specifier.** "Publish" → `uip solution upload <SolutionDir>`. Only run `uip maestro flow pack` + `uip solution publish` when the user explicitly asks to deploy to Orchestrator. The Orchestrator path bypasses Studio Web — the user cannot visualize or edit the flow there.
-3. **Always include `--folder-key <FOLDER_KEY>` (`-f` shorthand) on `instance` commands.** Without it the command rejects the request before reaching the API. Get the folder key from `uip or folders list --output json` or from the job/process context. See [shared/cli-conventions.md](../shared/cli-conventions.md#5---folder-key-requirement).
+3. **Always include `--folder-key <FOLDER_KEY>` (`-f` shorthand) on `instance` commands.** Without it the command rejects the request before reaching the API. Get the folder key from `uip or folders list --output json` or from the job/process context. See [shared/cli-conventions.md](../shared/cli-conventions.md#6---folder-key-requirement).
 4. **Always report Studio Web URL and Instance ID as the first two lines of any debug summary.** Parse `Data.studioWebUrl` and `Data.instanceId` from the JSON output. Use `<not returned by CLI>` if missing — never omit the line. Users need these immediately, not buried below status text.
 
 ## Workflow
@@ -40,6 +40,7 @@ Capability index for the lifecycle of a flow as a deployed asset. Operate owns e
 | **Sync solution resource declarations** | [ship.md — Pre-flight](references/ship.md#pre-flight) (the `uip solution resource refresh` step) |
 | **Debug a flow end-to-end** | [run.md — Debug](references/run.md#debug--controlled-end-to-end-run) |
 | **Pass input arguments to `flow debug`** | [run.md — Debug](references/run.md#debug--controlled-end-to-end-run) (the `--inputs` flag) |
+| **Bind local files to file-typed inputs** | [run.md — Debug](references/run.md#debug--controlled-end-to-end-run) and [run.md — Process run](references/run.md#process-run--trigger-a-deployed-process) (same `--attachment <variableId>=<localPath>` flag on both, repeatable; `--attachment` overrides `--inputs` on key collisions) |
 | **Trigger a deployed process** | [run.md — Process run](references/run.md#process-run--trigger-a-deployed-process) |
 | **Check status of a running job** | [run.md — Job inspection](references/run.md#job-inspection--status-and-traces) |
 | **Stream verbose execution traces** | [run.md — Job inspection](references/run.md#job-inspection--status-and-traces) (use sparingly — see [diagnose/CAPABILITY.md](../diagnose/CAPABILITY.md)) |

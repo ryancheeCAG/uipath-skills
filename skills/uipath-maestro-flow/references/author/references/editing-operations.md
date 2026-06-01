@@ -21,7 +21,7 @@ If the change feels too tangled for a sequence of `Edit` calls, use `Write` for 
 
 ## Required Strategy
 
-> **Use Edit / Write for all non-carve-out `.flow` edits.** Flow CLI is not an opt-in alternative for OOTB structural edits. Use CLI only for connector activity, connector-trigger, and managed HTTP carve-outs. Inline-agent project lifecycle commands (`uip agent init --inline-in-flow`, `uip agent validate --inline-in-flow`) are allowed for the agent project, but the `uipath.agent.autonomous` flow node and edges are authored directly in `.flow` JSON.
+> **Use Edit / Write for all non-carve-out `.flow` edits.** Flow CLI is not an opt-in alternative for OOTB structural edits. Use CLI only for connector activity, connector-trigger, and managed HTTP carve-outs. Inline-agent project lifecycle commands (`uip agent init --inline-in-flow`, `uip agent validate --inline-in-flow`, `uip agent migrate --inline-in-flow`) are allowed for the agent project, but the `uipath.agent.autonomous` flow node and edges are authored directly in `.flow` JSON.
 
 | Strategy | Guide | When to use |
 |----------|-------|-------------|
@@ -70,7 +70,7 @@ These apply regardless of which strategy you use.
 ### Definitions
 
 - Every unique `type:typeVersion` pair in `nodes` must have a matching entry in `definitions`
-- Definitions come from `uip maestro flow registry get <NODE_TYPE> --output json` — copy the returned node definition object (`Data.Node` or the top-level node object, depending on CLI/plugin version)
+- Definitions come from `uip maestro flow registry get <node-type> --output json` — copy the returned node definition object (`Data.Node` or the top-level node object, depending on CLI/plugin version)
 - **Never hand-write definitions** — hand-written definitions cause validation failures
 - One definition per unique type, not one per node instance
 

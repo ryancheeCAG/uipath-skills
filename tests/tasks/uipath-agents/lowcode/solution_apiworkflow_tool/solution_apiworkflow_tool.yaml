@@ -7,17 +7,9 @@ description: >
   `folderPath: "solution_folder"`.
 tags: [uipath-agents, e2e, low-code]
 
-agent:
-  type: claude-code
-  permission_mode: acceptEdits
-  allowed_tools: ["Skill", "Bash", "Read", "Write", "Edit", "Glob", "Grep"]
-
 run_limits:
+  expected_turns: 62
   turn_timeout: 1200
-
-sandbox:
-  driver: tempdir
-  python: {}
 
 initial_prompt: |
   Create a UiPath solution "ShippingSol" containing a low-code agent

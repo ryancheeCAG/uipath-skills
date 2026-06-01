@@ -1,6 +1,6 @@
 # HITL QuickForm Node — Direct JSON Reference
 
-The agent writes the `uipath.human-in-the-loop` node directly into the `.flow` file as JSON. **Direct JSON is the default.** A CLI opt-in is also available when the user explicitly requests it — see [cli-commands.md — uip maestro flow hitl add](../../../../uipath-maestro-flow/references/shared/cli-commands.md#uip-maestro-flow-hitl-add).
+The agent writes the `uipath.human-in-the-loop` node directly into the `.flow` file as JSON. **Direct JSON is the default.** A CLI opt-in is available when the user explicitly requests it, or as a fallback if direct JSON writing fails — see [CLI reference: uip maestro flow hitl add](../../uipath-maestro-flow/references/shared/cli-commands.md#uip-maestro-flow-hitl-add).
 
 ---
 
@@ -40,6 +40,8 @@ Each entry exposes exactly what `$vars` paths are available:
 
 The `id` field is the `$vars` path — `fetchInvoice.output` → `$vars.fetchInvoice.output`. Nested field access appends `.fieldName` (e.g., `$vars.fetchInvoice.output.invoiceId`).
 
+> **Binding path key = upstream script output key, not the HITL field `id`.** The HITL field `id` identifies the form field (lowercase, used for rendering). The binding path key is the property name in the upstream script's `return` statement. These are different things. If the script returns `{ supplierName: "Acme" }` and you give the HITL field `"id": "suppliername"`, the correct binding is `vars.fetchSupplier.output.supplierName` — NOT `vars.fetchSupplier.output.suppliername`. The field `id` is irrelevant to the binding path. Always look at the upstream script source to derive the key, never at the HITL field schema you are writing.
+
 **outputId by node type:**
 
 | Node type | outputId | Access pattern |
@@ -67,7 +69,7 @@ Also read `workflow.variables.globals`. Each entry has an `id` that maps directl
 | Node output | `vars.<nodeId>.output.<field>` | `=js:$vars.<nodeId>.output.<field>` |
 | Flow global (`direction: "in"`) | `vars.<globalId>` | `=js:$vars.<globalId>` |
 
-For the full variable system, see → [uipath-maestro-flow — variables-and-expressions.md](../../../../uipath-maestro-flow/references/shared/variables-and-expressions.md)
+For the full variable system, see → [How $vars paths are constructed in Flow](../../uipath-maestro-flow/references/shared/variables-and-expressions.md)
 
 ---
 
@@ -375,6 +377,8 @@ After the HITL node, downstream nodes can reference:
 | `$vars.<globalId>` | varies | Workflow-global variable for output/inOut fields — accessible without node prefix. The `globalId` is derived from `field.variable` (strip `vars.` prefix) |
 
 > **`fieldId` not `variable`**: The output object properties are keyed by the field's `id` (e.g. `"decision"`), not by the `variable` property. The `variable` property (`"vars.approvalResult"`) creates a separate workflow-global variable (`$vars.approvalResult`) — it does not change the key used in the output object. If a field has `"id": "dec1"` and `"variable": "vars.approvalResult"`, access it via the object as `$vars.nodeId.output.dec1`, or directly as `$vars.approvalResult`.
+>
+> **Common mistake:** A field with `"id": "approved"` and `"variable": "legalApproval"` must be read as `$vars.<nodeId>.output.approved` — **not** `$vars.<nodeId>.output.legalApproval`. Using the `variable` name as the key produces `undefined` at runtime; `flow validate` does not catch it.
 
 **In a downstream script node:**
 ```javascript

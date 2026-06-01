@@ -13,23 +13,15 @@ description: >
   binding kind) pinned to the deployed name + folder.
 tags: [uipath-agents, e2e, low-code]
 
-agent:
-  type: claude-code
-  permission_mode: acceptEdits
-  allowed_tools: ["Skill", "Bash", "Read", "Write", "Edit", "Glob", "Grep"]
-
 run_limits:
+  expected_turns: 29
   turn_timeout: 1200
-
-sandbox:
-  driver: tempdir
-  python: {}
 
 initial_prompt: |
   Create a UiPath solution "ProcurementSol" containing a single
   low-code agent "ProcurementAgent". The agent accepts a required
   `productId` (number) and returns a boolean `status`. It must
-  determine the status by delegating to a Maestro / agentic process
+  determine the status by delegating to an Agentic process
   named "ProcurementProcess" that is already deployed in the
   tenant — not by reasoning about the answer itself.
 
