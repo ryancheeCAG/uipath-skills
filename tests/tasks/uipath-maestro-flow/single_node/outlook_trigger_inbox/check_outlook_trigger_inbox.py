@@ -154,7 +154,14 @@ def check_folder_id_fresh():
     live = _uip_resources_run(
         ["list", CONNECTOR_KEY, "MailFolder", "--connection-id", conn_id, "--output", "json"]
     )
-    live_ids = {f.get("id") for f in _extract_list_items(live)}
+    # A MailFolder item exposes its id under `id` (camelCase — the connector's
+    # native shape, restored for `resources run` by uipath-cli #2308) or `Id`
+    # (PascalCase — CLI #2266 output normalization). Read both, then drop None
+    # so the set can never collapse to {None}: that previously masqueraded as
+    # "1 MailFolder IDs" and tripped a FALSE PR #348 regression even when the
+    # agent had freshly resolved the folder.
+    live_ids = {(f.get("id") or f.get("Id")) for f in _extract_list_items(live)}
+    live_ids.discard(None)
     if not live_ids:
         sys.exit(
             "FAIL: resources run/execute list MailFolder returned no folders on the bound connection"

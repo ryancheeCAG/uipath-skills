@@ -52,6 +52,12 @@ def _success_payload(folder_id: str = "mail-folder-1") -> str:
     return json.dumps({"Data": [{"id": folder_id}]})
 
 
+def _success_payload_pascal(folder_id: str = "mail-folder-1") -> str:
+    """`resources run list` output under CLI #2266 PascalCase normalization:
+    the item id key is `Id`, not `id`."""
+    return json.dumps({"Data": [{"Id": folder_id}]})
+
+
 def test_uses_run_verb_when_cli_supports_it(monkeypatch) -> None:
     """Happy path: post-rename CLI accepts `run`; no fallback issued."""
     checker = _load_checker()
@@ -133,3 +139,41 @@ def test_folder_id_mismatch_fails_with_pr348_signature(monkeypatch) -> None:
         assert "PR #348 regression" in str(message)
     else:
         raise AssertionError("expected SystemExit on a stale folder id")
+
+
+def test_pascalcase_item_id_resolves(monkeypatch) -> None:
+    """CLI #2266 regression: when `resources run list` returns PascalCase
+    item keys (`Id`), a freshly-resolved folder must still resolve.
+
+    On the pre-fix checker every `f.get("id")` was None, so `live_ids`
+    collapsed to {None} (cardinality 1) and a correct flow failed with a
+    bogus "1 MailFolder IDs" PR #348 regression. This locks the camelCase/
+    PascalCase tolerance."""
+    checker = _load_checker()
+    _patch_static(monkeypatch, checker, folder_id="mail-folder-1")
+
+    def fake_run(_args, **_kwargs):
+        return _fake_proc(0, stdout=_success_payload_pascal(folder_id="mail-folder-1"))
+
+    monkeypatch.setattr(checker.subprocess, "run", fake_run)
+    # Must NOT raise: the agent's folder id is present under the PascalCase key.
+    checker.check_folder_id_fresh()
+
+
+def test_pascalcase_genuine_mismatch_still_fails(monkeypatch) -> None:
+    """Tolerating PascalCase must not weaken the check: a genuinely stale
+    id under PascalCase output still trips the PR #348 marker (not a silent
+    pass via {None})."""
+    checker = _load_checker()
+    _patch_static(monkeypatch, checker, folder_id="stale-id-from-old-connection")
+
+    def fake_run(_args, **_kwargs):
+        return _fake_proc(0, stdout=_success_payload_pascal(folder_id="fresh-id"))
+
+    monkeypatch.setattr(checker.subprocess, "run", fake_run)
+    try:
+        checker.check_folder_id_fresh()
+    except SystemExit as exc:
+        assert "PR #348 regression" in str(exc.code)
+    else:
+        raise AssertionError("expected SystemExit on a stale folder id (PascalCase)")

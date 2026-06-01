@@ -13,6 +13,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flow_check import (  # noqa: E402
+    _get_ci,
     assert_flow_has_exact_node_type,
     assert_flow_has_node_type,
     assert_flow_uses_connector_target,
@@ -346,6 +347,21 @@ def test_is_flow_project_handles_malformed_manifest(tmp_path):
 def test_is_flow_project_handles_missing_file(tmp_path):
     missing = tmp_path / "does-not-exist.uiproj"
     assert _is_flow_project(str(missing)) is False
+
+
+def test_get_ci_tolerates_camel_and_pascal_case():
+    """_get_ci backs the debug-payload reads in the terminate/salesforce
+    checkers; it must resolve a key regardless of the CLI's output casing
+    (camelCase pre-#2266 / restored by cli #2308, PascalCase under #2266)."""
+    assert _get_ci({"finalStatus": "Completed"}, "finalStatus", "FinalStatus") == "Completed"
+    assert _get_ci({"FinalStatus": "Completed"}, "finalStatus", "FinalStatus") == "Completed"
+    # First lowercased candidate to match wins; order of args is the preference.
+    assert _get_ci({"Status": "Terminated"}, "status", "Status") == "Terminated"
+    # Missing key -> default; non-dict input -> default (never raises).
+    assert _get_ci({"Other": 1}, "status", "Status") is None
+    assert _get_ci({"Other": 1}, "status", default="x") == "x"
+    assert _get_ci(None, "status") is None
+    assert _get_ci(["not", "a", "dict"], "status") is None
 
 
 def test_find_project_dir_uses_central_filter(tmp_path, monkeypatch):
