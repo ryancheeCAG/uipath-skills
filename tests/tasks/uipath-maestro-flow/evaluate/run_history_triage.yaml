@@ -1,0 +1,148 @@
+task_id: skill-flow-eval-run-history-triage
+description: >
+  Tenant-backed Flow eval run-management coverage for non-wait start,
+  explicit polling, failed-row triage with `--only-failed --verbose`, run
+  listing, and comparing two runs from the same eval set.
+tags: [uipath-maestro-flow, e2e, mode:operate, lifecycle:execute, feature:eval]
+
+run_limits:
+  expected_turns: 55
+  max_turns: 100
+  turn_timeout: 1800
+  task_timeout: 2400
+
+post_run:
+  - command: "python3 $SKILLS_REPO_PATH/tests/tasks/uipath-maestro-flow/_shared/cleanup_solutions.py"
+    timeout: 90
+
+initial_prompt: |
+  Build a deterministic UiPath Flow and exercise Studio Web eval run history
+  commands. Use the `uipath-maestro-flow` skill's author and evaluate
+  capabilities.
+
+  Project layout: `EvalRunHistory/EvalRunHistory/EvalRunHistory.flow`.
+
+  Flow behavior:
+  - Start input variable: `name` (string).
+  - Script node returns `{ greeting: "Hello, " + name + "!" }`.
+  - End output variable: `greeting` (string).
+
+  Eval scaffolding:
+  - Exact-match evaluator named `greeting-match`, with `--target-key greeting`.
+  - Eval set named `Regression`.
+  - Two data points:
+      - `good-alice`: inputs `{"name":"Alice"}`, expected `{"greeting":"Hello, Alice!"}`
+      - `bad-bob`: inputs `{"name":"Bob"}`, expected `{"greeting":"Hello, Bob?"}`
+        This case is intentionally wrong so `--only-failed` has a row to return.
+
+  Run lifecycle:
+  1. Confirm the active tenant with `uip login status --output json`. Do not
+     run `uip login`.
+  2. Validate the Flow. I explicitly authorize uploading this single demo
+     solution for the eval run. Run `uip solution resource refresh
+     EvalRunHistory --output json`, then `uip solution upload EvalRunHistory
+     --output json`.
+  3. Start run A without `--wait`, save the full JSON as
+     `flow-run-a-start.json`, extract its run id, then poll
+     `uip maestro flow eval run status <run_id> --set "Regression" --path
+     EvalRunHistory/EvalRunHistory --output json` until terminal or at most
+     six polls. Save the latest status JSON as `flow-run-a-status.json`.
+  4. Fetch failed-row triage for run A using
+     `uip maestro flow eval run results <run_id> --set "Regression"
+     --path EvalRunHistory/EvalRunHistory --only-failed --verbose --output json`
+     and save it as `flow-only-failed-results.json`.
+  5. Start run B with `--wait --timeout 600 --output json`, save the returned
+     JSON as `flow-run-b-start.json`, then call status once for the same run id
+     and save it as `flow-run-b-status.json`.
+  6. List runs for `Regression`, save JSON as `flow-run-list.json`.
+  7. Compare run B to run A with
+     `uip maestro flow eval run compare <run_b_id> --compare-to <run_a_id>
+     --set "Regression" --path EvalRunHistory/EvalRunHistory --output json`
+     and save JSON as `flow-run-compare.json`.
+
+  Important:
+  - Start exactly two eval runs, both against the same eval set.
+  - Do not use `uip maestro flow debug`.
+  - Do not upload any other solution.
+  - Use `--output json` on every `uip` command.
+
+success_criteria:
+  - type: command_executed
+    description: "Agent confirmed login status without re-login"
+    tool_name: "Bash"
+    command_pattern: '(uip|\$UIP)\s+login\s+status\s+.*--output\s+json'
+    min_count: 1
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_not_executed
+    description: "Agent did not run login"
+    tool_name: "Bash"
+    command_pattern: '(uip|\$UIP)\s+login\s+(?!status)'
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent uploaded the authorized demo solution"
+    tool_name: "Bash"
+    command_pattern: '(uip|\$UIP)\s+solution\s+upload\s+EvalRunHistory'
+    min_count: 1
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent started exactly two Flow eval runs"
+    tool_name: "Bash"
+    command_pattern: '(uip|\$UIP)\s+maestro\s+flow\s+eval\s+run\s+start'
+    min_count: 2
+    max_count: 2
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent used --wait for the second run"
+    tool_name: "Bash"
+    command_pattern: '(uip|\$UIP)\s+maestro\s+flow\s+eval\s+run\s+start[\s\S]*--wait'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent polled run status"
+    tool_name: "Bash"
+    command_pattern: '(uip|\$UIP)\s+maestro\s+flow\s+eval\s+run\s+status'
+    min_count: 2
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent fetched failed results with verbose justifications"
+    tool_name: "Bash"
+    command_pattern: '(uip|\$UIP)\s+maestro\s+flow\s+eval\s+run\s+results(?=[\s\S]*--only-failed)(?=[\s\S]*--verbose)'
+    min_count: 1
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent listed historical runs"
+    tool_name: "Bash"
+    command_pattern: '(uip|\$UIP)\s+maestro\s+flow\s+eval\s+run\s+list\s+'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent compared the two runs from the same eval set"
+    tool_name: "Bash"
+    command_pattern: '(uip|\$UIP)\s+maestro\s+flow\s+eval\s+run\s+compare[\s\S]*--compare-to'
+    min_count: 1
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Saved run lifecycle JSON proves failed-row triage, list, and compare worked"
+    command: "python3 $TASK_DIR/check_run_history_triage.py"
+    timeout: 30
+    expected_exit_code: 0
+    weight: 7.0
+    pass_threshold: 1.0
