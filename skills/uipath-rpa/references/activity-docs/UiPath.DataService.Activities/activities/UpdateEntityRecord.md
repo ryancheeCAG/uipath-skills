@@ -12,20 +12,38 @@ Updates an existing record in a Data Fabric entity.
 
 ## Properties
 
-| Property | Type | Required | Default | Category | Description |
-|----------|------|----------|---------|----------|-------------|
-| `x:TypeArguments` | — | Yes | — | — | Concrete entity type: `local:EntityName` |
-| `EntityId` | `InArgument<Guid>` | Yes | — | — | Entity GUID from `EntitiesStore.json` |
-| `RecordId` | `InArgument<Guid>` | Yes | — | Input | GUID of the record to update |
-| `InputEntityInFieldView` | `InArgument<TEntity>` | Yes | — | Input | Object-initializer expression with updated field values (runtime reads this) |
-| `IsInRecordView` | `InArgument<bool>` | Yes | — | — | Set to `[False]` — makes runtime read `InputEntityInFieldView` |
-| `State` | `RecordState` | Yes | — | — | Contains `SelectedFields` with field GUIDs and values (Studio card UI reads this) |
-| `InputEntity` | `InArgument<TEntity>` | No | — | Input | Not recommended — Studio never syncs `SelectedFields` to this property, causing desync |
-| `VisibleDynamicPropertiesInfo` | `InArgument<string>` | No | `{x:Null}` | — | Always set to `{x:Null}` |
-| `ExpansionDepth` | `InArgument<int>` | No | `2` | Options | Depth of relationship expansion in response (range: 1–3, max `3`). On write, relationship fields take **only** the target record's Id GUID — see [overview § Relationship Fields & ExpansionDepth](../overview.md#relationship-fields--expansiondepth) |
-| `OutputEntity` | `OutArgument<TEntity>` | No | — | Output | Receives the updated record |
-| `ContinueOnError` | `InArgument<bool>` | No | `false` | Common | Continue workflow on error |
-| `TimeoutInMs` | `InArgument<int>` | No | `30000` | Common | Timeout in milliseconds |
+`x:TypeArguments` — concrete entity type, e.g. `local:EntityName`. Required at activity declaration.
+
+### Input
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `EntityId` | `InArgument<Guid>` | Yes | — | Entity GUID from `EntitiesStore.json` |
+| `RecordId` | `InArgument<Guid>` | Yes | — | GUID of the record to update |
+| `InputEntityInFieldView` | `InArgument<TEntity>` | Yes | — | Object-initializer expression with updated field values (runtime reads this) |
+| `InputEntity` | `InArgument<TEntity>` | No | — | Not recommended — Studio never syncs `SelectedFields` to this property, causing desync |
+| `State` | `RecordState` | Yes | — | Contains `SelectedFields` with field GUIDs and values (Studio card UI reads this) |
+| `ExpansionDepth` | `InArgument<int>` | No | `2` | Depth of relationship expansion in response (range: 1–3, max `3`). On write, relationship fields take **only** the target record's Id GUID — see [overview § Relationship Fields & ExpansionDepth](../overview.md#relationship-fields--expansiondepth) |
+
+### Output
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `OutputEntity` | `OutArgument<TEntity>` | No | — | Receives the updated record |
+
+### Configuration
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `IsInRecordView` | `InArgument<bool>` | Yes | — | Set to `[False]` — makes runtime read `InputEntityInFieldView` |
+| `VisibleDynamicPropertiesInfo` | `InArgument<string>` | No | `{x:Null}` | Always set to `{x:Null}` |
+
+### Common
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `ContinueOnError` | `InArgument<bool>` | No | `false` | Continue workflow on error |
+| `TimeoutInMs` | `InArgument<int>` | No | `30000` | Timeout in milliseconds |
 
 > **Solution scope properties** (`ScopeValue`, `SolutionEntityKey`, `SolutionEntityName`) only apply when the project has a SolutionId. For standalone projects, omit them. See [overview — Solution Scope Properties](overview.md#solution-scope-properties-conditional) and [Solution Context](overview.md#solution-context-folder-vs-tenant-scope).
 

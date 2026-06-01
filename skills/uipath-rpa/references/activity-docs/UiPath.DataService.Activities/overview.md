@@ -64,6 +64,19 @@ Only entities explicitly imported via Studio are available as CLR types in the g
 
 **Only read `EntitiesStore.json` from the current project.** Resolve the path via `project.json` → `entitiesStores[0].serviceDocument`. Do not search for `EntitiesStore.json` in sibling directories, parent folders, or other projects — even if multiple projects are open in Studio. If the entity you need does not appear with `installed: true` in `data-fabric-entities list` output, run `uip rpa data-fabric-entities install --add "<ENTITY_NAME>" --project-dir "<PROJECT_DIR>" --output json`. Only if the CLI fails should you ask the user to import via Studio > Data Service tab > "Import Entities". Do not search other projects' `EntitiesStore.json` files.
 
+## Unsupported Entity Types
+
+> **Federated entities and folder-scoped entities are not supported by `UiPath.DataService.Activities`.** Do not generate XAML targeting either.
+
+- **Federated entities** (backed by external connectors — Salesforce, Azure AD, etc.) can appear in `EntitiesStore.json` alongside native entities. Before generating XAML, detect federation: an entity is federated iff at least one entry in its `Fields[]` array has `"IsExternalField": true`. If so, stop and tell the user the activity does not support it.
+
+  ```bash
+  # Quick check — replace <ENTITY_NAME> and the project path
+  python3 -c "import json,sys; d=json.load(open(sys.argv[1])); e=next((x for x in d['Entities'] if x['Name']==sys.argv[2]), None); print('FEDERATED' if e and any(f.get('IsExternalField') for f in e.get('Fields',[])) else 'native')" \
+    "<PROJECT_DIR>/.entities/EntitiesStore.json" "<ENTITY_NAME>"
+  ```
+- **Folder-scoped entities** are not addressable through these activities. Any entity present in `EntitiesStore.json` is tenant-scoped by construction, so entities discovered through the standard lookup path are safe on this axis — but do not attempt to target a folder-scoped entity via any other route.
+
 ## XAML Namespace Declarations
 
 ```xml
@@ -331,6 +344,7 @@ Do NOT check for Studio Desktop vs Studio Web to decide scope. The only factor i
 
 ## Common Pitfalls
 
+- **Federated and folder-scoped entities are unsupported** — see [Unsupported Entity Types](#unsupported-entity-types). Check before generating XAML.
 - `x:TypeArguments` must be a concrete entity type — `udd:IEntity` is rejected at validation
 - The `local` xmlns must include the full `assembly=DataService.<ProjectName>` qualifier
 - `EntitiesStore.json` contains all tenant entities, but only explicitly imported ones have CLR types in the generated DLL. If validation returns `Cannot create unknown type '{clr-namespace:...}EntityName'` — run `uip rpa data-fabric-entities install --add "<EntityName>" --project-dir "<PROJECT_DIR>" --output json` to install the missing entity type, then retry validation. Only if the CLI fails should you ask the user to import via Studio > Data Service tab > "Import Entities". Do not attempt to fix this by changing namespaces or assembly references.

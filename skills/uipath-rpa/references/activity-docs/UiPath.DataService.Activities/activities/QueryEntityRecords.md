@@ -10,26 +10,37 @@ Queries records from a Data Fabric entity with optional filtering, sorting, and 
 
 ## Properties
 
-| Property | Type | Required | Default | Category | Description |
-|----------|------|----------|---------|----------|-------------|
-| `x:TypeArguments` | — | Yes | — | — | Concrete entity type: `local:EntityName` |
-| `EntityId` | `InArgument<Guid>` | Yes | — | — | Entity GUID from `EntitiesStore.json` |
-| `OutputRecords` | `OutArgument<IList<TEntity>>` | Yes | — | Output | Variable to receive the list of matching records |
-| `TotalRecords` | `OutArgument<long>` | No | — | Pagination | Variable to receive total count (before pagination) |
-| `FilterArguments` | `FilterArgument` | No | — | — | Filter definition (set via Studio designer; `[Browsable(false)]`) |
-| `FilterValues` | `IList<InArgument>` | No | — | — | Filter parameter values (set via Studio designer; `[Browsable(false)]`) |
-| `QueriedEntityId` | `Guid` | No | — | — | Entity GUID for query scope; `00000000-0000-0000-0000-000000000000` for all |
-| `Top` | `InArgument<int>` | No | `100` | Pagination | Maximum records to return (range: 1–1000; use `Skip` for pagination beyond 1000) |
-| `Skip` | `InArgument<long>` | No | `0` | Pagination | Number of records to skip (pagination offset, `>= 0`). If `Skip` exceeds the total matching records, the result is empty. |
-| `SortByField` | `InArgument<string>` | No | — | Options | Field name to sort by |
-| `SortAscending` | `InArgument<bool>` | No | `true` | Options | Sort direction |
-| `ExpansionDepth` | `InArgument<int>` | No | `2` | Options | Depth of relationship expansion (range: 1–3, max `3`). Controls relationship-field shape on returned records and gates dot-notation filterability — see [overview § Relationship Fields & ExpansionDepth](../overview.md#relationship-fields--expansiondepth) |
-| `ContinueOnError` | `InArgument<bool>` | No | `false` | Common | Continue workflow on error |
-| `TimeoutInMs` | `InArgument<int>` | No | `30000` | Common | Timeout in milliseconds |
+`x:TypeArguments` — concrete entity type, e.g. `local:EntityName`. Required at activity declaration.
+
+### Input
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `EntityId` | `InArgument<Guid>` | Yes | — | Entity GUID from `EntitiesStore.json` |
+| `Top` | `InArgument<int>` | No | `100` | Maximum records to return (range: 1–1000; use `Skip` for pagination beyond 1000) |
+| `Skip` | `InArgument<long>` | No | `0` | Number of records to skip (pagination offset, `>= 0`). If `Skip` exceeds the total matching records, the result is empty. |
+| `SortByField` | `InArgument<string>` | No | — | Field name to sort by |
+| `ExpansionDepth` | `InArgument<int>` | No | `2` | Depth of relationship expansion (range: 1–3, max `3`). Controls relationship-field shape on returned records and gates dot-notation filterability — see [overview § Relationship Fields & ExpansionDepth](../overview.md#relationship-fields--expansiondepth) |
+| `FilterArguments` | `FilterArgument` | No | — | Filter definition (set via Studio designer; `[Browsable(false)]`) |
+| `FilterValues` | `IList<InArgument>` | No | — | Filter parameter values (set via Studio designer; `[Browsable(false)]`) |
+| `SortAscending` | `InArgument<bool>` | No | `true` | Sort direction |
+| `QueriedEntityId` | `Guid` | No | — | **Deprecated — do not use.** Legacy design-time entity tracking (`[Browsable(false)]`). Use `EntityId` instead. |
+
+### Output
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `OutputRecords` | `OutArgument<IList<TEntity>>` | Yes | — | Variable to receive the list of matching records |
+| `TotalRecords` | `OutArgument<long>` | No | — | Variable to receive total count (before pagination) |
+
+### Common
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `ContinueOnError` | `InArgument<bool>` | No | `false` | Continue workflow on error |
+| `TimeoutInMs` | `InArgument<int>` | No | `30000` | Timeout in milliseconds |
 
 > **Solution scope properties** (`ScopeValue`, `SolutionEntityKey`, `SolutionEntityName`) only apply when the project has a SolutionId. For standalone projects, omit them. See [overview — Solution Scope Properties](overview.md#solution-scope-properties-conditional) and [Solution Context](overview.md#solution-context-folder-vs-tenant-scope).
-
-No `RecordState` or `IsInRecordView` — read-only operation.
 
 ## Filter Operators
 

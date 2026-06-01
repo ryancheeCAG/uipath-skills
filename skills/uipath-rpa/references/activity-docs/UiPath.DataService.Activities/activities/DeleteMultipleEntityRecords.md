@@ -12,15 +12,33 @@ Deletes multiple records from a Data Fabric entity by their IDs.
 
 ## Properties
 
-| Property | Type | Required | Default | Category | Description |
-|----------|------|----------|---------|----------|-------------|
-| `x:TypeArguments` | — | Yes | — | — | Concrete entity type: `local:EntityName` |
-| `EntityId` | `InArgument<Guid>` | Yes | — | — | Entity GUID from `EntitiesStore.json` |
-| `InputRecords` | `InArgument<ICollection<Guid>>` | Yes | — | Input | Collection of record GUIDs to delete (`[RequiredArgument]`) |
-| `FailedRecords` | `OutArgument<IList<Guid>>` | No | — | Output | GUIDs of records that failed to delete |
-| `ContinueBatchOnFailure` | `InArgument<bool>` | No | `true` | Options | If `true`, continues deleting remaining records when one fails |
-| `ContinueOnError` | `InArgument<bool>` | No | `false` | Common | Continue workflow on error |
-| `TimeoutInMs` | `InArgument<int>` | No | `30000` | Common | Timeout in milliseconds |
+`x:TypeArguments` — concrete entity type, e.g. `local:EntityName`. Required at activity declaration.
+
+### Input
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `EntityId` | `InArgument<Guid>` | Yes | — | Entity GUID from `EntitiesStore.json` |
+| `InputRecords` | `InArgument<ICollection<Guid>>` | Yes | — | Collection of record GUIDs to delete (`[RequiredArgument]`) |
+
+### Output
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `FailedRecords` | `OutArgument<IList<Guid>>` | No | — | GUIDs of records that failed to delete |
+
+### Configuration
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `ContinueBatchOnFailure` | `InArgument<bool>` | No | `true` | If `true`, continues deleting remaining records when one fails |
+
+### Common
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `ContinueOnError` | `InArgument<bool>` | No | `false` | Continue workflow on error |
+| `TimeoutInMs` | `InArgument<int>` | No | `30000` | Timeout in milliseconds |
 
 > **Solution scope properties** (`ScopeValue`, `SolutionEntityKey`, `SolutionEntityName`) only apply when the project has a SolutionId. For standalone projects, omit them. See [overview — Solution Scope Properties](overview.md#solution-scope-properties-conditional) and [Solution Context](overview.md#solution-context-folder-vs-tenant-scope).
 
