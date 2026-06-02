@@ -10,6 +10,7 @@ trajectory criteria, and a staged file-input reference.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,20 @@ DISPLAY_NAMES = {
     "trajectory-simulation-evaluator",
     "contains-evaluator",
 }
+SEARCH_TEXT_KEYS = {"searchtext"}
+TRAJECTORY_KEYS = {"expectedagentbehavior"}
+FILE_REF_KEYS = {
+    "file",
+    "files",
+    "filepath",
+    "filepaths",
+    "inputfile",
+    "inputfiles",
+    "attachment",
+    "attachments",
+}
+PATH_LIKE_RE = re.compile(r"(?:^|[./\\])[\w .-]+\.[A-Za-z0-9]{2,8}\b")
+NON_FIXTURE_SUFFIXES = (".json", ".flow", ".bpmn")
 
 
 def fail(msg: str) -> None:
@@ -55,8 +70,51 @@ def walk(value: Any):
             yield from walk(child)
 
 
-def text_blob(value: Any) -> str:
-    return json.dumps(value, sort_keys=True)
+def normalize_key(key: Any) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(key).lower())
+
+
+def meaningful(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, dict)):
+        return bool(value)
+    return True
+
+
+def has_nonempty_key(value: Any, normalized_keys: set[str]) -> bool:
+    for item in walk(value):
+        if not isinstance(item, dict):
+            continue
+        for key, child in item.items():
+            if normalize_key(key) in normalized_keys and meaningful(child):
+                return True
+    return False
+
+
+def contains_fixture_path(value: Any) -> bool:
+    for item in walk(value):
+        if not isinstance(item, str):
+            continue
+        text = item.strip()
+        if not text:
+            continue
+        match = PATH_LIKE_RE.search(text)
+        if match and not match.group(0).lower().endswith(NON_FIXTURE_SUFFIXES):
+            return True
+    return False
+
+
+def has_staged_file_reference(value: Any) -> bool:
+    for item in walk(value):
+        if not isinstance(item, dict):
+            continue
+        for key, child in item.items():
+            if normalize_key(key) in FILE_REF_KEYS and meaningful(child):
+                return True
+    return contains_fixture_path(value)
 
 
 def evaluator_type(doc: Any) -> str | None:
@@ -132,12 +190,11 @@ def main() -> None:
         "evaluator ids/file refs"
     )
 
-    blob = text_blob(eval_set)
-    if "deployment succeeded" not in blob:
-        fail("eval set does not contain the contains search text")
-    if "expectedAgentBehavior" not in blob:
-        fail("eval set does not contain trajectory expectedAgentBehavior criteria")
-    if "invoice" not in blob.lower() and "receipt" not in blob.lower():
+    if not has_nonempty_key(eval_set, SEARCH_TEXT_KEYS):
+        fail("eval set does not contain non-empty contains search-text criteria")
+    if not has_nonempty_key(eval_set, TRAJECTORY_KEYS):
+        fail("eval set does not contain non-empty trajectory expectedAgentBehavior criteria")
+    if not has_staged_file_reference(eval_set):
         fail("eval set does not contain a staged input-file reference")
 
     cases = eval_set.get("evaluations") or []

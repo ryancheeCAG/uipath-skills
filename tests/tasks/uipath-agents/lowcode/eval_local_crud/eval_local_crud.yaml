@@ -3,7 +3,7 @@ description: >
   Low-code agent eval local-CRUD coverage for `uip agent eval`: default
   evaluator scaffolding, evaluator add/list, hand-written deterministic
   evaluator JSON, eval set and test-case CRUD, simulation flags, and validate.
-tags: [uipath-agents, integration, mode:build, lifecycle:generate, feature:eval]
+tags: [uipath-agents, integration, mode:build, low-code, lifecycle:generate, feature:eval]
 
 run_limits:
   expected_turns: 35
@@ -14,19 +14,11 @@ initial_prompt: |
   Create a local low-code UiPath agent evaluation project named
   `EvalLowCodeAgent` inside solution `EvalLowCodeSol`.
 
-  Build only local eval artifacts:
-  - Initialize the low-code agent and keep the default eval files.
-  - Add a semantic-similarity evaluator and a trajectory evaluator with
-    `uip agent eval evaluator add`.
-  - Add hand-written legacy evaluator JSON files for exact match and JSON
-    similarity under `evals/evaluators/`.
-  - Create an eval set named `Regression Eval` that references evaluator ids,
-    not filenames or display names.
-  - Add at least two test cases with `uip agent eval add`. One should include
-    expected output; one should include expected agent behavior plus simulation
-    flags/instructions.
-  - List evaluators, eval sets, and test cases.
-  - Run `uip agent validate --output json`.
+  Build only local eval artifacts: CLI-added semantic-similarity and
+  trajectory evaluators, hand-written legacy exact-match and JSON-similarity
+  evaluators, an eval set named `Regression Eval` that references evaluator
+  ids, and at least two test cases covering expected output plus simulation
+  behavior. Validate the project.
 
   Do NOT run `uip agent push`, `uip agent eval run *`, `uip login`, publish,
   upload, or deploy. This is local CRUD only.

@@ -7,6 +7,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from _shared.project_root import find_project_root  # noqa: E402
@@ -28,12 +29,101 @@ def load(path: Path) -> dict:
     return value
 
 
-def result_case_id(case: dict) -> str:
-    for key in ("evaluationId", "evaluationName", "id", "testId", "testName", "name"):
+def walk(value: Any):
+    yield value
+    if isinstance(value, dict):
+        for child in value.values():
+            yield from walk(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from walk(child)
+
+
+def result_case_ids(case: dict[str, Any]) -> set[str]:
+    ids: set[str] = set()
+    for key in ("evaluationId", "id", "testId", "caseId"):
+        value = case.get(key)
+        if value:
+            ids.add(str(value))
+    return ids
+
+
+def result_case_label(case: dict[str, Any]) -> str:
+    for key in (
+        "evaluationId",
+        "evaluationName",
+        "id",
+        "testId",
+        "testName",
+        "caseId",
+        "name",
+    ):
         value = case.get(key)
         if value:
             return str(value)
     return json.dumps(case, sort_keys=True)
+
+
+def rowish(row: dict[str, Any]) -> bool:
+    id_keys = {"evaluationId", "evaluationName", "id", "testId", "testName", "caseId", "name"}
+    result_keys = {"evaluationRunResults", "evaluationResults", "result", "score", "Score"}
+    return bool(id_keys & set(row)) and bool(result_keys & set(row))
+
+
+def extract_result_rows(results: dict[str, Any]) -> list[dict[str, Any]]:
+    if rowish(results):
+        return [results]
+
+    for key in (
+        "evaluationSetResults",
+        "testResults",
+        "results",
+        "Results",
+        "rows",
+        "Rows",
+    ):
+        rows = results.get(key)
+        if isinstance(rows, list) and all(isinstance(row, dict) for row in rows):
+            selected = [row for row in rows if rowish(row)]
+            if selected:
+                return selected
+
+    data = results.get("Data")
+    if isinstance(data, dict):
+        rows = extract_result_rows(data)
+        if rows:
+            return rows
+    elif isinstance(data, list) and all(isinstance(row, dict) for row in data):
+        selected = [row for row in data if rowish(row)]
+        if selected:
+            return selected
+
+    for item in walk(results):
+        if (
+            isinstance(item, list)
+            and item
+            and all(isinstance(row, dict) for row in item)
+            and any(rowish(row) for row in item)
+        ):
+            return [row for row in item if rowish(row)]
+    return []
+
+
+def result_scores(row: dict[str, Any]) -> list[float]:
+    scores: list[float] = []
+    for item in walk(row):
+        if not isinstance(item, dict):
+            continue
+        for key in ("score", "Score"):
+            value = item.get(key)
+            if isinstance(value, (int, float)):
+                scores.append(float(value))
+            elif isinstance(value, str):
+                try:
+                    scores.append(float(value))
+                except ValueError:
+                    pass
+    return scores
 
 
 def main() -> None:
@@ -56,23 +146,19 @@ def main() -> None:
     if not result_path.is_file():
         fail("selected-results.json was not written")
     results = load(result_path)
-    rows = results.get("evaluationSetResults")
-    if not isinstance(rows, list) or not rows:
-        fail(f"selected-results.json has no evaluationSetResults. Keys: {list(results)}")
-    names = [result_case_id(row) for row in rows if isinstance(row, dict)]
+    rows = extract_result_rows(results)
+    if not rows:
+        fail(f"selected-results.json has no recognizable result rows. Keys: {list(results)}")
+    names = [result_case_label(row) for row in rows]
     if len(rows) != 1:
         fail(f"expected exactly one selected result row, got {len(rows)} rows: {names}")
-    if "selected" not in names[0].lower():
-        fail(f"the only result row should be case-selected, got {names[0]!r}")
+    if "case-selected" not in result_case_ids(rows[0]):
+        fail(f"the only result row should have id case-selected, got {names[0]!r}")
 
-    runs = rows[0].get("evaluationRunResults") or []
-    if not runs:
-        fail("selected result row has no evaluationRunResults")
-    bad_scores = []
-    for run in runs:
-        score = (run.get("result") or {}).get("score") if isinstance(run, dict) else None
-        if score != 1.0:
-            bad_scores.append(score)
+    scores = result_scores(rows[0])
+    if not scores:
+        fail("selected result row has no score values")
+    bad_scores = [score for score in scores if score != 1.0]
     if bad_scores:
         fail(f"selected case should score 1.0, got bad scores {bad_scores!r}")
     print("OK: eval set has three cases, --eval-ids run saved only case-selected with score 1.0")

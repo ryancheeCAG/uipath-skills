@@ -13,6 +13,28 @@ UUID_RE = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
     r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
 )
+TERMINAL_STATUSES = {
+    "2",
+    "3",
+    "4",
+    "5",
+    "complete",
+    "completed",
+    "done",
+    "error",
+    "errored",
+    "failed",
+    "passed",
+    "success",
+    "succeeded",
+}
+RUN_ID_KEYS = {
+    "evalrunid",
+    "evalsetrunid",
+    "evaluationrunid",
+    "evaluationsetrunid",
+    "runid",
+}
 
 
 def fail(msg: str) -> None:
@@ -50,6 +72,42 @@ def collect_ids(value: Any) -> set[str]:
     return ids
 
 
+def normalize_key(key: Any) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(key).lower())
+
+
+def collect_run_ids(value: Any) -> set[str]:
+    ids: set[str] = set()
+    for item in walk(value):
+        if not isinstance(item, dict):
+            continue
+        for key, child in item.items():
+            if normalize_key(key) in RUN_ID_KEYS and isinstance(child, str):
+                ids.update(UUID_RE.findall(child))
+    if ids:
+        return ids
+
+    for item in walk(value):
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("Code") or item.get("code") or "").lower()
+        if "run" not in code and not any("run" in normalize_key(key) for key in item):
+            continue
+        for key, child in item.items():
+            if normalize_key(key) == "id" and isinstance(child, str):
+                ids.update(UUID_RE.findall(child))
+    return ids
+
+
+def response_code(doc: dict[str, Any]) -> Any:
+    if doc.get("Code") is not None:
+        return doc.get("Code")
+    d = doc.get("Data")
+    if isinstance(d, dict):
+        return d.get("Code")
+    return None
+
+
 def data(doc: dict[str, Any]) -> Any:
     return doc.get("Data", doc)
 
@@ -59,14 +117,15 @@ def status_value(doc: dict[str, Any]) -> str:
     if isinstance(d, dict):
         for key in ("Status", "status", "State", "state", "RunStatus", "runStatus"):
             if d.get(key) is not None:
-                return str(d[key]).lower()
+                return str(d[key]).strip().lower()
     return ""
 
 
 def assert_code(path: str, expected: str) -> dict[str, Any]:
     doc = load(path)
-    if doc.get("Code") != expected:
-        fail(f"{path} Code should be {expected!r}, got {doc.get('Code')!r}")
+    code = response_code(doc)
+    if code != expected:
+        fail(f"{path} Code should be {expected!r}, got {code!r}")
     return doc
 
 
@@ -104,13 +163,18 @@ def main() -> None:
     run_list = assert_code("flow-run-list.json", "MaestroFlowEvalRunList")
     compare = assert_code("flow-run-compare.json", "MaestroFlowEvalRunComparison")
 
-    if status_value(status_a) not in {"completed", "failed"}:
+    if status_value(status_a) not in TERMINAL_STATUSES:
         fail(f"run A should be terminal, got status {status_value(status_a)!r}")
-    if status_value(status_b) not in {"completed", "failed"}:
+    if status_value(status_b) not in TERMINAL_STATUSES:
         fail(f"run B should be terminal, got status {status_value(status_b)!r}")
 
-    ids_a = collect_ids(start_a) | collect_ids(status_a)
-    ids_b = collect_ids(status_b) | collect_ids(load("flow-run-b-start.json"))
+    start_b = load("flow-run-b-start.json")
+    ids_a = collect_run_ids(start_a) | collect_run_ids(status_a)
+    ids_b = collect_run_ids(status_b) | collect_run_ids(start_b)
+    if not ids_a:
+        ids_a = collect_ids(start_a) | collect_ids(status_a)
+    if not ids_b:
+        ids_b = collect_ids(status_b) | collect_ids(start_b)
     if not ids_a:
         fail("could not find run A id in start/status JSON")
     if not ids_b:

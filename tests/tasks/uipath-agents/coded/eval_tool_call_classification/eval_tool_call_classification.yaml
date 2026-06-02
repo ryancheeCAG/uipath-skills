@@ -5,7 +5,7 @@ description: >
   tool-call args, tool-call count, tool-call output, binary classification,
   and multiclass classification. This is a local artifact test, not a cloud
   reporting run.
-tags: [uipath-agents, integration, mode:build, lifecycle:generate, feature:eval]
+tags: [uipath-agents, integration, mode:build, coded, lifecycle:generate, feature:eval]
 
 run_limits:
   expected_turns: 30
@@ -16,16 +16,10 @@ initial_prompt: |
   Create a coded UiPath agent project named `eval-matrix` and an evaluation
   harness for a ticket-routing agent.
 
-  The important output is the evaluation harness:
-  - `entry-points.json` should be generated with `uip codedagent init`.
-  - Create evaluator JSON configs under `evaluations/evaluators/` for:
-      strict JSON similarity, trajectory simulation, tool-call order,
-      tool-call args, tool-call count, tool-call output, binary
-      classification, and multiclass classification.
-  - Create one eval set under `evaluations/eval-sets/` that references all of
-    those evaluators.
-  - Each test case should key `evaluationCriterias` by evaluator id and include
-    the expected criteria shape for that evaluator type.
+  The important output is a coherent local evaluation harness: initialized
+  entry point metadata, evaluator configs for strict structured output,
+  trajectory simulation, tool-call behavior, and binary/multiclass
+  classification, plus one eval set whose criteria are keyed by evaluator id.
 
   Do NOT publish, upload, deploy, or call `uip login`. Do NOT run a cloud
   report. This task is complete when the evaluator files and eval-set JSON are
