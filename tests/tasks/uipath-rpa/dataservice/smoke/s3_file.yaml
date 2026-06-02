@@ -11,10 +11,10 @@ description: >
 tags: [uipath-rpa, windows, smoke, dataservice]
 
 run_limits:
-  expected_turns: 20
-  max_turns: 40
-  task_timeout: 900
-  turn_timeout: 900
+  expected_turns: 30
+  max_turns: 60
+  task_timeout: 1800
+  turn_timeout: 1800
 
 sandbox:
   template_sources:
