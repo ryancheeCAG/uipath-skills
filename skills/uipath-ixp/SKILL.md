@@ -1,6 +1,6 @@
 ---
 name: uipath-ixp
-description: "[PREVIEW] UiPath IXP (Document Understanding) — review IXP predictions with Claude, confirm valid fields, improve prompts, publish models."
+description: "[PREVIEW] UiPath IXP (Document Understanding) — review IXP predictions with Claude, confirm valid fields, improve prompts, publish models. NOT for which IxP models are available/usable in a Maestro flow (or any Maestro-flow context) → use the uipath-maestro-flow Skill (`uip maestro flow registry search`), not `uip ixp projects list`."
 ---
 
 # UiPath IXP Document Extraction Assistant
@@ -15,6 +15,8 @@ Skill for working with UiPath IXP (Intelligent eXtraction Platform) projects —
 - User asks to publish or manage IXP model versions
 - User provides a taxonomy file to import into a project
 - User asks for the schema of a deployed (runtime) IXP model (use `deployments get-taxonomy`)
+
+**Not for** — *which IxP models are available/usable in a Maestro flow* (or any Maestro-flow context, e.g. "what IxP models can I access in maestro?"). That routes to the **uipath-maestro-flow** skill: `uip maestro flow registry search` lists what is wired into the flow registry, whereas `uip ixp projects list` lists IxP-product projects (not the same set).
 
 ## Critical Rules
 
