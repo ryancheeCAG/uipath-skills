@@ -205,6 +205,38 @@ def validate_match(
             return False, f"parent 'uip {' '.join(parent)}' returned {result}"
         subs = subcommand_names(help_payload)
         if token not in subs:
+            # The token isn't enumerated in the parent's --help Subcommands.
+            # Two known-legitimate reasons before we flag it invalid:
+            #
+            # (a) Aspect-routers (e.g. `maestro` -> bpmn/case/flow): the
+            #     parent's JSON --help hides these even though they're real
+            #     subcommands at runtime.
+            if token in KNOWN_ASPECT_ROUTERS.get(parent, frozenset()):
+                continue
+            # (b) Lazily-listed tool command-groups: under the alpha `uip` CLI,
+            #     an installed tool's top-level group (`or`, `is`, `maestro`,
+            #     `resource`, `docsai`, `traces`, `rpa`, ...) is NOT listed in
+            #     its parent's Subcommands even though `uip ... <token>` is a
+            #     real command group ("Successfully installed
+            #     @uipath/<tool>-tool" but absent from `uip --help`). Probe the
+            #     token's own --help and accept it only if it renders as a
+            #     DISTINCT group — its own Subcommands are non-empty and differ
+            #     from the parent's. The distinctness check guards against the
+            #     Windows `.CMD` shim, which falls back to the parent's help for
+            #     a genuinely-unknown token (the same false positive the
+            #     level-by-level tree-walk was built to avoid): a typo would
+            #     echo the parent's Subcommands verbatim and be rejected here.
+            probe = fetch_help(uip_bin, (*parent, token))
+            if probe is None or probe.get("Result") == "ConfigError":
+                return True, (
+                    f"WARN: '{token}' not listed under "
+                    f"'uip {' '.join(parent) or '(root)'}' and its own help could not "
+                    f"be introspected — skipping deeper validation"
+                )
+            if probe.get("Result") == "Success":
+                probe_subs = subcommand_names(probe)
+                if probe_subs and probe_subs != subs:
+                    continue  # real command group, just not enumerated by the parent
             return False, f"'{token}' is not a subcommand of 'uip {' '.join(parent) or '(root)'}'"
 
     # 2. Leaf-level flag validation (per-command flags + inherited global flags)
