@@ -1,0 +1,126 @@
+task_id: skill-rpa-ds-i-umr1-update-retry
+description: >
+  Integration I-UMR1 (Confluence §2.7, merges I41+I43+I57) — agent authors
+  two uda:UpdateMultipleEntityRecords activities implementing a retry pattern.
+  First batch updates 3 records' Status; conditional on FailedRecords.Count>0,
+  the second batch retries only the failed records sourced from the first
+  batch's FailedRecords.Item2 values.
+
+tags: [uipath-rpa, windows, integration, dataservice]
+
+run_limits:
+  expected_turns: 30
+  max_turns: 60
+  task_timeout: 1800
+  turn_timeout: 1800
+
+sandbox:
+  template_sources:
+    - type: template_dir
+      path: ../templates/local-feed
+      mount_point: "."
+
+initial_prompt: |
+  Build an RPA automation that updates 3 pre-existing records in Data Service
+  entity `CodingAgentsEvalEntity` — setting each record's `Status` to
+  `'Processed'` — in a single batch operation.
+
+  After the first batch, if any updates fail, retry only the failed records
+  once more using a second batch operation. The retry batch must source its
+  input from the first batch's failed-records collection.
+
+  Sandbox setup (already in place — do not modify):
+    - `./NuGet.Config` declares a local NuGet source at `./local-feed/`
+    - `./local-feed/` hosts `UiPath.DataService.Activities` version `23.1.4-dev`,
+      which is the version you must pin in your project dependencies (this
+      package version is not available on any public feed)
+
+  Place the project inside a `DataServiceEval/` subdirectory so the parent
+  `NuGet.Config` is inherited.
+
+  Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
+  connected Data Service tenant — install both into the project.
+
+  Not complete until `uip rpa validate` returns no diagnostics. Use
+  `--output json` on uip commands whose output you parse.
+
+success_criteria:
+  - type: file_exists
+    description: "Project was scaffolded via uip rpa init"
+    path: DataServiceEval/project.json
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_exists
+    description: "Main.xaml exists in the scaffolded project"
+    path: DataServiceEval/Main.xaml
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent ran uip rpa init"
+    tool_name: Bash
+    command_pattern: 'uip\s+rpa\s+init\b'
+    min_count: 1
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent installed entities from the live tenant"
+    tool_name: Bash
+    command_pattern: 'uip\s+rpa\s+data-fabric-entities\s+install\b'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent ran validate with --output json"
+    tool_name: Bash
+    command_pattern: 'uip\s+rpa\s+validate\s+.*--output\s+json'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "project.json pins the local-feed DataService package version"
+    path: DataServiceEval/project.json
+    includes:
+      - 'UiPath.DataService.Activities'
+      - '23.1.4-dev'
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Main.xaml references UpdateMultipleEntityRecords on CodingAgentsEvalEntity"
+    path: DataServiceEval/Main.xaml
+    includes:
+      - 'uda:UpdateMultipleEntityRecords'
+      - 'local:CodingAgentsEvalEntity'
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Retry conditional on FailedRecords.Count > 0 and Item2 source"
+    path: DataServiceEval/Main.xaml
+    includes:
+      - 'FailedRecords'
+      - 'Count'
+      - 'Item2'
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Exactly two UpdateMultipleEntityRecords activities present"
+    command: 'python "$TASK_DIR/check_i_umr1.py" DataServiceEval/Main.xaml'
+    timeout: 15
+    expected_exit_code: 0
+    weight: 3.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "uip rpa validate exits clean against the authored Main.xaml"
+    command: 'uip rpa validate --file-path Main.xaml --project-dir DataServiceEval --output json'
+    timeout: 120
+    expected_exit_code: 0
+    weight: 5.0
+    pass_threshold: 1.0

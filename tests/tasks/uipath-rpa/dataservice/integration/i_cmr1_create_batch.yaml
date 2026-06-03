@@ -1,0 +1,136 @@
+task_id: skill-rpa-ds-i-cmr1-create-batch
+description: >
+  Integration I-CMR1 (Confluence §2.6, merges I38+I40+I56) — agent authors a
+  single uda:CreateMultipleEntityRecords inserting 10 records on
+  CodingAgentsEvalEntity (Titles 'R01'..'R10'), followed by a ForEach over
+  FailedRecords logging each error message + the failed record's Title.
+  Asserts the FailedRecords typing Tuple(Of String, CodingAgentsEvalEntity)
+  and the .Item1 / .Item2.Title access pattern.
+
+tags: [uipath-rpa, windows, integration, dataservice]
+
+run_limits:
+  expected_turns: 30
+  max_turns: 60
+  task_timeout: 1800
+  turn_timeout: 1800
+
+sandbox:
+  template_sources:
+    - type: template_dir
+      path: ../templates/local-feed
+      mount_point: "."
+
+initial_prompt: |
+  Build an RPA automation that creates 10 records in Data Service entity
+  `CodingAgentsEvalEntity` with Titles `'R01'`, `'R02'`, … `'R10'` in a single
+  batch operation.
+
+  After the batch completes, iterate over any failed records and log each
+  failure's error message alongside the failed record's `Title`. Use a single
+  `CreateMultipleEntityRecords` activity for the batch.
+
+  Sandbox setup (already in place — do not modify):
+    - `./NuGet.Config` declares a local NuGet source at `./local-feed/`
+    - `./local-feed/` hosts `UiPath.DataService.Activities` version `23.1.4-dev`,
+      which is the version you must pin in your project dependencies (this
+      package version is not available on any public feed)
+
+  Place the project inside a `DataServiceEval/` subdirectory so the parent
+  `NuGet.Config` is inherited.
+
+  Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
+  connected Data Service tenant — install both into the project.
+
+  Not complete until `uip rpa validate` returns no diagnostics. Use
+  `--output json` on uip commands whose output you parse.
+
+success_criteria:
+  - type: file_exists
+    description: "Project was scaffolded via uip rpa init"
+    path: DataServiceEval/project.json
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_exists
+    description: "Main.xaml exists in the scaffolded project"
+    path: DataServiceEval/Main.xaml
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent ran uip rpa init"
+    tool_name: Bash
+    command_pattern: 'uip\s+rpa\s+init\b'
+    min_count: 1
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent installed entities from the live tenant"
+    tool_name: Bash
+    command_pattern: 'uip\s+rpa\s+data-fabric-entities\s+install\b'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent ran validate with --output json"
+    tool_name: Bash
+    command_pattern: 'uip\s+rpa\s+validate\s+.*--output\s+json'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "project.json pins the local-feed DataService package version"
+    path: DataServiceEval/project.json
+    includes:
+      - 'UiPath.DataService.Activities'
+      - '23.1.4-dev'
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Main.xaml references CreateMultipleEntityRecords on CodingAgentsEvalEntity"
+    path: DataServiceEval/Main.xaml
+    includes:
+      - 'uda:CreateMultipleEntityRecords'
+      - 'local:CodingAgentsEvalEntity'
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "FailedRecords typed Tuple(Of String, CodingAgentsEvalEntity) and tuple-element access"
+    path: DataServiceEval/Main.xaml
+    includes:
+      - 'Tuple'
+      - 'CodingAgentsEvalEntity'
+      - 'Item1'
+      - 'Item2.Title'
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "ForEach iterates the FailedRecords collection"
+    path: DataServiceEval/Main.xaml
+    includes:
+      - 'ForEach'
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "CreateMultipleEntityRecords is the only batch-create activity on the entity"
+    command: 'python "$TASK_DIR/check_i_cmr1.py" DataServiceEval/Main.xaml'
+    timeout: 15
+    expected_exit_code: 0
+    weight: 3.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "uip rpa validate exits clean against the authored Main.xaml"
+    command: 'uip rpa validate --file-path Main.xaml --project-dir DataServiceEval --output json'
+    timeout: 120
+    expected_exit_code: 0
+    weight: 5.0
+    pass_threshold: 1.0
