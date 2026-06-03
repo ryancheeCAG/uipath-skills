@@ -35,6 +35,15 @@ initial_prompt: |
   Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
   connected Data Service tenant — install both into the project.
 
+  Note on `uip rpa data-fabric-entities --add` / `--remove`: the CLI's own
+  `--help` advertises them as taking an array literal (e.g.
+  `--add ["Customer","Invoice"]`). That is wrong. The flags actually take
+  a single entity name and must be repeated for each entity:
+
+      uip rpa data-fabric-entities install --add CodingAgentsEvalEntity --add CodingAgentsEvalFileEntity
+
+  Do not pass JSON-array literals — they will not parse correctly.
+
   Not complete until `uip rpa validate` returns no diagnostics. Use
   `--output json` on uip commands whose output you parse.
 
