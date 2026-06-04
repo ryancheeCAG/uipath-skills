@@ -34,12 +34,136 @@
 
 import { readFileSync, writeFileSync, copyFileSync, mkdirSync, readdirSync, existsSync, renameSync } from 'fs';
 import { join, dirname, resolve } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { execSync, spawn } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCAFFOLD_DIR = resolve(__dirname, '../templates/dashboard/scaffold');
 const WIDGETS_DIR = resolve(__dirname, '../templates/dashboard/widgets');
+
+// ── Capability registry ───────────────────────────────────────────────────────
+
+const REGISTRY = JSON.parse(readFileSync(resolve(__dirname, 'capability-registry.json'), 'utf8'));
+
+// ── intent.json validator ─────────────────────────────────────────────────────
+
+export function validateIntent(intent) {
+  const errors = []
+  if (!intent.dashboardName || typeof intent.dashboardName !== 'string') errors.push('dashboardName must be a non-empty string')
+  if (!['1d','7d','30d','90d'].includes(intent.timeRange)) errors.push(`timeRange must be one of: 1d, 7d, 30d, 90d`)
+  if (!Array.isArray(intent.metrics) || intent.metrics.length === 0) errors.push('metrics must be a non-empty array')
+  for (const m of (intent.metrics ?? [])) {
+    if (!m.name) errors.push('metric missing name')
+    if (!['T1','T2','T3'].includes(m.tier)) errors.push(`metric "${m.name}" has invalid tier: ${m.tier}`)
+    if (m.tier === 'T2' && !m.params) errors.push(`T2 metric "${m.name}" missing params`)
+    if (m.tier === 'T3' && !m.fnBody) errors.push(`T3 metric "${m.name}" missing fnBody`)
+    if (m.tier === 'T3' && !m.displayAs) errors.push(`T3 metric "${m.name}" missing displayAs`)
+    if (m.tier === 'T3' && !m.title) errors.push(`T3 metric "${m.name}" missing title`)
+  }
+  return errors
+}
+
+// ── Resolution Engine ─────────────────────────────────────────────────────────
+
+const TIME_RANGE_CONSTANTS = {
+  '1d':  'ONE_DAY_AGO',
+  '7d':  'SEVEN_DAYS_AGO',
+  '30d': 'THIRTY_DAYS_AGO',
+  '90d': 'NINETY_DAYS_AGO',
+}
+
+function toPascalCase(str) {
+  return str.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join('')
+}
+
+export function resolveMetric(metric) {
+  if (metric.tier === 'T3') return { tier: 'T3', key: metric.name, entry: null }
+  const registrySection = metric.tier === 'T1' ? REGISTRY.t1 : REGISTRY.t2
+  const entry = registrySection[metric.name]
+  if (!entry) {
+    throw new Error(`Metric "${metric.name}" (${metric.tier}) not found in registry. Available: ${Object.keys(registrySection).join(', ')}`)
+  }
+  return { tier: metric.tier, key: metric.name, entry }
+}
+
+export function buildT1WidgetSpec(metric, entry, timeRange) {
+  const startConst = TIME_RANGE_CONSTANTS[timeRange] ?? 'THIRTY_DAYS_AGO'
+  const componentName = metric.componentName ?? toPascalCase(metric.name)
+  const responseType = '{ data: Array<Record<string, unknown>> }'
+  const dataHook = `useInsights<${responseType}>('${entry.namespace}.${entry.method}', { startTime: ${startConst}, endTime: NOW })`
+  return {
+    componentName,
+    template: entry.template,
+    detailRoute: metric.detailRoute ?? `/${componentName.toLowerCase()}`,
+    icon: metric.icon ?? entry.defaults.icon,
+    title: metric.title ?? entry.defaults.title,
+    description: metric.description ?? entry.defaults.description,
+    dataHook,
+    dataSelector: entry.defaults.dataSelector ?? '[]',
+    xKey: entry.defaults.xKey ?? 'date',
+    yKey: entry.defaults.yKey ?? 'value',
+    valueExpression: entry.defaults.valueExpression ?? "'—'",
+    columns: metric.columns ?? entry.defaults.columns ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]',
+    deltaDir: entry.defaults.deltaDir ?? 'neutral',
+    deltaText: entry.defaults.deltaText ?? '',
+    series: entry.defaults.series ?? '[{key:"value",color:"hsl(var(--chart-1))"}]',
+    pivotExpression: entry.defaults.pivotExpression ?? 'rawData',
+  }
+}
+
+const VALID_T2_OPS = ['gt', 'lt', 'eq', 'gte', 'lte', 'neq']
+const T2_OP_TO_JS = { gt: '>', lt: '<', eq: '===', gte: '>=', lte: '<=', neq: '!==' }
+
+export function compileT2ToTypeScript(descriptor) {
+  const { sdkService, method, filterField, filterOp, filterValue, sortField, sortDir } = descriptor
+  if (!VALID_T2_OPS.includes(filterOp)) {
+    throw new Error(`T2 descriptor has invalid op: ${filterOp}. Must be one of: ${VALID_T2_OPS.join(', ')}`)
+  }
+  const jsOp = T2_OP_TO_JS[filterOp]
+  const sortFn = sortDir === 'asc'
+    ? `items.sort((a, b) => (a.${sortField} ?? 0) - (b.${sortField} ?? 0))`
+    : `items.sort((a, b) => (b.${sortField} ?? 0) - (a.${sortField} ?? 0))`
+  return `async (sdk, _getToken) => {
+  const svc = new ${sdkService}(sdk as never)
+  const result = await svc.${method}({})
+  const items = (result?.items ?? result?.value ?? []) as Array<Record<string, number>>
+  const filtered = items.filter(item => (item.${filterField} ?? 0) ${jsOp} ${filterValue})
+  ${sortFn}
+  return filtered
+}`
+}
+
+export function buildT2WidgetSpec(metric, entry) {
+  const componentName = metric.componentName ?? toPascalCase(metric.name)
+  const { params } = metric
+  const descriptor = {
+    service: entry.service,
+    sdkImport: entry.sdkImport,
+    sdkService: entry.sdkService,
+    method: entry.method,
+    filterField: params.field ?? entry.filterField,
+    filterOp: params.direction ?? 'gt',
+    filterValue: params.threshold ?? params.value ?? 0,
+    sortField: params.sortField ?? entry.sortField,
+    sortDir: params.sortDir ?? 'desc',
+  }
+  const sdkHookCode = compileT2ToTypeScript(descriptor)
+  return {
+    componentName,
+    template: metric.displayAs ?? entry.defaultDisplayAs,
+    sdkImport: entry.sdkImport,
+    sdkService: entry.sdkService,
+    sdkHookCode,
+    title: metric.title ?? entry.defaults.title,
+    description: metric.description ?? entry.defaults.description,
+    icon: metric.icon ?? entry.defaults.icon,
+    columns: metric.columns ?? entry.defaults.columns,
+    detailRoute: metric.detailRoute ?? `/${componentName.toLowerCase()}`,
+    deltaDir: entry.defaults.deltaDir ?? 'neutral',
+    deltaText: entry.defaults.deltaText ?? '',
+    dataSelector: entry.defaults.dataSelector ?? '(data as any)?.items ?? []',
+  }
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -144,6 +268,8 @@ export function ${componentName}View() {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+
 // Accept plan as file path argument — cross-platform, no /dev/stdin issues on Windows
 const planArg = process.argv[2];
 if (!planArg) fail('Usage: node build-dashboard.mjs <plan.json>');
@@ -153,6 +279,11 @@ try {
   plan = JSON.parse(readFileSync(planArg, 'utf8'));
 } catch (e) {
   fail(`Could not read plan JSON from ${planArg}: ${e.message}`);
+}
+
+if (plan.metrics) {
+  const intentErrors = validateIntent(plan)
+  if (intentErrors.length > 0) fail(`Invalid intent.json:\n${intentErrors.map(e => '  • ' + e).join('\n')}`)
 }
 
 const {
@@ -372,6 +503,8 @@ const result = {
 };
 log('\nBUILD_RESULT:' + JSON.stringify(result));
 process.exit(0);  // exit before server's detached process can throw
+
+} // end entry-point guard
 
 /**
  * PLAN JSON SCHEMA

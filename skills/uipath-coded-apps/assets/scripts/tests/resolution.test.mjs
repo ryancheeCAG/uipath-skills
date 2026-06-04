@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { validateIntent, resolveMetric, buildT1WidgetSpec, buildT2WidgetSpec, compileT2ToTypeScript } from '../build-dashboard.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REGISTRY_PATH = resolve(__dirname, '../capability-registry.json')
@@ -102,4 +103,109 @@ test('hardRefuse does not collide with valid T1 aliases', () => {
       }
     }
   }
+})
+
+// ── validateIntent tests ──────────────────────────────────────────────────────
+
+test('validateIntent: valid T1 intent passes', () => {
+  const errors = validateIntent({
+    dashboardName: 'My Dashboard',
+    timeRange: '30d',
+    metrics: [{ name: 'agent-errors', tier: 'T1' }]
+  })
+  assert.deepEqual(errors, [])
+})
+
+test('validateIntent: rejects missing dashboardName', () => {
+  const errors = validateIntent({ timeRange: '30d', metrics: [{ name: 'x', tier: 'T1' }] })
+  assert.ok(errors.some(e => e.includes('dashboardName')))
+})
+
+test('validateIntent: rejects invalid timeRange', () => {
+  const errors = validateIntent({ dashboardName: 'x', timeRange: '2w', metrics: [{ name: 'x', tier: 'T1' }] })
+  assert.ok(errors.some(e => e.includes('timeRange')))
+})
+
+test('validateIntent: rejects T2 metric without params', () => {
+  const errors = validateIntent({ dashboardName: 'x', timeRange: '7d', metrics: [{ name: 'queue-failure-threshold', tier: 'T2' }] })
+  assert.ok(errors.some(e => e.includes('T2') && e.includes('params')))
+})
+
+test('validateIntent: rejects T3 metric without fnBody', () => {
+  const errors = validateIntent({ dashboardName: 'x', timeRange: '7d', metrics: [{ name: 'custom', tier: 'T3', displayAs: 'ranked-table', title: 'Custom' }] })
+  assert.ok(errors.some(e => e.includes('T3') && e.includes('fnBody')))
+})
+
+// ── resolveMetric + buildT1WidgetSpec tests ───────────────────────────────────
+
+test('resolveMetric: T1 known name returns entry with template', () => {
+  const result = resolveMetric({ name: 'agent-errors', tier: 'T1' })
+  assert.equal(result.tier, 'T1')
+  assert.equal(result.entry.template, 'line-chart')
+})
+
+test('resolveMetric: T2 known name returns entry with service', () => {
+  const result = resolveMetric({ name: 'queue-failure-threshold', tier: 'T2', params: { threshold: 20, direction: 'gt' } })
+  assert.equal(result.tier, 'T2')
+  assert.ok(result.entry.service)
+})
+
+test('resolveMetric: T3 always resolves with null entry', () => {
+  const result = resolveMetric({ name: 'custom-thing', tier: 'T3', fnBody: 'return []', displayAs: 'kpi-card', title: 'X' })
+  assert.equal(result.tier, 'T3')
+  assert.equal(result.entry, null)
+})
+
+test('resolveMetric: unknown T1 name throws with "not found in registry"', () => {
+  assert.throws(() => resolveMetric({ name: 'nonexistent-metric', tier: 'T1' }), /not found in registry/)
+})
+
+test('buildT1WidgetSpec: merges registry defaults with intent overrides', () => {
+  const spec = buildT1WidgetSpec(
+    { name: 'agent-errors', tier: 'T1', title: 'My Error Chart' },
+    registry.t1['agent-errors'],
+    '30d'
+  )
+  assert.equal(spec.componentName, 'AgentErrors')
+  assert.equal(spec.template, 'line-chart')
+  assert.equal(spec.title, 'My Error Chart')
+  assert.equal(spec.icon, 'AlertTriangle')
+  assert.ok(spec.dataHook.includes('agents.getErrors'))
+  assert.ok(spec.dataHook.includes('THIRTY_DAYS_AGO'))
+})
+
+test('buildT1WidgetSpec: uses 7d time range constant', () => {
+  const spec = buildT1WidgetSpec({ name: 'agent-errors', tier: 'T1' }, registry.t1['agent-errors'], '7d')
+  assert.ok(spec.dataHook.includes('SEVEN_DAYS_AGO'))
+})
+
+// ── buildT2WidgetSpec + compileT2ToTypeScript tests ───────────────────────────
+
+test('buildT2WidgetSpec: returns correct spec for queue-failure-threshold', () => {
+  const metric = { name: 'queue-failure-threshold', tier: 'T2', params: { threshold: 20, direction: 'gt' } }
+  const spec = buildT2WidgetSpec(metric, registry.t2['queue-failure-threshold'])
+  assert.equal(spec.componentName, 'QueueFailureThreshold')
+  assert.equal(spec.template, 'ranked-table')
+  assert.ok(spec.sdkHookCode)
+  assert.ok(spec.sdkImport)
+})
+
+test('compileT2ToTypeScript: generates valid async function for gt filter', () => {
+  const code = compileT2ToTypeScript({
+    service: 'queues', sdkImport: '@uipath/uipath-typescript/queues', sdkService: 'Queues',
+    method: 'getAll', filterField: 'failureCount', filterOp: 'gt', filterValue: 20,
+    sortField: 'failureCount', sortDir: 'desc'
+  })
+  assert.ok(code.includes('Queues'))
+  assert.ok(code.includes('getAll'))
+  assert.ok(code.includes('failureCount'))
+  assert.ok(code.startsWith('async (sdk'))
+})
+
+test('compileT2ToTypeScript: throws for invalid op', () => {
+  assert.throws(() => compileT2ToTypeScript({
+    service: 'queues', sdkImport: 'x', sdkService: 'Queues',
+    method: 'getAll', filterField: 'x', filterOp: 'INVALID', filterValue: 1,
+    sortField: 'x', sortDir: 'desc'
+  }), /invalid op/)
 })
