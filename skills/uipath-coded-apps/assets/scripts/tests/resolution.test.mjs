@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { validateIntent, resolveMetric, buildT1WidgetSpec, buildT2WidgetSpec, compileT2ToTypeScript, buildT3WidgetFile, emit, parseEvent } from '../build-dashboard.mjs'
+import { validateIntent, resolveMetric, buildT1WidgetSpec, buildT2WidgetSpec, compileT2ToTypeScript, buildT3WidgetFile, emit, parseEvent, classifyEditIntent } from '../build-dashboard.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REGISTRY_PATH = resolve(__dirname, '../capability-registry.json')
@@ -262,4 +262,21 @@ test('parseEvent: parses simple event with no payload', () => {
 test('parseEvent: returns null for non-event lines', () => {
   const result = parseEvent('regular log line')
   assert.equal(result, null)
+})
+
+// ── classifyEditIntent tests ──────────────────────────────────────────────────
+
+test('classifyEditIntent: identifies ADD', () => {
+  const result = classifyEditIntent({ op: 'ADD', projectDir: '/tmp/x', metric: { name: 'agent-errors', tier: 'T1' } })
+  assert.equal(result.op, 'ADD')
+})
+
+test('classifyEditIntent: identifies REMOVE', () => {
+  const result = classifyEditIntent({ op: 'REMOVE', projectDir: '/tmp/x', target: 'ErrorRateTrend' })
+  assert.equal(result.op, 'REMOVE')
+  assert.equal(result.target, 'ErrorRateTrend')
+})
+
+test('classifyEditIntent: throws on invalid op', () => {
+  assert.throws(() => classifyEditIntent({ op: 'DELETE', projectDir: '/tmp/x' }), /invalid op/)
 })

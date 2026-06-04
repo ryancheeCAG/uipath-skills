@@ -607,6 +607,122 @@ async function runDashboardBuild(intent, intentPath) {
   }
 }
 
+// ── Incremental editing ───────────────────────────────────────────────────────
+
+const VALID_EDIT_OPS = ['ADD', 'REMOVE', 'CHANGE', 'REBUILD']
+
+export function classifyEditIntent(editIntent) {
+  if (!VALID_EDIT_OPS.includes(editIntent.op)) {
+    throw new Error(`classifyEditIntent: invalid op "${editIntent.op}". Must be one of: ${VALID_EDIT_OPS.join(', ')}`)
+  }
+  return editIntent
+}
+
+async function runIncrementalEdit(editIntent, intentPath) {
+  const { projectDir } = editIntent
+  if (!projectDir) fail('edit-intent.projectDir is required')
+  const P = resolve(projectDir)
+  const statePath = join(P, '.dashboard', 'state.json')
+  if (!existsSync(statePath)) fail('No .dashboard/state.json found. Run a fresh build first.')
+  const state = JSON.parse(readFileSync(statePath, 'utf8'))
+  const { op, target, metric, delta } = classifyEditIntent(editIntent)
+  const timeRange = state.timeRange ?? '30d'
+
+  if (op === 'ADD') {
+    const { tier, entry } = resolveMetric(metric)
+    let widgetContent, componentName
+
+    if (tier === 'T1') {
+      const spec = buildT1WidgetSpec(metric, entry, timeRange)
+      componentName = spec.componentName
+      widgetContent = applyTemplate(spec.template, {
+        COMPONENT_NAME: spec.componentName, TITLE: spec.title, DESCRIPTION: spec.description,
+        DETAIL_ROUTE: spec.detailRoute, ICON: spec.icon, DATA_HOOK: spec.dataHook,
+        DATA_SELECTOR: spec.dataSelector, X_KEY: spec.xKey, Y_KEY: spec.yKey,
+        VALUE_EXPRESSION: spec.valueExpression, COLUMNS: spec.columns,
+        DELTA_DIR: spec.deltaDir, DELTA_TEXT: spec.deltaText,
+        SERIES: spec.series, PIVOT_EXPRESSION: spec.pivotExpression,
+        SDK_IMPORT: '', SDK_SERVICE: '', SDK_CALL: '', SDK_RESULT_TYPE: '',
+      })
+    } else if (tier === 'T3') {
+      componentName = toPascalCase(metric.name)
+      widgetContent = buildT3WidgetFile(metric)
+    } else {
+      const spec = buildT2WidgetSpec(metric, entry)
+      componentName = spec.componentName
+      widgetContent = applyTemplate('sdk-data-table', {
+        COMPONENT_NAME: componentName, TITLE: spec.title, DESCRIPTION: spec.description,
+        DETAIL_ROUTE: spec.detailRoute, ICON: spec.icon, SDK_IMPORT: spec.sdkImport,
+        SDK_SERVICE: spec.sdkService, SDK_CALL: 'getAll({})',
+        SDK_RESULT_TYPE: '{ items?: Array<Record<string, unknown>> }',
+        COLUMNS: spec.columns, DELTA_DIR: spec.deltaDir ?? 'neutral', DELTA_TEXT: spec.deltaText ?? '',
+        DATA_HOOK: '', DATA_SELECTOR: '', X_KEY: '', Y_KEY: '', VALUE_EXPRESSION: '', SERIES: '', PIVOT_EXPRESSION: '',
+      })
+    }
+
+    const widgetPath = join(P, 'src', 'dashboard', 'widgets', `${componentName}.tsx`)
+    writeAtomic(widgetPath, widgetContent)
+    state.widgets = state.widgets ?? {}
+    state.widgets[componentName] = { hash: hashContent(widgetContent), tier, metric: metric.name }
+
+  } else if (op === 'REMOVE') {
+    const widgetPath = join(P, 'src', 'dashboard', 'widgets', `${target}.tsx`)
+    const currentContent = existsSync(widgetPath) ? readFileSync(widgetPath, 'utf8') : null
+    const stored = state.widgets?.[target]
+    if (currentContent && stored && hashContent(currentContent) !== stored.hash) {
+      emit('HAND_EDIT_DETECTED', { widget: target })
+      fail(`Widget "${target}" has been hand-edited. Overwriting would lose your changes.`)
+    }
+    if (existsSync(widgetPath)) unlinkSync(widgetPath)
+    const viewPath = join(P, 'src', 'dashboard', 'views', `${target}View.tsx`)
+    if (existsSync(viewPath)) unlinkSync(viewPath)
+    if (state.widgets) delete state.widgets[target]
+
+  } else if (op === 'CHANGE') {
+    const widgetPath = join(P, 'src', 'dashboard', 'widgets', `${target}.tsx`)
+    const currentContent = existsSync(widgetPath) ? readFileSync(widgetPath, 'utf8') : null
+    const stored = state.widgets?.[target]
+    if (currentContent && stored && hashContent(currentContent) !== stored.hash) {
+      emit('HAND_EDIT_DETECTED', { widget: target })
+      fail(`Widget "${target}" has been hand-edited. Overwriting would lose your changes.`)
+    }
+    const tier = stored?.tier ?? 'T1'
+    const metricRef = { name: stored?.metric ?? target.toLowerCase(), tier, ...delta }
+    if (tier === 'T1') {
+      const { entry } = resolveMetric(metricRef)
+      const spec = buildT1WidgetSpec(metricRef, entry, delta?.timeRange ?? timeRange)
+      const widgetContent = applyTemplate(spec.template, {
+        COMPONENT_NAME: spec.componentName, TITLE: spec.title, DESCRIPTION: spec.description,
+        DETAIL_ROUTE: spec.detailRoute, ICON: spec.icon, DATA_HOOK: spec.dataHook,
+        DATA_SELECTOR: spec.dataSelector, X_KEY: spec.xKey, Y_KEY: spec.yKey,
+        VALUE_EXPRESSION: spec.valueExpression, COLUMNS: spec.columns,
+        DELTA_DIR: spec.deltaDir, DELTA_TEXT: spec.deltaText,
+        SERIES: spec.series, PIVOT_EXPRESSION: spec.pivotExpression,
+        SDK_IMPORT: '', SDK_SERVICE: '', SDK_CALL: '', SDK_RESULT_TYPE: '',
+      })
+      writeAtomic(widgetPath, widgetContent)
+      if (state.widgets) state.widgets[target] = { hash: hashContent(widgetContent), tier, metric: metricRef.name }
+    }
+  }
+
+  // Regenerate Dashboard.tsx + index.ts
+  const widgetNames = Object.keys(state.widgets ?? {})
+  generateDashboardFiles(P, widgetNames, state.app?.name ?? 'Dashboard')
+
+  // tsc validate
+  try {
+    execSync('npx tsc --noEmit', { cwd: P, stdio: 'pipe' })
+    emit('TSC_PASS')
+  } catch (e) {
+    const err = e.stdout?.toString() || ''
+    emit('TSC_FAIL', { errors: err.slice(0, 500) })
+    fail(`TypeScript errors after edit:\n${err}`)
+  }
+
+  writeAtomic(statePath, JSON.stringify(state, null, 2))
+  emit('INCREMENTAL_READY', { op, widget: target ?? toPascalCase(metric?.name ?? '') })
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -629,8 +745,8 @@ if (plan.metrics) {
   if (intentErrors.length > 0) fail(`Invalid intent.json:\n${intentErrors.map(e => '  • ' + e).join('\n')}`)
   await runDashboardBuild(plan, planArg)
 } else if (plan.op) {
-  // Incremental edit path (stub — full impl in Task 9)
-  fail('edit-intent.json not yet implemented — run a fresh build first')
+  const { op } = classifyEditIntent(plan)
+  await runIncrementalEdit(plan, planArg)
 } else {
   // Legacy plan.json path — unchanged
   const {
