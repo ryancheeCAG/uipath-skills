@@ -35,7 +35,7 @@ initial_prompt: |
   Entity install: do NOT use `uip rpa data-fabric-entities install`. Use the
   rpa-tool source directly via `bun`:
 
-      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --verbose --format json
+      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir "<PROJECT_DIR>" --verbose --format json
 
   Notes for this command:
     - Verb is `install-data-fabric-entities` (single hyphenated verb, not
