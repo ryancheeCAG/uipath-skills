@@ -1,0 +1,180 @@
+{
+  "t1": {
+    "agent-errors": {
+      "aliases": ["agent errors", "error count", "errors over time", "agent failures", "error rate trend", "error spikes", "which agents are failing"],
+      "source": "insights",
+      "namespace": "agents",
+      "method": "getErrors",
+      "template": "line-chart",
+      "defaults": {
+        "title": "Agent Error Rate",
+        "description": "Daily error counts — spot spikes early",
+        "icon": "AlertTriangle",
+        "xKey": "date",
+        "yKey": "value",
+        "deltaDir": "down-good",
+        "deltaText": "errors today",
+        "dataSelector": "(data as any)?.data ?? []"
+      }
+    },
+    "invocation-volume": {
+      "aliases": ["invocation volume", "total runs", "agent runs", "invocations", "run volume", "execution volume"],
+      "source": "insights",
+      "namespace": "agents",
+      "method": "getSummaryV2",
+      "template": "area-chart",
+      "defaults": {
+        "title": "Invocation Volume",
+        "description": "Total agent runs per day",
+        "icon": "Activity",
+        "xKey": "date",
+        "yKey": "count",
+        "deltaDir": "up-good",
+        "deltaText": "runs today",
+        "dataSelector": "(data as any)?.data ?? []"
+      }
+    },
+    "top-failing-agents": {
+      "aliases": ["top failing agents", "most errors by agent", "agent leaderboard errors", "which agents fail most"],
+      "source": "insights",
+      "namespace": "agents",
+      "method": "getTopErroredAgents",
+      "template": "ranked-table",
+      "defaults": {
+        "title": "Top Failing Agents",
+        "description": "Agents with the most errors",
+        "icon": "AlertOctagon",
+        "dataSelector": "(data as any)?.data ?? []",
+        "columns": "[{key:\"name\",label:\"Agent\"},{key:\"value\",label:\"Errors\",align:\"right\" as const}]",
+        "deltaDir": "neutral",
+        "deltaText": ""
+      }
+    },
+    "active-agents-kpi": {
+      "aliases": ["active agents", "active agent count", "how many agents", "agent count", "agents running"],
+      "source": "insights",
+      "namespace": "agents",
+      "method": "getAgents",
+      "template": "kpi-card",
+      "defaults": {
+        "title": "Active Agents",
+        "description": "Agents with at least one run",
+        "icon": "Bot",
+        "valueExpression": "String((data as any)?.data?.length ?? 0)",
+        "dataSelector": "(data as any)?.data ?? []",
+        "deltaDir": "up-good",
+        "deltaText": "active agents"
+      }
+    },
+    "agent-latency": {
+      "aliases": ["agent latency", "p95 latency", "response time", "execution time", "latency trend"],
+      "source": "insights",
+      "namespace": "agents",
+      "method": "getLatencyTimeline",
+      "template": "multi-line-chart",
+      "defaults": {
+        "title": "Agent Latency",
+        "description": "P50 and P95 execution time",
+        "icon": "Timer",
+        "xKey": "date",
+        "yKey": "value",
+        "deltaDir": "down-good",
+        "deltaText": "ms p95 today",
+        "dataSelector": "(data as any)?.data ?? []",
+        "series": "[{key:\"p50\",color:\"hsl(var(--chart-1))\"},{key:\"p95\",color:\"hsl(var(--chart-2))\"}]",
+        "pivotExpression": "rawData"
+      }
+    },
+    "job-failures": {
+      "aliases": ["job failures", "job failure rate", "rpa failures", "process failures", "failed jobs"],
+      "source": "insights",
+      "namespace": "jobs",
+      "method": "getTopFailures",
+      "template": "ranked-table",
+      "defaults": {
+        "title": "Top Job Failures",
+        "description": "Processes with the most failures",
+        "icon": "XCircle",
+        "dataSelector": "(data as any)?.data ?? []",
+        "columns": "[{key:\"name\",label:\"Process\"},{key:\"value\",label:\"Failures\",align:\"right\" as const}]",
+        "deltaDir": "down-good",
+        "deltaText": "failures today"
+      }
+    },
+    "job-completion-trend": {
+      "aliases": ["job completions", "completed jobs", "jobs over time", "job volume", "rpa throughput"],
+      "source": "insights",
+      "namespace": "jobs",
+      "method": "getCompletedTimeline",
+      "template": "area-chart",
+      "defaults": {
+        "title": "Job Completions",
+        "description": "Jobs completed per day",
+        "icon": "CheckCircle",
+        "xKey": "date",
+        "yKey": "value",
+        "deltaDir": "up-good",
+        "deltaText": "completions today",
+        "dataSelector": "(data as any)?.data ?? []"
+      }
+    },
+    "governance-policy-summary": {
+      "aliases": ["governance", "policy violations", "policy compliance", "governance summary"],
+      "source": "insights",
+      "namespace": "governance",
+      "method": "getPolicySummary",
+      "template": "kpi-card",
+      "defaults": {
+        "title": "Policy Violations",
+        "description": "Total governance policy violations",
+        "icon": "ShieldAlert",
+        "valueExpression": "String((data as any)?.total ?? 0)",
+        "dataSelector": "(data as any)?.data ?? []",
+        "deltaDir": "down-good",
+        "deltaText": "violations"
+      }
+    }
+  },
+  "t2": {
+    "queue-failure-threshold": {
+      "aliases": ["queues where failure", "high failure queues", "failing queues above", "queues exceeding failure"],
+      "service": "queues",
+      "sdkImport": "@uipath/uipath-typescript/queues",
+      "sdkService": "Queues",
+      "method": "getAll",
+      "filterField": "failureCount",
+      "sortField": "failureCount",
+      "defaultDisplayAs": "ranked-table",
+      "defaults": {
+        "title": "High-Failure Queues",
+        "description": "Queues exceeding the failure threshold",
+        "icon": "AlertOctagon",
+        "columns": "[{key:\"name\",label:\"Queue\"},{key:\"failureCount\",label:\"Failures\",align:\"right\" as const}]"
+      }
+    },
+    "jobs-duration-threshold": {
+      "aliases": ["long running jobs", "jobs over duration", "slow jobs", "jobs running longer than"],
+      "service": "jobs",
+      "sdkImport": "@uipath/uipath-typescript/processes",
+      "sdkService": "Jobs",
+      "method": "getAll",
+      "filterField": "duration",
+      "sortField": "duration",
+      "defaultDisplayAs": "data-table",
+      "defaults": {
+        "title": "Long-Running Jobs",
+        "description": "Jobs exceeding duration threshold",
+        "icon": "Clock",
+        "columns": "[{key:\"name\",label:\"Process\"},{key:\"state\",label:\"State\"},{key:\"duration\",label:\"Duration\",align:\"right\" as const}]"
+      }
+    }
+  },
+  "hardRefuse": [
+    { "pattern": "cost.*dollar|dollar.*cost|\\$.*agent|agent.*\\$", "reason": "The platform tracks AGU units, not currency.", "alternative": "AGU consumption chart (metric: invocation-volume)" },
+    { "pattern": "cpu|memory per agent|per.agent memory", "reason": "Per-agent CPU/memory is not exposed by any API.", "alternative": "Fleet-level latency (metric: agent-latency)" },
+    { "pattern": "who triggered|triggered by|user.*job|job.*user", "reason": "Job records carry no end-user identity.", "alternative": "Job counts by process name (metric: job-completion-trend)" },
+    { "pattern": "cross.tenant|multi.tenant|compare.*tenant", "reason": "Dashboards are scoped to one tenant.", "alternative": "Multi-widget single-tenant view" },
+    { "pattern": "sla.*breach|breach.*sla", "reason": "Raw counts only — no SLA metadata in any API.", "alternative": "Success rate % (computable from job-completion-trend)" },
+    { "pattern": "error.*message|stack.*trace|exception.*text", "reason": "No aggregation endpoint for error text or stack traces.", "alternative": "Error count by type (metric: agent-errors)" }
+  ]
+}
