@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { validateIntent, resolveMetric, buildT1WidgetSpec, buildT2WidgetSpec, compileT2ToTypeScript } from '../build-dashboard.mjs'
+import { validateIntent, resolveMetric, buildT1WidgetSpec, buildT2WidgetSpec, compileT2ToTypeScript, buildT3WidgetFile, emit, parseEvent } from '../build-dashboard.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REGISTRY_PATH = resolve(__dirname, '../capability-registry.json')
@@ -208,4 +208,58 @@ test('compileT2ToTypeScript: throws for invalid op', () => {
     method: 'getAll', filterField: 'x', filterOp: 'INVALID', filterValue: 1,
     sortField: 'x', sortDir: 'desc'
   }), /invalid op/)
+})
+
+// ── buildT3WidgetFile tests ───────────────────────────────────────────────────
+
+test('buildT3WidgetFile: injects fnBody into shell template', () => {
+  const content = buildT3WidgetFile({
+    name: 'faulted-queues', tier: 'T3', title: 'Faulted Queues', description: 'Queues with faults',
+    displayAs: 'ranked-table', fnBody: "const r = await sdk.queues.getAll({})\nreturn r.items ?? []"
+  })
+  assert.ok(content.includes('FaultedQueues'), 'component name not injected')
+  assert.ok(content.includes('Faulted Queues'), 'title not injected')
+  assert.ok(content.includes('sdk.queues.getAll'), 'fnBody not injected')
+  assert.ok(!content.includes('<<FN_BODY>>'), 'FN_BODY placeholder not replaced')
+  assert.ok(!content.includes('<<COMPONENT_NAME>>'), 'COMPONENT_NAME placeholder not replaced')
+})
+
+test('buildT3WidgetFile: throws if fnBody is missing', () => {
+  assert.throws(
+    () => buildT3WidgetFile({ name: 'x', tier: 'T3', title: 'X', displayAs: 'kpi-card' }),
+    /fnBody/
+  )
+})
+
+// ── emit + parseEvent tests ───────────────────────────────────────────────────
+
+test('emit: writes structured event with payload', () => {
+  const lines = []
+  emit('WIDGET_READY', { name: 'ErrorRateTrend', index: 1, total: 4 }, { write: s => lines.push(s) })
+  assert.equal(lines.length, 1)
+  const parsed = JSON.parse(lines[0].replace('WIDGET_READY:', ''))
+  assert.equal(parsed.name, 'ErrorRateTrend')
+})
+
+test('emit: writes simple event with no payload', () => {
+  const lines = []
+  emit('PREWARM_DONE', null, { write: s => lines.push(s) })
+  assert.equal(lines[0].trim(), 'PREWARM_DONE')
+})
+
+test('parseEvent: parses WIDGET_READY with payload', () => {
+  const result = parseEvent('WIDGET_READY:{"name":"Foo","index":2,"total":5}')
+  assert.equal(result.type, 'WIDGET_READY')
+  assert.equal(result.payload.name, 'Foo')
+})
+
+test('parseEvent: parses simple event with no payload', () => {
+  const result = parseEvent('PREWARM_DONE')
+  assert.equal(result.type, 'PREWARM_DONE')
+  assert.equal(result.payload, null)
+})
+
+test('parseEvent: returns null for non-event lines', () => {
+  const result = parseEvent('regular log line')
+  assert.equal(result, null)
 })

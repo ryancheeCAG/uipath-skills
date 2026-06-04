@@ -32,7 +32,7 @@
  * Exit 0 = success, exit 1 = failure (message on stderr).
  */
 
-import { readFileSync, writeFileSync, copyFileSync, mkdirSync, readdirSync, existsSync, renameSync } from 'fs';
+import { readFileSync, writeFileSync, copyFileSync, mkdirSync, readdirSync, existsSync, renameSync, unlinkSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { execSync, spawn } from 'child_process';
@@ -40,6 +40,7 @@ import { execSync, spawn } from 'child_process';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCAFFOLD_DIR = resolve(__dirname, '../templates/dashboard/scaffold');
 const WIDGETS_DIR = resolve(__dirname, '../templates/dashboard/widgets');
+const T3_SHELL_TEMPLATE_PATH = resolve(__dirname, '../templates/dashboard/widgets/t3-shell.tsx.template');
 
 // ── Capability registry ───────────────────────────────────────────────────────
 
@@ -165,11 +166,56 @@ export function buildT2WidgetSpec(metric, entry) {
   }
 }
 
+export function buildT3WidgetFile(metric) {
+  if (!metric.fnBody) throw new Error(`T3 metric "${metric.name}" missing fnBody`)
+  if (!existsSync(T3_SHELL_TEMPLATE_PATH)) {
+    throw new Error(`T3 shell template not found at ${T3_SHELL_TEMPLATE_PATH}`)
+  }
+  const componentName = metric.componentName ?? toPascalCase(metric.name)
+  const iconName = metric.icon ?? 'Activity'
+  const indentedFnBody = metric.fnBody.split('\n').map(l => '  ' + l).join('\n')
+  let content = readFileSync(T3_SHELL_TEMPLATE_PATH, 'utf8')
+  content = content
+    .split('<<FN_BODY>>').join(indentedFnBody)
+    .split('<<COMPONENT_NAME>>').join(componentName)
+    .split('<<TITLE>>').join(metric.title ?? componentName)
+    .split('<<DESCRIPTION>>').join(metric.description ?? '')
+    .split('<<ICON_NAME>>').join(iconName)
+  return content
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function fail(msg) {
   process.stderr.write(`ERROR: ${msg}\n`);
   process.exit(1);
+}
+
+const KNOWN_EVENTS = new Set([
+  'PREWARM_START','PREWARM_DONE','PREWARM_FAILED','SCAFFOLD_READY','ENV_WRITTEN',
+  'WIDGET_READY','T3_RETRY','T3_FAILED','TSC_PASS','TSC_FAIL',
+  'SERVER_READY','BUILD_RESULT','PARTIAL_BUILD_DETECTED','AUTH_MISSING',
+  'HAND_EDIT_DETECTED','T2_SCHEMA_ERROR','INCREMENTAL_READY'
+])
+
+export function emit(type, payload = null, writer = process.stdout) {
+  const line = payload != null ? `${type}:${JSON.stringify(payload)}` : type
+  writer.write(line + '\n')
+}
+
+export function parseEvent(line) {
+  const trimmed = line.trim()
+  const colonIdx = trimmed.indexOf(':')
+  if (colonIdx === -1) {
+    return KNOWN_EVENTS.has(trimmed) ? { type: trimmed, payload: null } : null
+  }
+  const type = trimmed.slice(0, colonIdx)
+  if (!KNOWN_EVENTS.has(type)) return null
+  try {
+    return { type, payload: JSON.parse(trimmed.slice(colonIdx + 1)) }
+  } catch {
+    return null
+  }
 }
 
 function log(msg) {
@@ -196,6 +242,42 @@ function writeAtomic(filePath, content) {
   const tmp = filePath + '.tmp';
   writeFileSync(tmp, content, 'utf8');
   renameSync(tmp, filePath);
+}
+
+// ── Pre-warm ──────────────────────────────────────────────────────────────────
+
+export async function runPrewarm(projectPath) {
+  emit('PREWARM_START')
+  const prewarmLock = join(projectPath, '.prewarm.lock')
+  writeAtomic(prewarmLock, String(Date.now()))
+  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+  try {
+    execSync(`${npmCmd} ci --prefer-offline`, { cwd: projectPath, stdio: 'pipe' })
+  } catch {
+    try {
+      execSync(`${npmCmd} ci`, { cwd: projectPath, stdio: 'pipe' })
+    } catch (e) {
+      const stderr = (e.stderr?.toString() ?? String(e)).slice(0, 500)
+      emit('PREWARM_FAILED', { exitCode: e.status ?? 1, stderr })
+      try { unlinkSync(prewarmLock) } catch { /* ignore */ }
+      throw new Error(`npm ci failed: ${stderr}`)
+    }
+  }
+  try { unlinkSync(prewarmLock) } catch { /* ignore */ }
+  emit('PREWARM_DONE')
+}
+
+export function waitForPrewarm(projectPath, timeoutMs = 60_000) {
+  const signal = join(projectPath, 'node_modules', '.package-lock.json')
+  const deadline = Date.now() + timeoutMs
+  while (!existsSync(signal)) {
+    if (Date.now() > deadline) {
+      emit('PREWARM_FAILED', { exitCode: -1, stderr: 'Timed out waiting for pre-warm' })
+      throw new Error('Pre-warm timed out after 60s')
+    }
+    execSync('node -e "setTimeout(()=>{},500)"', { stdio: 'pipe' })
+  }
+  emit('PREWARM_DONE')
 }
 
 // ── Template substitution ─────────────────────────────────────────────────────
@@ -337,17 +419,20 @@ if (existsSync(uipathJsonPath) && clientId) {
   writeAtomic(uipathJsonPath, JSON.stringify(uj, null, 2));
 }
 
-// Step 3 — npm ci (skip if pre-warm already completed)
-const lockSignal = join(P, 'node_modules', '.package-lock.json');
-if (!existsSync(lockSignal)) {
-  log('⚙ Installing dependencies…');
-  try {
-    execSync('npm ci --prefer-offline', { cwd: P, stdio: 'pipe' });
-  } catch {
-    execSync('npm ci', { cwd: P, stdio: 'pipe' });
+// Step 3 — Pre-warm guarantee: ensure dependencies installed before any code gen
+const LOCK_SIGNAL = join(P, 'node_modules', '.package-lock.json');
+const PREWARM_LOCK = join(P, '.prewarm.lock');
+if (!existsSync(LOCK_SIGNAL)) {
+  if (existsSync(PREWARM_LOCK)) {
+    log('⏳ Waiting for pre-warm to complete…')
+    waitForPrewarm(P)
+  } else {
+    log('⚙ Installing dependencies…')
+    await runPrewarm(P)
   }
 } else {
-  log('✓ Dependencies already installed (pre-warm)');
+  emit('PREWARM_DONE')
+  log('✓ Dependencies ready (pre-warm)')
 }
 
 // Step 4 — Write agent-authored files (files map — Dashboard.tsx, index.ts, etc.)

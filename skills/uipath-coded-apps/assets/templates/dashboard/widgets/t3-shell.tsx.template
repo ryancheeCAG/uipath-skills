@@ -1,0 +1,62 @@
+import React from 'react'
+import { useState, useEffect } from 'react'
+import { useAuth } from '@/hooks/useAuth'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { WidgetBoundary } from '@/dashboard/chrome/WidgetBoundary'
+import { LoadingState, EmptyState } from '@/dashboard/chrome'
+import { <<ICON_NAME>> } from 'lucide-react'
+
+type Row = Record<string, unknown>
+
+// ── Custom data function (injected at build time) ─────────────────────────────
+const customDataFn = async (sdk: any, getToken: () => Promise<string>): Promise<Row[]> => {
+<<FN_BODY>>
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+function use<<COMPONENT_NAME>>Data() {
+  const { sdk, getToken } = useAuth()
+  const [data, setData] = useState<Row[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+
+  useEffect(() => {
+    if (!sdk) return
+    setLoading(true)
+    customDataFn(sdk, getToken)
+      .then(rows => { setData(rows); setLoading(false) })
+      .catch(err => { setError(err instanceof Error ? err : new Error(String(err))); setLoading(false) })
+  }, [sdk])
+
+  return { data, loading, error }
+}
+
+export function <<COMPONENT_NAME>>() {
+  const { data, loading, error } = use<<COMPONENT_NAME>>Data()
+
+  return (
+    <WidgetBoundary label="<<TITLE>>">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <<<ICON_NAME>> className="h-4 w-4" />
+            <<TITLE>>
+          </CardTitle>
+          <CardDescription><<DESCRIPTION>></CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading && <LoadingState height="h-32" />}
+          {error && <EmptyState message={error.message} />}
+          {!loading && !error && (
+            <div className="text-sm">
+              {data.length === 0
+                ? <EmptyState message="No data" />
+                : <span className="text-2xl font-bold">{data.length} items</span>
+              }
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </WidgetBoundary>
+  )
+}
