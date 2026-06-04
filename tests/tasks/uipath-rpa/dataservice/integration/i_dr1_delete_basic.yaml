@@ -20,9 +20,8 @@ sandbox:
       mount_point: "."
 
 initial_prompt: |
-  Build a UiPath RPA project named `DataServiceEval` under `./DataServiceEval`
-  (i.e. run `uip rpa init --name "DataServiceEval" --location "."`) that
-  deletes a pre-existing record from Data Service entity
+  Build a UiPath RPA project named `DataServiceEval` in the current working
+  directory that deletes a pre-existing record from Data Service entity
   `CodingAgentsEvalEntity` by its ID.
 
   Sandbox setup (already in place — do not modify):
@@ -34,23 +33,12 @@ initial_prompt: |
   Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
   connected Data Service tenant — install both into the project.
 
-  Entity install: do NOT use `uip rpa data-fabric-entities install`. Use the
-  rpa-tool source directly via `bun`:
+  For the entity install step — equivalent of `uip rpa data-fabric-entities
+  install` in the skill docs — run the rpa-tool source directly:
 
-      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir DataServiceEval --verbose --format json
+      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir "<PROJECT_DIR>" --verbose --format json
 
-  Notes for this command:
-    - Verb is `install-data-fabric-entities` (single hyphenated verb, not
-      `data-fabric-entities install`).
-    - `--add` takes a single comma-separated list of entity names, NOT
-      repeated `--add X --add Y` flags.
-    - Use `--format json` (not `--output json`) for machine-readable output.
-
-  All other steps continue to use the standard `uip rpa` CLI (`uip rpa init`,
-  `uip rpa validate`, etc.).
-
-  Not complete until `uip rpa validate` returns no diagnostics. Use
-  `--output json` on uip commands whose output you parse.
+  All other commands use the standard `uip rpa` CLI as documented in the skill.
 
 success_criteria:
   - type: file_exists
