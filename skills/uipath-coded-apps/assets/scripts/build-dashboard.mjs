@@ -36,6 +36,7 @@ import { readFileSync, writeFileSync, copyFileSync, mkdirSync, readdirSync, exis
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { execSync, spawn } from 'child_process';
+import { createHash } from 'crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCAFFOLD_DIR = resolve(__dirname, '../templates/dashboard/scaffold');
@@ -280,6 +281,39 @@ export function waitForPrewarm(projectPath, timeoutMs = 60_000) {
   emit('PREWARM_DONE')
 }
 
+// ── Content hashing ───────────────────────────────────────────────────────────
+
+function hashContent(content) {
+  return createHash('sha256').update(content).digest('hex').slice(0, 16)
+}
+
+// ── Dashboard file generation ─────────────────────────────────────────────────
+
+function generateDashboardFiles(projectPath, widgetNames, dashboardName) {
+  const imports = widgetNames.map(n => `import { ${n} } from './${n}'`).join('\n')
+  const indexTs = widgetNames.map(n => `export { ${n} } from './${n}'`).join('\n') + '\n'
+  const grid = widgetNames.length === 1 ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'
+  const dashboardJsx = `import React from 'react'
+import { Header } from '@/dashboard/chrome/Header'
+${imports}
+
+export function Dashboard() {
+  return (
+    <div className="min-h-screen bg-background">
+      <Header title="${dashboardName}" description="Operational metrics dashboard" />
+      <div className="p-4 md:p-8">
+        <div className="grid ${grid} gap-4">
+          ${widgetNames.map(n => `<${n} />`).join('\n          ')}
+        </div>
+      </div>
+    </div>
+  )
+}
+`
+  writeAtomic(join(projectPath, 'src', 'dashboard', 'Dashboard.tsx'), dashboardJsx)
+  writeAtomic(join(projectPath, 'src', 'dashboard', 'widgets', 'index.ts'), indexTs)
+}
+
 // ── Template substitution ─────────────────────────────────────────────────────
 
 const TIME_CONSTANTS = `const NOW = new Date().toISOString()
@@ -348,6 +382,231 @@ export function ${componentName}View() {
 `;
 }
 
+// ── runDashboardBuild pipeline ────────────────────────────────────────────────
+
+async function runDashboardBuild(intent, intentPath) {
+  const {
+    dashboardName, timeRange, metrics,
+    projectDir, orgName, tenantName, cloudUrl, apiUrl, tenantId, clientId = '',
+    routingName,
+  } = intent
+
+  if (!projectDir) fail('intent.projectDir is required')
+  if (!routingName) fail('intent.routingName is required')
+
+  const P = resolve(projectDir)
+  const BUILD_SENTINEL = join(P, '.build-in-progress')
+
+  if (existsSync(BUILD_SENTINEL)) {
+    emit('PARTIAL_BUILD_DETECTED', { projectDir: P })
+  }
+  writeAtomic(BUILD_SENTINEL, String(Date.now()))
+
+  try {
+    // Step 1 — Scaffold (skip if already exists)
+    if (!existsSync(join(P, 'package.json'))) {
+      if (!existsSync(SCAFFOLD_DIR)) fail(`Scaffold not found at ${SCAFFOLD_DIR}`)
+      copyDir(SCAFFOLD_DIR, P)
+      try {
+        execSync(`node -e "require('fs').rmSync(${JSON.stringify(join(P,'node_modules'))},{recursive:true,force:true})"`,
+          { stdio: 'pipe' })
+      } catch { /* ignore */ }
+    }
+    emit('SCAFFOLD_READY')
+
+    // Step 2 — Env
+    writeAtomic(join(P, '.env.local'), [
+      `VITE_UIPATH_CLOUD_URL=${cloudUrl}`,
+      `VITE_UIPATH_BASE_URL=${apiUrl}`,
+      `VITE_UIPATH_ORG_NAME=${orgName}`,
+      `VITE_UIPATH_TENANT_NAME=${tenantName}`,
+      `VITE_INSIGHTS_TENANT_ID=${tenantId}`,
+      `VITE_UIPATH_CLIENT_ID=${clientId}`,
+    ].join('\n'))
+    const uipathJsonPath = join(P, 'uipath.json')
+    if (existsSync(uipathJsonPath) && clientId) {
+      const uj = JSON.parse(readFileSync(uipathJsonPath, 'utf8'))
+      uj.clientId = clientId
+      writeAtomic(uipathJsonPath, JSON.stringify(uj, null, 2))
+    }
+    emit('ENV_WRITTEN')
+
+    // Step 3 — Pre-warm guarantee
+    const LOCK_SIGNAL = join(P, 'node_modules', '.package-lock.json')
+    const PREWARM_LOCK_PATH = join(P, '.prewarm.lock')
+    if (!existsSync(LOCK_SIGNAL)) {
+      if (existsSync(PREWARM_LOCK_PATH)) {
+        log('⏳ Waiting for pre-warm…')
+        waitForPrewarm(P)
+      } else {
+        log('⚙ Installing dependencies…')
+        await runPrewarm(P)
+      }
+    } else {
+      emit('PREWARM_DONE')
+    }
+
+    // Step 4 — Resolve + generate widgets
+    const t1t2Metrics = metrics.filter(m => m.tier !== 'T3')
+    const t3Metrics = metrics.filter(m => m.tier === 'T3')
+    const widgetHashes = {}
+    let widgetIndex = 0
+    const total = metrics.length
+
+    // T1 + T2 in parallel
+    await Promise.all(t1t2Metrics.map(async (metric) => {
+      const { tier, entry } = resolveMetric(metric)
+      let widgetContent, componentName
+
+      if (tier === 'T1') {
+        const spec = buildT1WidgetSpec(metric, entry, timeRange)
+        componentName = spec.componentName
+        widgetContent = applyTemplate(spec.template, {
+          COMPONENT_NAME: spec.componentName,
+          TITLE: spec.title,
+          DESCRIPTION: spec.description,
+          DETAIL_ROUTE: spec.detailRoute,
+          ICON: spec.icon,
+          DATA_HOOK: spec.dataHook,
+          DATA_SELECTOR: spec.dataSelector,
+          X_KEY: spec.xKey,
+          Y_KEY: spec.yKey,
+          VALUE_EXPRESSION: spec.valueExpression,
+          COLUMNS: spec.columns,
+          DELTA_DIR: spec.deltaDir,
+          DELTA_TEXT: spec.deltaText,
+          SERIES: spec.series,
+          PIVOT_EXPRESSION: spec.pivotExpression,
+          SDK_IMPORT: '', SDK_SERVICE: '', SDK_CALL: '', SDK_RESULT_TYPE: '',
+        })
+      } else {
+        // T2
+        const spec = buildT2WidgetSpec(metric, entry)
+        componentName = spec.componentName
+        widgetContent = applyTemplate('sdk-data-table', {
+          COMPONENT_NAME: spec.componentName,
+          TITLE: spec.title,
+          DESCRIPTION: spec.description,
+          DETAIL_ROUTE: spec.detailRoute,
+          ICON: spec.icon,
+          SDK_IMPORT: spec.sdkImport,
+          SDK_SERVICE: spec.sdkService,
+          SDK_CALL: `getAll({})`,
+          SDK_RESULT_TYPE: '{ items?: Array<Record<string, unknown>> }',
+          COLUMNS: spec.columns,
+          DELTA_DIR: spec.deltaDir ?? 'neutral',
+          DELTA_TEXT: spec.deltaText ?? '',
+          DATA_HOOK: '', DATA_SELECTOR: '', X_KEY: '', Y_KEY: '',
+          VALUE_EXPRESSION: '', SERIES: '', PIVOT_EXPRESSION: '',
+        })
+      }
+
+      const widgetPath = join(P, 'src', 'dashboard', 'widgets', `${componentName}.tsx`)
+      writeAtomic(widgetPath, widgetContent)
+      widgetHashes[componentName] = { hash: hashContent(widgetContent), tier, metric: metric.name }
+      widgetIndex++
+      emit('WIDGET_READY', { name: componentName, index: widgetIndex, total })
+    }))
+
+    // T3 widgets — sequential (may require agent retry)
+    for (const metric of t3Metrics) {
+      let attempts = 0
+      let success = false
+      while (attempts < 3 && !success) {
+        attempts++
+        const currentIntent = JSON.parse(readFileSync(intentPath, 'utf8'))
+        const currentMetric = currentIntent.metrics.find(m => m.name === metric.name) ?? metric
+        let widgetContent
+        try {
+          widgetContent = buildT3WidgetFile(currentMetric)
+        } catch (e) {
+          emit('T3_FAILED', { widget: metric.name, reason: e.message })
+          fail(`T3 widget "${metric.name}" failed: ${e.message}`)
+        }
+        const componentName = toPascalCase(metric.name)
+        const widgetPath = join(P, 'src', 'dashboard', 'widgets', `${componentName}.tsx`)
+        writeAtomic(widgetPath, widgetContent)
+
+        try {
+          execSync('npx tsc --noEmit', { cwd: P, stdio: 'pipe' })
+          widgetHashes[componentName] = { hash: hashContent(widgetContent), tier: 'T3', metric: metric.name }
+          widgetIndex++
+          emit('WIDGET_READY', { name: componentName, index: widgetIndex, total })
+          success = true
+        } catch (e) {
+          const errors = (e.stdout?.toString() ?? '').split('\n').filter(l => l.includes('error TS')).slice(0, 5)
+          if (attempts >= 3) {
+            emit('T3_FAILED', { widget: metric.name, errors, attempts })
+            fail(`T3 widget "${metric.name}" failed after 3 attempts`)
+          }
+          emit('T3_RETRY', { widget: metric.name, errors, intentPath, retryCount: attempts })
+          log(`⚠ T3 "${metric.name}" has TypeScript errors (attempt ${attempts}/3). Update fnBody in ${intentPath} and re-run.`)
+          process.exit(2)
+        }
+      }
+    }
+
+    // Step 5 — Generate Dashboard.tsx + index.ts
+    generateDashboardFiles(P, Object.keys(widgetHashes), dashboardName)
+
+    // Step 6 — Full tsc
+    try {
+      execSync('npx tsc --noEmit', { cwd: P, stdio: 'pipe' })
+      emit('TSC_PASS')
+    } catch (e) {
+      const err = e.stdout?.toString() || e.stderr?.toString() || String(e)
+      emit('TSC_FAIL', { errors: err.slice(0, 1000) })
+      fail(`TypeScript errors:\n${err}`)
+    }
+
+    // Step 7 — Write state.json
+    const stateDir = join(P, '.dashboard')
+    mkdirSync(stateDir, { recursive: true })
+    const statePath = join(stateDir, 'state.json')
+    const existingState = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : {}
+    const newState = {
+      schemaVersion: 2,
+      app: { name: dashboardName, routingName, semver: existingState.app?.semver ?? '1.0.0' },
+      env: cloudUrl.includes('alpha') ? 'alpha' : cloudUrl.includes('staging') ? 'staging' : 'prod',
+      org: orgName, tenant: tenantName, cloudUrl,
+      widgets: widgetHashes,
+      deployment: existingState.deployment ?? { systemName: null, folderKey: null, appUrl: null, lastDeployedAt: null },
+    }
+    writeAtomic(statePath, JSON.stringify(newState, null, 2))
+
+    // Step 8 — Start dev server
+    const isWindows = process.platform === 'win32'
+    const server = spawn('npm', ['run', 'dev'], {
+      cwd: P, detached: true, stdio: 'pipe', shell: isWindows,
+    })
+    server.on('error', () => {})
+    server.unref()
+
+    let port = 5173
+    const deadline = Date.now() + 8000
+    while (Date.now() < deadline) {
+      try {
+        execSync(
+          `node -e "require('http').get('http://localhost:${port}',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"`,
+          { stdio: 'pipe', timeout: 1000 }
+        )
+        break
+      } catch { port++; if (port > 5183) { port = 5173; break } }
+    }
+
+    emit('SERVER_READY', { port, url: `http://localhost:${port}` })
+    emit('BUILD_RESULT', {
+      success: true, projectDir: P, port,
+      previewUrl: `http://localhost:${port}`,
+      widgets: Object.keys(widgetHashes),
+      dashboardName,
+    })
+
+  } finally {
+    try { unlinkSync(BUILD_SENTINEL) } catch { /* ignore */ }
+  }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -363,231 +622,238 @@ try {
   fail(`Could not read plan JSON from ${planArg}: ${e.message}`);
 }
 
+// Route based on input type
 if (plan.metrics) {
+  // New intent.json path
   const intentErrors = validateIntent(plan)
   if (intentErrors.length > 0) fail(`Invalid intent.json:\n${intentErrors.map(e => '  • ' + e).join('\n')}`)
-}
-
-const {
-  projectDir,
-  dashboardName,
-  routingName,
-  orgName,
-  tenantName,
-  cloudUrl,
-  apiUrl,
-  tenantId,
-  clientId = '',               // external OAuth app client ID
-  files = {},                  // { 'relative/path': 'file content' } — agent-authored files
-  widgets: planWidgets = [],   // widget config array — script generates TypeScript via templates
-  appTsxImports,
-  appTsxRoutes,
-} = plan;
-
-if (!projectDir) fail('plan.projectDir is required');
-if (!routingName) fail('plan.routingName is required');
-
-const P = resolve(projectDir);
-
-// Step 1 — Copy scaffold (cross-platform Node.js, no cp -r)
-log('⚙ Copying scaffold…');
-if (!existsSync(SCAFFOLD_DIR)) fail(`Scaffold not found at ${SCAFFOLD_DIR}`);
-copyDir(SCAFFOLD_DIR, P);
-
-// Remove stale node_modules if present in scaffold (prevents npm ci ENOTEMPTY)
-try {
-  execSync(`node -e "require('fs').rmSync(${JSON.stringify(join(P, 'node_modules'))},{recursive:true,force:true})"`,
-    { stdio: 'pipe' });
-} catch { /* ignore */ }
-
-// Step 2 — Write .env.local
-log('⚙ Writing environment config…');
-writeAtomic(join(P, '.env.local'), [
-  `VITE_UIPATH_CLOUD_URL=${cloudUrl}`,
-  `VITE_UIPATH_BASE_URL=${apiUrl}`,
-  `VITE_UIPATH_ORG_NAME=${orgName}`,
-  `VITE_UIPATH_TENANT_NAME=${tenantName}`,
-  `VITE_INSIGHTS_TENANT_ID=${tenantId}`,
-  `VITE_UIPATH_CLIENT_ID=${clientId}`,
-].join('\n'));
-
-// Update uipath.json with clientId from plan
-const uipathJsonPath = join(P, 'uipath.json');
-if (existsSync(uipathJsonPath) && clientId) {
-  const uj = JSON.parse(readFileSync(uipathJsonPath, 'utf8'));
-  uj.clientId = clientId;
-  writeAtomic(uipathJsonPath, JSON.stringify(uj, null, 2));
-}
-
-// Step 3 — Pre-warm guarantee: ensure dependencies installed before any code gen
-const LOCK_SIGNAL = join(P, 'node_modules', '.package-lock.json');
-const PREWARM_LOCK = join(P, '.prewarm.lock');
-if (!existsSync(LOCK_SIGNAL)) {
-  if (existsSync(PREWARM_LOCK)) {
-    log('⏳ Waiting for pre-warm to complete…')
-    waitForPrewarm(P)
-  } else {
-    log('⚙ Installing dependencies…')
-    await runPrewarm(P)
-  }
+  await runDashboardBuild(plan, planArg)
+} else if (plan.op) {
+  // Incremental edit path (stub — full impl in Task 9)
+  fail('edit-intent.json not yet implemented — run a fresh build first')
 } else {
-  emit('PREWARM_DONE')
-  log('✓ Dependencies ready (pre-warm)')
-}
+  // Legacy plan.json path — unchanged
+  const {
+    projectDir,
+    dashboardName,
+    routingName,
+    orgName,
+    tenantName,
+    cloudUrl,
+    apiUrl,
+    tenantId,
+    clientId = '',               // external OAuth app client ID
+    files = {},                  // { 'relative/path': 'file content' } — agent-authored files
+    widgets: planWidgets = [],   // widget config array — script generates TypeScript via templates
+    appTsxImports,
+    appTsxRoutes,
+  } = plan;
 
-// Step 4 — Write agent-authored files (files map — Dashboard.tsx, index.ts, etc.)
-log('⚙ Writing dashboard files…');
-for (const [relativePath, content] of Object.entries(files)) {
-  writeAtomic(join(P, relativePath), content);
-}
+  if (!projectDir) fail('plan.projectDir is required');
+  if (!routingName) fail('plan.routingName is required');
 
-// Step 4b — Process widgets array via template substitution
-const generatedWidgetNames = [];
+  const P = resolve(projectDir);
 
-if (planWidgets.length > 0) {
-  log(`⚙ Generating ${planWidgets.length} widget(s) from templates…`);
-}
+  // Step 1 — Copy scaffold (cross-platform Node.js, no cp -r)
+  log('⚙ Copying scaffold…');
+  if (!existsSync(SCAFFOLD_DIR)) fail(`Scaffold not found at ${SCAFFOLD_DIR}`);
+  copyDir(SCAFFOLD_DIR, P);
 
-for (const widget of planWidgets) {
-  const { componentName, template } = widget;
-  if (!componentName) fail(`Widget entry missing required field: componentName`);
-  if (!template) fail(`Widget "${componentName}" missing required field: template`);
-
-  // Build substitution map — all known placeholders with defaults
-  const subs = {
-    COMPONENT_NAME: componentName,
-    TITLE: widget.title ?? componentName,
-    DESCRIPTION: widget.description ?? '',
-    DETAIL_ROUTE: widget.detailRoute ?? `/${componentName.toLowerCase()}`,
-    ICON: widget.icon ?? 'Activity',
-    DATA_HOOK: widget.dataHook ?? `useInsights('agents.getAgents', { startTime: THIRTY_DAYS_AGO, endTime: NOW })`,
-    DATA_SELECTOR: widget.dataSelector ?? '[]',
-    X_KEY: widget.xKey ?? 'date',
-    Y_KEY: widget.yKey ?? 'value',
-    VALUE_EXPRESSION: widget.valueExpression ?? "'—'",
-    COLUMNS: widget.columns ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]',
-    DATA_KEY: widget.dataKey ?? 'value',
-    NAME_KEY: widget.nameKey ?? 'name',
-    DELTA_DIR: widget.deltaDir ?? 'neutral',
-    DELTA_TEXT: widget.deltaText ?? '',
-    SERIES: widget.series ?? '[{key:"value",color:"hsl(var(--chart-1))"}]',
-    PIVOT_EXPRESSION: widget.pivotExpression ?? 'rawData',
-    SDK_IMPORT: widget.sdkImport ?? '',
-    SDK_SERVICE: widget.sdkService ?? '',
-    SDK_CALL: widget.sdkCall ?? '',
-    SDK_RESULT_TYPE: widget.sdkResultType ?? '{ items?: Array<Record<string, unknown>> }',
-  };
-
-  // Generate widget file from template
-  const widgetContent = applyTemplate(template, subs);
-  writeAtomic(join(P, 'src', 'dashboard', 'widgets', `${componentName}.tsx`), widgetContent);
-
-  // Generate view file (always DetailViewShell + RecordsTable)
-  const viewContent = generateViewFile(widget);
-  writeAtomic(join(P, 'src', 'dashboard', 'views', `${componentName}View.tsx`), viewContent);
-
-  generatedWidgetNames.push(componentName);
-}
-
-// Step 5 — Update App.tsx route markers
-if (appTsxImports || appTsxRoutes) {
-  const appPath = join(P, 'src', 'app', 'App.tsx');
-  // Fall back to src/App.tsx if src/app/App.tsx doesn't exist
-  const appFile = existsSync(appPath) ? appPath : join(P, 'src', 'App.tsx');
-  let appContent = readFileSync(appFile, 'utf8');
-
-  if (appTsxImports) {
-    appContent = appContent.replace(
-      /\/\/ GENERATED_IMPORTS_START[\s\S]*?\/\/ GENERATED_IMPORTS_END/,
-      `// GENERATED_IMPORTS_START\n${appTsxImports}// GENERATED_IMPORTS_END`
-    );
-  }
-  if (appTsxRoutes) {
-    appContent = appContent.replace(
-      /\{\/\* GENERATED_ROUTES_START \*\/\}[\s\S]*?\{\/\* GENERATED_ROUTES_END \*\/\}/,
-      `{/* GENERATED_ROUTES_START */}\n${appTsxRoutes}{/* GENERATED_ROUTES_END */}`
-    );
-  }
-  writeFileSync(appFile, appContent, 'utf8');
-}
-
-// Step 6 — tsc --noEmit
-log('⚙ Validating TypeScript…');
-try {
-  execSync('npx tsc --noEmit', { cwd: P, stdio: 'pipe' });
-  log('✓ TypeScript clean');
-} catch (e) {
-  const err = e.stdout?.toString() || e.stderr?.toString() || String(e);
-  fail(`TypeScript errors:\n${err}`);
-}
-
-// Step 7 — Write state.json
-const stateDir = join(P, '.dashboard');
-mkdirSync(stateDir, { recursive: true });
-const statePath = join(stateDir, 'state.json');
-const existingState = existsSync(statePath)
-  ? JSON.parse(readFileSync(statePath, 'utf8'))
-  : {};
-
-// Collect widget names from both modes
-const filesWidgetNames = Object.keys(files)
-  .filter(p => p.startsWith('src/dashboard/widgets/') && p.endsWith('.tsx'))
-  .map(p => p.replace('src/dashboard/widgets/', '').replace('.tsx', ''));
-const allWidgetNames = [...new Set([...filesWidgetNames, ...generatedWidgetNames])];
-
-const newState = {
-  ...existingState,
-  app: { name: dashboardName, routingName, semver: existingState.app?.semver ?? '1.0.0' },
-  env: cloudUrl.includes('alpha') ? 'alpha' : cloudUrl.includes('staging') ? 'staging' : 'prod',
-  org: orgName,
-  tenant: tenantName,
-  cloudUrl,
-  widgets: allWidgetNames,
-  deployment: existingState.deployment ?? { systemName: null, folderKey: null, appUrl: null, lastDeployedAt: null },
-};
-writeAtomic(statePath, JSON.stringify(newState, null, 2));
-
-// Step 8 — Start dev server
-// Use shell:true so npm resolves correctly on Windows (npm.cmd vs npm)
-log('⚙ Starting preview server…');
-const isWindows = process.platform === 'win32';
-const server = spawn('npm', ['run', 'dev'], {
-  cwd: P,
-  detached: true,
-  stdio: 'pipe',
-  shell: isWindows,   // required on Windows — npm is npm.cmd
-});
-server.on('error', () => {});  // suppress unhandled error if server fails to start
-server.unref();
-
-// Give server 5s to bind, then output result regardless
-// (user runs `npm run dev` themselves if this poll times out)
-let port = 5173;
-const deadline = Date.now() + 5000;
-while (Date.now() < deadline) {
+  // Remove stale node_modules if present in scaffold (prevents npm ci ENOTEMPTY)
   try {
-    execSync(
-      `node -e "require('http').get('http://localhost:${port}',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"`,
-      { stdio: 'pipe', timeout: 1000 }
-    );
-    break;
-  } catch {
-    port++;
-    if (port > 5180) { port = 5173; break; }
-  }
-}
+    execSync(`node -e "require('fs').rmSync(${JSON.stringify(join(P, 'node_modules'))},{recursive:true,force:true})"`,
+      { stdio: 'pipe' });
+  } catch { /* ignore */ }
 
-// Output structured result — always exit 0 after this point (server runs independently)
-const result = {
-  success: true,
-  projectDir: P,
-  port,
-  previewUrl: `http://localhost:${port}`,
-  widgets: allWidgetNames,
-  dashboardName,
-};
-log('\nBUILD_RESULT:' + JSON.stringify(result));
-process.exit(0);  // exit before server's detached process can throw
+  // Step 2 — Write .env.local
+  log('⚙ Writing environment config…');
+  writeAtomic(join(P, '.env.local'), [
+    `VITE_UIPATH_CLOUD_URL=${cloudUrl}`,
+    `VITE_UIPATH_BASE_URL=${apiUrl}`,
+    `VITE_UIPATH_ORG_NAME=${orgName}`,
+    `VITE_UIPATH_TENANT_NAME=${tenantName}`,
+    `VITE_INSIGHTS_TENANT_ID=${tenantId}`,
+    `VITE_UIPATH_CLIENT_ID=${clientId}`,
+  ].join('\n'));
+
+  // Update uipath.json with clientId from plan
+  const uipathJsonPath = join(P, 'uipath.json');
+  if (existsSync(uipathJsonPath) && clientId) {
+    const uj = JSON.parse(readFileSync(uipathJsonPath, 'utf8'));
+    uj.clientId = clientId;
+    writeAtomic(uipathJsonPath, JSON.stringify(uj, null, 2));
+  }
+
+  // Step 3 — Pre-warm guarantee: ensure dependencies installed before any code gen
+  const LOCK_SIGNAL = join(P, 'node_modules', '.package-lock.json');
+  const PREWARM_LOCK = join(P, '.prewarm.lock');
+  if (!existsSync(LOCK_SIGNAL)) {
+    if (existsSync(PREWARM_LOCK)) {
+      log('⏳ Waiting for pre-warm to complete…')
+      waitForPrewarm(P)
+    } else {
+      log('⚙ Installing dependencies…')
+      await runPrewarm(P)
+    }
+  } else {
+    emit('PREWARM_DONE')
+    log('✓ Dependencies ready (pre-warm)')
+  }
+
+  // Step 4 — Write agent-authored files (files map — Dashboard.tsx, index.ts, etc.)
+  log('⚙ Writing dashboard files…');
+  for (const [relativePath, content] of Object.entries(files)) {
+    writeAtomic(join(P, relativePath), content);
+  }
+
+  // Step 4b — Process widgets array via template substitution
+  const generatedWidgetNames = [];
+
+  if (planWidgets.length > 0) {
+    log(`⚙ Generating ${planWidgets.length} widget(s) from templates…`);
+  }
+
+  for (const widget of planWidgets) {
+    const { componentName, template } = widget;
+    if (!componentName) fail(`Widget entry missing required field: componentName`);
+    if (!template) fail(`Widget "${componentName}" missing required field: template`);
+
+    // Build substitution map — all known placeholders with defaults
+    const subs = {
+      COMPONENT_NAME: componentName,
+      TITLE: widget.title ?? componentName,
+      DESCRIPTION: widget.description ?? '',
+      DETAIL_ROUTE: widget.detailRoute ?? `/${componentName.toLowerCase()}`,
+      ICON: widget.icon ?? 'Activity',
+      DATA_HOOK: widget.dataHook ?? `useInsights('agents.getAgents', { startTime: THIRTY_DAYS_AGO, endTime: NOW })`,
+      DATA_SELECTOR: widget.dataSelector ?? '[]',
+      X_KEY: widget.xKey ?? 'date',
+      Y_KEY: widget.yKey ?? 'value',
+      VALUE_EXPRESSION: widget.valueExpression ?? "'—'",
+      COLUMNS: widget.columns ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]',
+      DATA_KEY: widget.dataKey ?? 'value',
+      NAME_KEY: widget.nameKey ?? 'name',
+      DELTA_DIR: widget.deltaDir ?? 'neutral',
+      DELTA_TEXT: widget.deltaText ?? '',
+      SERIES: widget.series ?? '[{key:"value",color:"hsl(var(--chart-1))"}]',
+      PIVOT_EXPRESSION: widget.pivotExpression ?? 'rawData',
+      SDK_IMPORT: widget.sdkImport ?? '',
+      SDK_SERVICE: widget.sdkService ?? '',
+      SDK_CALL: widget.sdkCall ?? '',
+      SDK_RESULT_TYPE: widget.sdkResultType ?? '{ items?: Array<Record<string, unknown>> }',
+    };
+
+    // Generate widget file from template
+    const widgetContent = applyTemplate(template, subs);
+    writeAtomic(join(P, 'src', 'dashboard', 'widgets', `${componentName}.tsx`), widgetContent);
+
+    // Generate view file (always DetailViewShell + RecordsTable)
+    const viewContent = generateViewFile(widget);
+    writeAtomic(join(P, 'src', 'dashboard', 'views', `${componentName}View.tsx`), viewContent);
+
+    generatedWidgetNames.push(componentName);
+  }
+
+  // Step 5 — Update App.tsx route markers
+  if (appTsxImports || appTsxRoutes) {
+    const appPath = join(P, 'src', 'app', 'App.tsx');
+    // Fall back to src/App.tsx if src/app/App.tsx doesn't exist
+    const appFile = existsSync(appPath) ? appPath : join(P, 'src', 'App.tsx');
+    let appContent = readFileSync(appFile, 'utf8');
+
+    if (appTsxImports) {
+      appContent = appContent.replace(
+        /\/\/ GENERATED_IMPORTS_START[\s\S]*?\/\/ GENERATED_IMPORTS_END/,
+        `// GENERATED_IMPORTS_START\n${appTsxImports}// GENERATED_IMPORTS_END`
+      );
+    }
+    if (appTsxRoutes) {
+      appContent = appContent.replace(
+        /\{\/\* GENERATED_ROUTES_START \*\/\}[\s\S]*?\{\/\* GENERATED_ROUTES_END \*\/\}/,
+        `{/* GENERATED_ROUTES_START */}\n${appTsxRoutes}{/* GENERATED_ROUTES_END */}`
+      );
+    }
+    writeFileSync(appFile, appContent, 'utf8');
+  }
+
+  // Step 6 — tsc --noEmit
+  log('⚙ Validating TypeScript…');
+  try {
+    execSync('npx tsc --noEmit', { cwd: P, stdio: 'pipe' });
+    log('✓ TypeScript clean');
+  } catch (e) {
+    const err = e.stdout?.toString() || e.stderr?.toString() || String(e);
+    fail(`TypeScript errors:\n${err}`);
+  }
+
+  // Step 7 — Write state.json
+  const stateDir = join(P, '.dashboard');
+  mkdirSync(stateDir, { recursive: true });
+  const statePath = join(stateDir, 'state.json');
+  const existingState = existsSync(statePath)
+    ? JSON.parse(readFileSync(statePath, 'utf8'))
+    : {};
+
+  // Collect widget names from both modes
+  const filesWidgetNames = Object.keys(files)
+    .filter(p => p.startsWith('src/dashboard/widgets/') && p.endsWith('.tsx'))
+    .map(p => p.replace('src/dashboard/widgets/', '').replace('.tsx', ''));
+  const allWidgetNames = [...new Set([...filesWidgetNames, ...generatedWidgetNames])];
+
+  const newState = {
+    ...existingState,
+    app: { name: dashboardName, routingName, semver: existingState.app?.semver ?? '1.0.0' },
+    env: cloudUrl.includes('alpha') ? 'alpha' : cloudUrl.includes('staging') ? 'staging' : 'prod',
+    org: orgName,
+    tenant: tenantName,
+    cloudUrl,
+    widgets: allWidgetNames,
+    deployment: existingState.deployment ?? { systemName: null, folderKey: null, appUrl: null, lastDeployedAt: null },
+  };
+  writeAtomic(statePath, JSON.stringify(newState, null, 2));
+
+  // Step 8 — Start dev server
+  // Use shell:true so npm resolves correctly on Windows (npm.cmd vs npm)
+  log('⚙ Starting preview server…');
+  const isWindows = process.platform === 'win32';
+  const server = spawn('npm', ['run', 'dev'], {
+    cwd: P,
+    detached: true,
+    stdio: 'pipe',
+    shell: isWindows,   // required on Windows — npm is npm.cmd
+  });
+  server.on('error', () => {});  // suppress unhandled error if server fails to start
+  server.unref();
+
+  // Give server 5s to bind, then output result regardless
+  // (user runs `npm run dev` themselves if this poll times out)
+  let port = 5173;
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    try {
+      execSync(
+        `node -e "require('http').get('http://localhost:${port}',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"`,
+        { stdio: 'pipe', timeout: 1000 }
+      );
+      break;
+    } catch {
+      port++;
+      if (port > 5180) { port = 5173; break; }
+    }
+  }
+
+  // Output structured result — always exit 0 after this point (server runs independently)
+  const result = {
+    success: true,
+    projectDir: P,
+    port,
+    previewUrl: `http://localhost:${port}`,
+    widgets: allWidgetNames,
+    dashboardName,
+  };
+  log('\nBUILD_RESULT:' + JSON.stringify(result));
+  process.exit(0);  // exit before server's detached process can throw
+}
 
 } // end entry-point guard
 
