@@ -290,7 +290,7 @@ function hashContent(content) {
 // ── Dashboard file generation ─────────────────────────────────────────────────
 
 function generateDashboardFiles(projectPath, widgetNames, dashboardName) {
-  const imports = widgetNames.map(n => `import { ${n} } from './${n}'`).join('\n')
+  const imports = widgetNames.map(n => `import { ${n} } from './widgets/${n}'`).join('\n')
   const indexTs = widgetNames.map(n => `export { ${n} } from './${n}'`).join('\n') + '\n'
   const grid = widgetNames.length === 1 ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'
   const dashboardJsx = `import React from 'react'
