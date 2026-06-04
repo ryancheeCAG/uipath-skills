@@ -1,22 +1,26 @@
-# State File — Per-Project Persistence
+# State File — .dashboard/state.json
 
-Every dashboard project has a `.dashboard/state.json` that persists metadata across sessions.
-Read it at the start of every build and deploy operation.
+Per-project metadata. Read at every build start. Written by build script on success.
 
 ## Schema
 
 ```json
 {
+  "schemaVersion": 2,
   "app": {
-    "name": "Agent Health Dashboard",
-    "routingName": "agent-health-dashboard-x7k2",
+    "name": "Operations Health Dashboard",
+    "routingName": "operations-health-x7k2",
     "semver": "1.0.0"
   },
   "env": "alpha",
   "org": "appsdev",
   "tenant": "appsdevDefault",
   "cloudUrl": "https://alpha.uipath.com",
-  "widgets": ["ActiveAgentsKPI", "ErrorRateTrend", "InvocationVolume"],
+  "widgets": {
+    "ErrorRateTrend": { "hash": "a3f7b2c1", "tier": "T1", "metric": "agent-errors" },
+    "InvocationVolume": { "hash": "c9e1d4f2", "tier": "T1", "metric": "invocation-volume" },
+    "HighFailureQueues": { "hash": "f2a8c6d3", "tier": "T2", "metric": "queue-failure-threshold" }
+  },
   "deployment": {
     "systemName": null,
     "folderKey": null,
@@ -26,69 +30,10 @@ Read it at the start of every build and deploy operation.
 }
 ```
 
-## Writing the state file
+## Key rules
 
-Write after Phase 7 (after widgets are generated) and after every successful deploy.
-Use atomic writes — write to a `.tmp` file, then rename:
-
-```bash
-node << 'SCRIPT'
-const fs = require('fs'), path = require('path');
-const stateDir = path.join('<PROJECT_DIR>', '.dashboard');
-fs.mkdirSync(stateDir, { recursive: true });
-const state = {
-  app: {
-    name: '<DASHBOARD_NAME>',
-    routingName: '<ROUTING_NAME>',
-    semver: '1.0.0'
-  },
-  env: '<ENV>',
-  org: '<ORG_NAME>',
-  tenant: '<TENANT_NAME>',
-  cloudUrl: '<CLOUD_BASE_URL>',
-  widgets: [<WIDGET_COMPONENT_NAMES>],
-  deployment: { systemName: null, folderKey: null, appUrl: null, lastDeployedAt: null }
-};
-const tmpPath = path.join(stateDir, 'state.json.tmp');
-const finalPath = path.join(stateDir, 'state.json');
-fs.writeFileSync(tmpPath, JSON.stringify(state, null, 2));
-fs.renameSync(tmpPath, finalPath);
-console.log('✓ state saved');
-SCRIPT
-```
-
-## Reading the state file
-
-```bash
-STATE=$(node -e "try { process.stdout.write(require('fs').readFileSync('.dashboard/state.json','utf8')) } catch { process.stdout.write('{}') }")
-ROUTING_NAME=$(node -e "const s=JSON.parse('$STATE' || '{}'); console.log(s.app?.routingName || '')")
-FOLDER_KEY=$(node -e "const s=JSON.parse('$STATE' || '{}'); console.log(s.deployment?.folderKey || '')")
-SYSTEM_NAME=$(node -e "const s=JSON.parse('$STATE' || '{}'); console.log(s.deployment?.systemName || '')")
-```
-
-## Routing name
-
-The routing name is derived from the dashboard title at build time:
-```bash
-ROUTING_NAME=$(node -e "
-  const name = '<DASHBOARD_NAME>'.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-\$)/g, '');
-  const suffix = Math.random().toString(36).slice(2, 6);
-  console.log(name + '-' + suffix);
-")
-```
-
-Once set, the routing name NEVER changes — it's the URL slug and package identifier.
-If it's already in state.json, reuse it.
-
-## State file location
-
-The state file lives at `<PROJECT_DIR>/.dashboard/state.json`.
-The project directory is the folder containing `package.json`.
-
-## Incremental mode detection
-
-If `.dashboard/state.json` exists when the user asks to build a dashboard:
-→ Read `primitives/incremental-editor.md` and follow its flow.
-
-If it does NOT exist:
-→ This is a fresh build. Follow the normal Phase 1–8 pipeline.
+1. `schemaVersion: 2` — written by build script. If absent, treat as legacy (widget list array).
+2. `widgets` is a map of `{ hash, tier, metric }` — not a string array.
+3. `routingName` never changes once set. Not even on upgrades.
+4. `hash` used for hand-edit detection — compare to current file before CHANGE/REMOVE.
+5. `deployment.systemName` set by deploy plugin on first deploy.
