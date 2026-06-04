@@ -725,7 +725,7 @@ async function runIncrementalEdit(editIntent, intentPath) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
 
 // Accept plan as file path argument — cross-platform, no /dev/stdin issues on Windows
 const planArg = process.argv[2];
