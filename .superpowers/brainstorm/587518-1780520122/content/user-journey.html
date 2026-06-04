@@ -1,0 +1,138 @@
+<h2>Section 2: User Journey</h2>
+<p class="subtitle">What the user sees from first message to live dashboard — and every follow-up after that</p>
+
+<div style="margin: 24px 0;">
+
+  <!-- Happy path timeline -->
+  <h3 style="font-size: 14px; color: #e5e7eb; margin-bottom: 16px;">Happy Path — First Dashboard</h3>
+
+  <div style="display: flex; flex-direction: column; gap: 0;">
+
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+      <div style="width: 60px; text-align: right; flex-shrink: 0; padding-top: 3px; font-size: 11px; font-weight: 700; color: #6b7280;">T+0s</div>
+      <div style="width: 2px; background: rgba(99,102,241,0.4); flex-shrink: 0; margin-top: 6px;"></div>
+      <div style="flex: 1; padding-bottom: 20px; padding-left: 12px;">
+        <div style="font-size: 13px; font-weight: 600; color: #818cf8;">User sends natural language request</div>
+        <div style="font-family: monospace; font-size: 12px; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 4px; margin-top: 6px; color: #d1d5db; font-style: italic;">
+          "show me agent error rates, invocation volume, and queues where failure rate exceeds 20% for the last 30 days"
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+      <div style="width: 60px; text-align: right; flex-shrink: 0; padding-top: 3px; font-size: 11px; font-weight: 700; color: #6b7280;">T+1s</div>
+      <div style="width: 2px; background: rgba(99,102,241,0.4); flex-shrink: 0; margin-top: 6px;"></div>
+      <div style="flex: 1; padding-bottom: 20px; padding-left: 12px;">
+        <div style="font-size: 13px; font-weight: 600; color: #818cf8;">Agent: intent extraction + pre-warm fires silently</div>
+        <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">Writes intent.json (3 fields). Starts <code style="background:rgba(0,0,0,0.3);padding:2px 4px;border-radius:3px;">npm ci</code> in background — user never sees this.</div>
+        <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">Resolution Engine classifies all 3 metrics in parallel: T1, T1, T2.</div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+      <div style="width: 60px; text-align: right; flex-shrink: 0; padding-top: 3px; font-size: 11px; font-weight: 700; color: #6b7280;">T+3s</div>
+      <div style="width: 2px; background: rgba(16,185,129,0.4); flex-shrink: 0; margin-top: 6px;"></div>
+      <div style="flex: 1; padding-bottom: 20px; padding-left: 12px;">
+        <div style="font-size: 13px; font-weight: 600; color: #10b981;">Agent shows plain-English plan (no API names)</div>
+        <div style="font-family: monospace; font-size: 12px; background: rgba(0,0,0,0.3); padding: 10px 12px; border-radius: 4px; margin-top: 6px; color: #d1d5db; line-height: 1.8;">
+          Here's your <strong>Operations Health Dashboard</strong> — 3 widgets. Confirm to build, or tell me what to change.<br/><br/>
+          • <strong>Agent Error Rate (30 days)</strong> — daily error counts as a trend line<br/>
+          • <strong>Invocation Volume (30 days)</strong> — total runs per day as an area chart<br/>
+          • <strong>High-Failure Queues</strong> — queues where failure rate &gt; 20%, ranked table<br/><br/>
+          What you can do: "make it 7 days", "add a KPI for total errors", "remove the queue widget", "add job failures"
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+      <div style="width: 60px; text-align: right; flex-shrink: 0; padding-top: 3px; font-size: 11px; font-weight: 700; color: #6b7280;">T+20s</div>
+      <div style="width: 2px; background: rgba(16,185,129,0.4); flex-shrink: 0; margin-top: 6px;"></div>
+      <div style="flex: 1; padding-bottom: 20px; padding-left: 12px;">
+        <div style="font-size: 13px; font-weight: 600; color: #10b981;">User reads plan, npm ci finishes in background</div>
+        <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">Pre-warm is <strong>guaranteed complete</strong> by the time user confirms — not timing-dependent. Build script polls for lock file.</div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+      <div style="width: 60px; text-align: right; flex-shrink: 0; padding-top: 3px; font-size: 11px; font-weight: 700; color: #6b7280;">T+25s</div>
+      <div style="width: 2px; background: rgba(245,158,11,0.4); flex-shrink: 0; margin-top: 6px;"></div>
+      <div style="flex: 1; padding-bottom: 20px; padding-left: 12px;">
+        <div style="font-size: 13px; font-weight: 600; color: #fbbf24;">User confirms → Build Engine starts, streams progress</div>
+        <div style="font-family: monospace; font-size: 12px; background: rgba(0,0,0,0.3); padding: 10px 12px; border-radius: 4px; margin-top: 6px; color: #d1d5db; line-height: 2;">
+          Building your dashboard...<br/>
+          ✓ Agent Error Rate ready (1/3)<br/>
+          ✓ Invocation Volume ready (2/3)<br/>
+          ✓ High-Failure Queues ready (3/3)<br/>
+          ✓ TypeScript check passed<br/>
+          ✓ Dev server running
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+      <div style="width: 60px; text-align: right; flex-shrink: 0; padding-top: 3px; font-size: 11px; font-weight: 700; color: #6b7280;">T+45s</div>
+      <div style="width: 2px; background: rgba(16,185,129,0.4); flex-shrink: 0; margin-top: 6px;"></div>
+      <div style="flex: 1; padding-bottom: 20px; padding-left: 12px;">
+        <div style="font-size: 13px; font-weight: 600; color: #10b981;">Dashboard opens in browser</div>
+        <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">Agent shows: "Your dashboard is live at <code style="background:rgba(0,0,0,0.3);padding:2px 4px;border-radius:3px;">http://localhost:5173</code>. Tell me what to change."</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Follow-up flow -->
+  <h3 style="font-size: 14px; color: #e5e7eb; margin: 32px 0 16px;">Follow-up Enhancements — Same Session</h3>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+
+    <div style="border: 1px solid rgba(99,102,241,0.3); border-radius: 8px; padding: 14px; background: rgba(99,102,241,0.04);">
+      <div style="font-size: 11px; font-weight: 700; color: #818cf8; letter-spacing: 1px; margin-bottom: 8px;">ADD WIDGET</div>
+      <div style="font-size: 12px; color: #9ca3af; font-style: italic; margin-bottom: 8px;">"add a KPI showing total errors today"</div>
+      <div style="font-size: 12px; color: #6b7280; line-height: 1.7;">
+        1. Classify: ADD + metric resolution<br/>
+        2. Generate single widget file<br/>
+        3. Inject into Dashboard.tsx<br/>
+        4. tsc validate<br/>
+        5. Hot-reload fires automatically<br/>
+        <strong style="color: #10b981;">~5s</strong>
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(99,102,241,0.3); border-radius: 8px; padding: 14px; background: rgba(99,102,241,0.04);">
+      <div style="font-size: 11px; font-weight: 700; color: #818cf8; letter-spacing: 1px; margin-bottom: 8px;">MODIFY WIDGET</div>
+      <div style="font-size: 12px; color: #9ca3af; font-style: italic; margin-bottom: 8px;">"change the error chart to 7 days"</div>
+      <div style="font-size: 12px; color: #6b7280; line-height: 1.7;">
+        1. Classify: CHANGE + target widget<br/>
+        2. Re-run resolution with new params<br/>
+        3. Regenerate widget file only<br/>
+        4. tsc validate<br/>
+        5. Hot-reload fires automatically<br/>
+        <strong style="color: #10b981;">~5s</strong>
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(99,102,241,0.3); border-radius: 8px; padding: 14px; background: rgba(99,102,241,0.04);">
+      <div style="font-size: 11px; font-weight: 700; color: #818cf8; letter-spacing: 1px; margin-bottom: 8px;">REMOVE WIDGET</div>
+      <div style="font-size: 12px; color: #9ca3af; font-style: italic; margin-bottom: 8px;">"remove the queue widget"</div>
+      <div style="font-size: 12px; color: #6b7280; line-height: 1.7;">
+        1. Classify: REMOVE + target name<br/>
+        2. Delete widget file<br/>
+        3. Remove from Dashboard.tsx + index.ts<br/>
+        4. Update state.json<br/>
+        5. Hot-reload fires automatically<br/>
+        <strong style="color: #10b981;">~2s</strong>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- New session -->
+  <div style="margin-top: 24px; padding: 14px 18px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; background: rgba(255,255,255,0.02);">
+    <h3 style="font-size: 13px; color: #e5e7eb; margin: 0 0 8px;">New session — resuming an existing dashboard</h3>
+    <div style="font-size: 12px; color: #6b7280; line-height: 1.8;">
+      Agent detects <code style="background:rgba(0,0,0,0.3);padding:2px 4px;border-radius:3px;">.dashboard/state.json</code> → reads widget list from state → starts dev server → ready for enhancements.<br/>
+      No rebuild needed. No re-asking for context. User continues where they left off.
+    </div>
+  </div>
+
+</div>

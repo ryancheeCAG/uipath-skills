@@ -1,0 +1,151 @@
+<h2>Architecture Overview</h2>
+<p class="subtitle">Section 1 of 5 — The complete system. Four layers, clean separation of concerns.</p>
+
+<div style="margin: 24px 0;">
+
+  <!-- Layer diagram -->
+  <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 32px;">
+
+    <!-- Layer 1 -->
+    <div style="display: flex; align-items: stretch; gap: 12px;">
+      <div style="width: 140px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; padding-right: 12px;">
+        <span style="font-size: 11px; font-weight: 700; color: #6b7280; text-align: right; letter-spacing: 0.5px;">LAYER 1<br/>AGENT (NLP)</span>
+      </div>
+      <div style="flex: 1; border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; padding: 14px 18px; background: rgba(99,102,241,0.06);">
+        <div style="display: flex; align-items: center; gap: 24px; flex-wrap: wrap;">
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #818cf8;">Intent Extractor</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">NLP → intent.json<br/>metric names + time range + format hints</div>
+          </div>
+          <div style="color: #4b5563;">→</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #818cf8;">Plan Renderer</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">Plain-English plan from resolution results<br/>No API names. One confirmation.</div>
+          </div>
+          <div style="color: #4b5563;">→</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #818cf8;">Tier 3 Hook Author</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">Only invoked for truly novel queries<br/>Writes fetch fn body, not React</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align: center; padding-left: 152px; color: #374151; font-size: 18px;">↓ intent.json + (optional) tier3 fn bodies</div>
+
+    <!-- Layer 2 -->
+    <div style="display: flex; align-items: stretch; gap: 12px;">
+      <div style="width: 140px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; padding-right: 12px;">
+        <span style="font-size: 11px; font-weight: 700; color: #6b7280; text-align: right; letter-spacing: 0.5px;">LAYER 2<br/>RESOLUTION</span>
+      </div>
+      <div style="flex: 1; border: 1px solid rgba(16,185,129,0.4); border-radius: 8px; padding: 14px 18px; background: rgba(16,185,129,0.06);">
+        <div style="display: flex; align-items: center; gap: 24px; flex-wrap: wrap;">
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #10b981;">Metric Classifier</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">alias lookup → T1 / T2 / T3 / refuse</div>
+          </div>
+          <div style="color: #4b5563;">→</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #10b981;">Tier Router</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">T1: template key<br/>T2: descriptor schema<br/>T3: fn body + interface</div>
+          </div>
+          <div style="color: #4b5563;">→</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #10b981;">Widget Config Builder</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">Produces validated widget spec<br/>per-metric, runs in parallel</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align: center; padding-left: 152px; color: #374151; font-size: 18px;">↓ validated widget specs[]</div>
+
+    <!-- Layer 3 -->
+    <div style="display: flex; align-items: stretch; gap: 12px;">
+      <div style="width: 140px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; padding-right: 12px;">
+        <span style="font-size: 11px; font-weight: 700; color: #6b7280; text-align: right; letter-spacing: 0.5px;">LAYER 3<br/>BUILD ENGINE</span>
+      </div>
+      <div style="flex: 1; border: 1px solid rgba(245,158,11,0.4); border-radius: 8px; padding: 14px 18px; background: rgba(245,158,11,0.06);">
+        <div style="display: flex; align-items: center; gap: 24px; flex-wrap: wrap;">
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #fbbf24;">Scaffold Copier</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">copies template once<br/>skipped on incremental</div>
+          </div>
+          <div style="color: #4b5563;">→</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #fbbf24;">Code Generator</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">T1: placeholder sub<br/>T2: descriptor compile<br/>T3: fn injection + shell</div>
+          </div>
+          <div style="color: #4b5563;">→</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #fbbf24;">tsc Validator</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">tsc --noEmit on all widgets<br/>T3 errors → retry signal</div>
+          </div>
+          <div style="color: #4b5563;">→</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #fbbf24;">Progressive Emitter</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">streams WIDGET_READY events<br/>as each widget validates</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align: center; padding-left: 152px; color: #374151; font-size: 18px;">↓ WIDGET_READY / BUILD_COMPLETE / BUILD_RESULT</div>
+
+    <!-- Layer 4 -->
+    <div style="display: flex; align-items: stretch; gap: 12px;">
+      <div style="width: 140px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; padding-right: 12px;">
+        <span style="font-size: 11px; font-weight: 700; color: #6b7280; text-align: right; letter-spacing: 0.5px;">LAYER 4<br/>UX SHELL</span>
+      </div>
+      <div style="flex: 1; border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 14px 18px; background: rgba(239,68,68,0.04);">
+        <div style="display: flex; align-items: center; gap: 24px; flex-wrap: wrap;">
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #f87171;">Pre-warm Manager</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">npm ci hidden behind plan review<br/>guaranteed ready at approval</div>
+          </div>
+          <div style="color: #4b5563;">→</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #f87171;">Progress Reporter</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">streams build events to terminal<br/>"✓ ErrorRateTrend ready (1/4)"</div>
+          </div>
+          <div style="color: #4b5563;">→</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #f87171;">State Manager</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">.dashboard/state.json<br/>enables incremental edits</div>
+          </div>
+          <div style="color: #4b5563;">→</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 600; color: #f87171;">Dev Server</div>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 2px;">opens preview URL automatically<br/>hot-reload on incremental edits</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- What changes vs current -->
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+    <div style="border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 16px; background: rgba(239,68,68,0.04);">
+      <h3 style="color: #f87171; margin: 0 0 10px; font-size: 13px;">Current design — what moves out of the agent</h3>
+      <ul style="margin: 0; padding-left: 16px; font-size: 12px; color: #9ca3af; line-height: 2;">
+        <li>Agent derives full TypeScript widget config → <strong style="color: #f87171;">moved to Tier Router</strong></li>
+        <li>Agent writes widget files → <strong style="color: #f87171;">moved to Code Generator</strong></li>
+        <li>Agent manages 7 sequential phases → <strong style="color: #f87171;">moved to Build Engine pipeline</strong></li>
+        <li>Agent guesses pre-warm timing → <strong style="color: #f87171;">Pre-warm Manager guarantees it</strong></li>
+        <li>Agent streams no progress → <strong style="color: #f87171;">Progressive Emitter streams all events</strong></li>
+      </ul>
+    </div>
+    <div style="border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; padding: 16px; background: rgba(16,185,129,0.04);">
+      <h3 style="color: #10b981; margin: 0 0 10px; font-size: 13px;">New design — what the agent keeps</h3>
+      <ul style="margin: 0; padding-left: 16px; font-size: 12px; color: #9ca3af; line-height: 2;">
+        <li>NLP → metric name + time range + format hints</li>
+        <li>Render plain-English plan from resolution output</li>
+        <li>Tier 3 only: write a typed async function body</li>
+        <li>Follow-up enhancements: classify "add / remove / change"</li>
+        <li>Refuse with reason when metric is in hard-refuse table</li>
+      </ul>
+    </div>
+  </div>
+
+</div>

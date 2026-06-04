@@ -1,0 +1,99 @@
+<h2>The answer: Tiered Resolution</h2>
+<p class="subtitle">Approach B doesn't refuse unknown metrics — it routes them through the right generation strategy. Three tiers, each progressively more flexible but equally safe.</p>
+
+<div style="margin: 24px 0;">
+
+  <!-- Tier diagram -->
+  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 32px;">
+
+    <div style="border: 1px solid rgba(16,185,129,0.4); border-radius: 8px; padding: 16px; background: rgba(16,185,129,0.06);">
+      <div style="font-size: 11px; font-weight: 700; color: #10b981; letter-spacing: 1px; margin-bottom: 8px;">TIER 1 — CATALOG</div>
+      <h3 style="margin: 0 0 8px; font-size: 15px;">Known metrics</h3>
+      <p style="font-size: 12px; color: #9ca3af; margin: 0 0 12px;">Exact match in capability registry. Fully deterministic.</p>
+      <div style="font-family: monospace; font-size: 11px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; color: #10b981;">
+        "agent errors" → agents.getErrors<br/>
+        "invocation volume" → agents.getSummaryV2<br/>
+        "job failures" → jobs.getTopFailures
+      </div>
+      <div style="margin-top: 12px; font-size: 12px; color: #6b7280;">
+        <strong style="color: #10b981;">Generator:</strong> Pure template substitution<br/>
+        <strong style="color: #10b981;">AI writes:</strong> Nothing<br/>
+        <strong style="color: #10b981;">Speed:</strong> &lt;1s per widget
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; padding: 16px; background: rgba(99,102,241,0.06);">
+      <div style="font-size: 11px; font-weight: 700; color: #6366f1; letter-spacing: 1px; margin-bottom: 8px;">TIER 2 — PARAMETRIC</div>
+      <h3 style="margin: 0 0 8px; font-size: 15px;">Variations of known patterns</h3>
+      <p style="font-size: 12px; color: #9ca3af; margin: 0 0 12px;">Known API + custom filter/threshold/group. Agent fills a typed parameter object. Build script compiles it.</p>
+      <div style="font-family: monospace; font-size: 11px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; color: #6366f1;">
+        "queues where failure &gt; 20%"<br/>
+        → sdk.queues.getAll<br/>
+        + filter: failureRate &gt; 0.2<br/><br/>
+        "agents running &gt; 5 min"<br/>
+        → sdk.jobs.getAll<br/>
+        + filter: duration &gt; 300s
+      </div>
+      <div style="margin-top: 12px; font-size: 12px; color: #6b7280;">
+        <strong style="color: #6366f1;">Generator:</strong> Typed query descriptor → TS<br/>
+        <strong style="color: #6366f1;">AI writes:</strong> Parameter values only<br/>
+        <strong style="color: #6366f1;">Speed:</strong> &lt;2s per widget
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(245,158,11,0.4); border-radius: 8px; padding: 16px; background: rgba(245,158,11,0.06);">
+      <div style="font-size: 11px; font-weight: 700; color: #f59e0b; letter-spacing: 1px; margin-bottom: 8px;">TIER 3 — SANDBOXED CUSTOM</div>
+      <h3 style="margin: 0 0 8px; font-size: 15px;">Truly novel queries</h3>
+      <p style="font-size: 12px; color: #9ca3af; margin: 0 0 12px;">Agent writes a single hook function body — NOT a React component. Typed interface enforced by tsc. Component shell is always deterministic.</p>
+      <div style="font-family: monospace; font-size: 11px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; color: #f59e0b;">
+        // Interface (never changes)<br/>
+        type DataFn = () =&gt;<br/>
+          Promise&lt;Row[]&gt;<br/><br/>
+        // Agent writes only this:<br/>
+        const r = await sdk<br/>
+          .queues.getAll({...})<br/>
+        return r.items ?? []
+      </div>
+      <div style="margin-top: 12px; font-size: 12px; color: #6b7280;">
+        <strong style="color: #f59e0b;">Generator:</strong> AI fn body + TS validation<br/>
+        <strong style="color: #f59e0b;">AI writes:</strong> Fetch logic only, no JSX<br/>
+        <strong style="color: #f59e0b;">Speed:</strong> 5–10s + tsc retry if needed
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Flow diagram -->
+  <div style="border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 20px; background: rgba(255,255,255,0.02);">
+    <h3 style="margin: 0 0 16px; font-size: 14px; color: #e5e7eb;">Resolution flow — every metric goes through this</h3>
+    <div style="font-family: monospace; font-size: 12px; line-height: 2.2; color: #9ca3af;">
+      <span style="color: #e5e7eb;">User:</span> "show me queues where failure rate &gt; 20% and agent errors last 30 days"
+      <br/>
+      <span style="color: #6b7280;">↓ Agent extracts metrics: ["queue-failure-threshold:0.2", "agent-errors"]</span>
+      <br/>
+      <span style="color: #6b7280;">↓ For each metric, build script runs resolution:</span>
+      <br/>
+      <span style="color: #6b7280; padding-left: 24px;">• "agent-errors" → T1 exact match → template substitution → ✅ done in 1s</span>
+      <br/>
+      <span style="color: #6b7280; padding-left: 24px;">• "queue-failure-threshold:0.2" → T1 miss → T2 parametric match on queues.getAll → typed descriptor → ✅ done in 2s</span>
+      <br/>
+      <span style="color: #6b7280;">↓ Both widgets generated in parallel</span>
+      <br/>
+      <span style="color: #6b7280;">↓ Progressive: first widget visible at 1s, second at 2s</span>
+      <br/>
+      <span style="color: #10b981;">↓ Dashboard preview open — total: ~5s after npm pre-warm</span>
+    </div>
+  </div>
+
+  <!-- Key insight box -->
+  <div style="margin-top: 20px; padding: 16px; border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; background: rgba(16,185,129,0.05);">
+    <h3 style="color: #10b981; margin: 0 0 8px; font-size: 14px;">Key insight: the surface area AI can touch shrinks at each tier</h3>
+    <p style="margin: 0; font-size: 13px; color: #9ca3af;">
+      Tier 1: AI touches nothing — pure substitution.<br/>
+      Tier 2: AI provides values in a typed JSON schema — build script validates before compiling.<br/>
+      Tier 3: AI writes one function body — typed interface enforced, component shell always deterministic, <code style="background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 3px;">tsc --noEmit</code> catches errors before the user ever sees output.<br/><br/>
+      <strong style="color: #e5e7eb;">No unknown metric is refused. Every metric finds the safest path available.</strong>
+    </p>
+  </div>
+
+</div>

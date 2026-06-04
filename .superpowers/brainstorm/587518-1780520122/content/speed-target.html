@@ -1,0 +1,33 @@
+<h2>How fast does "first dashboard ready" need to feel?</h2>
+<p class="subtitle">From the moment the user sends their request to a live, running dashboard in the browser</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Under 30 seconds</h3>
+      <p>Feels instant. The user barely has time to read the plan before the build is done. Requires aggressive pre-warming and parallelism. Some constraints on dashboard complexity.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>30–90 seconds</h3>
+      <p>Fast enough to hold attention. User reads the plan (~15s), approves, build completes while they're still engaged. This is the current design target. Achievable with current pre-warm approach.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>90 seconds – 3 minutes</h3>
+      <p>Acceptable if the experience is smooth and there's visible progress. User sees what's happening at each step. More time means richer dashboards (more widgets, better defaults).</p>
+    </div>
+  </div>
+  <div class="option" data-choice="d" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>It depends on complexity</h3>
+      <p>A 3-widget dashboard should take under 60s. A 10-widget dashboard with custom queries can take 3–4 minutes. Progressive disclosure: show partial results as they're ready rather than blocking on full completion.</p>
+    </div>
+  </div>
+</div>

@@ -1,4 +1,4 @@
-# Dashboard Generation v2 Implementation Plan
+# Dashboard Generation — Code-as-Orchestrator Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -18,9 +18,9 @@
 | `assets/scripts/build-dashboard.mjs` | **Rewrite** | Main pipeline — reads intent.json, runs Resolution Engine, streams events, starts dev server |
 | `assets/scripts/tests/resolution.test.mjs` | **Create** | Unit tests for T1 alias lookup, T2 descriptor compilation, T3 injection, event format |
 | `assets/templates/dashboard/widgets/t3-shell.tsx.template` | **Create** | Typed React component shell with `<<FN_BODY>>` injection point for T3 |
-| `skills/uipath-coded-apps/references/dashboards/plugins/build/impl.md` | **Rewrite** | Agent instructions for v2 build flow (5 phases, intent.json, event parsing) |
+| `skills/uipath-coded-apps/references/dashboards/plugins/build/impl.md` | **Rewrite** | Agent instructions for intent-based build flow (5 phases, intent.json, event parsing) |
 | `skills/uipath-coded-apps/references/dashboards/primitives/build-plan.md` | **Update** | intent.json schema, tier classification rules, plan format |
-| `skills/uipath-coded-apps/references/dashboards/primitives/state-file.md` | **Update** | Schema v2 (widget hashes, schemaVersion, tier metadata) |
+| `skills/uipath-coded-apps/references/dashboards/primitives/state-file.md` | **Update** | schema (widget hashes, schemaVersion, tier metadata) |
 | `skills/uipath-coded-apps/references/dashboards/primitives/incremental-editor.md` | **Update** | edit-intent.json schema, HAND_EDIT_DETECTED flow |
 | `skills/uipath-coded-apps/references/dashboards/primitives/tier-resolution.md` | **Create** | Agent guide: how to classify metrics into T1/T2/T3, write T2 params, write T3 fn bodies |
 | `skills/uipath-coded-apps/references/dashboards/CAPABILITY.md` | **Update** | Phase list, link to tier-resolution.md |
@@ -442,7 +442,7 @@ export function validateIntent(intent) {
 Also add this guard near the top of main execution (after `plan` is read, currently ~line 151):
 
 ```javascript
-// v2 intent.json path
+// intent.json path
 if (plan.metrics) {
   const intentErrors = validateIntent(plan)
   if (intentErrors.length > 0) fail(`Invalid intent.json:\n${intentErrors.map(e => '  • ' + e).join('\n')}`)
@@ -1074,7 +1074,7 @@ git commit -m "feat(dashboards): add structured event streaming protocol (emit/p
 **Files:**
 - Modify: `skills/uipath-coded-apps/assets/scripts/build-dashboard.mjs` (replace timing-based pre-warm with `runPrewarm`, `waitForPrewarm`)
 
-The current pre-warm is timing-based — if the user confirms before `npm ci` finishes, the build fails. v2 uses a polling guarantee: code generation waits for `node_modules/.package-lock.json` before proceeding, regardless of timing.
+The current pre-warm is timing-based — if the user confirms before `npm ci` finishes, the build fails. the new design uses a polling guarantee: code generation waits for `node_modules/.package-lock.json` before proceeding, regardless of timing.
 
 - [ ] **Step 7.1: Replace pre-warm section in build-dashboard.mjs**
 
@@ -1164,7 +1164,7 @@ git commit -m "feat(dashboards): replace timing-based pre-warm with polling guar
 
 ---
 
-## Task 8: Main Pipeline v2 Rewrite
+## Task 8: Main Pipeline Rewrite — runDashboardBuild
 
 **Files:**
 - Modify: `skills/uipath-coded-apps/assets/scripts/build-dashboard.mjs` (rewrite main execution section)
@@ -1189,13 +1189,13 @@ The current main code starts at line 145. Replace the entire main execution bloc
     fail(`Could not read JSON from ${planArg}: ${e.message}`)
   }
 
-  // ── v2 intent.json path ───────────────────────────────────────────────────
+  // ── intent.json path (new capability) ───────────────────────────────────────────────────
   if (plan.metrics) {
-    await runIntentBuild(plan, planArg)
+    await runDashboardBuild(plan, planArg)
     return
   }
 
-  // ── v1 plan.json backward-compat path ────────────────────────────────────
+  // ── legacy plan.json backward-compat path ────────────────────────────────────
   await runLegacyPlanBuild(plan)
 })()
 ```
@@ -1211,12 +1211,12 @@ async function runLegacyPlanBuild(plan) {
 }
 ```
 
-- [ ] **Step 8.3: Implement `runIntentBuild`**
+- [ ] **Step 8.3: Implement `runDashboardBuild`**
 
-Add the v2 pipeline function before `runLegacyPlanBuild`:
+Add the new pipeline function before `runLegacyPlanBuild`:
 
 ```javascript
-async function runIntentBuild(intent, intentPath) {
+async function runDashboardBuild(intent, intentPath) {
   const {
     dashboardName, timeRange, metrics,
     projectDir, orgName, tenantName, cloudUrl, apiUrl, tenantId, clientId = '',
@@ -1399,7 +1399,7 @@ async function runIntentBuild(intent, intentPath) {
       fail(`TypeScript errors after full build:\n${err}`)
     }
 
-    // Step 7 — Write state.json v2
+    // Step 7 — Write state.json
     const stateDir = join(P, '.dashboard')
     mkdirSync(stateDir, { recursive: true })
     const statePath = join(stateDir, 'state.json')
@@ -1504,12 +1504,12 @@ Expected: no output (clean parse).
 
 ```bash
 git add skills/uipath-coded-apps/assets/scripts/build-dashboard.mjs
-git commit -m "feat(dashboards): implement runIntentBuild v2 pipeline with T1/T2/T3 routing and event streaming"
+git commit -m "feat(dashboards): implement runDashboardBuild pipeline with T1/T2/T3 routing and event streaming"
 ```
 
 ---
 
-## Task 9: State File v2 + Incremental Editing
+## Task 9: State File + Incremental Editing
 
 **Files:**
 - Modify: `skills/uipath-coded-apps/assets/scripts/build-dashboard.mjs` (add `runIncrementalEdit`)
@@ -1673,7 +1673,7 @@ async function runIncrementalEdit(editIntent, projectPath, timeRange) {
 In the main IIFE, after `if (plan.metrics)`, add:
 
 ```javascript
-  // v2 edit-intent.json path
+  // edit-intent.json path
   if (plan.op) {
     const stateFile = join(resolve(plan.projectDir ?? process.cwd()), '.dashboard', 'state.json')
     if (!existsSync(stateFile)) fail('No .dashboard/state.json found. Run a fresh build first.')
@@ -1696,7 +1696,7 @@ Expected: all tests PASS.
 ```bash
 git add skills/uipath-coded-apps/assets/scripts/build-dashboard.mjs \
         skills/uipath-coded-apps/assets/scripts/tests/resolution.test.mjs
-git commit -m "feat(dashboards): add classifyEditIntent, runIncrementalEdit, state.json v2 hashes"
+git commit -m "feat(dashboards): add classifyEditIntent, runIncrementalEdit, state.json hashes"
 ```
 
 ---
@@ -1716,7 +1716,7 @@ git commit -m "feat(dashboards): add classifyEditIntent, runIncrementalEdit, sta
 Write `skills/uipath-coded-apps/references/dashboards/plugins/build/impl.md`:
 
 ```markdown
-# Dashboard Build Plugin — v2
+# Dashboard Build Plugin
 
 Implements `build` action from `CAPABILITY.md`. Reads an `intent.json`, runs `build-dashboard.mjs`, streams progress to terminal.
 
@@ -1885,7 +1885,7 @@ Write `skills/uipath-coded-apps/references/dashboards/primitives/state-file.md`:
 
 Per-project metadata. Read at every build start. Written by build script on success.
 
-## Schema v2
+## Schema
 
 ```json
 {
@@ -1915,7 +1915,7 @@ Per-project metadata. Read at every build start. Written by build script on succ
 
 ## Key rules
 
-1. `schemaVersion: 2` — build script writes this. If absent, treat as v1 (widget list array).
+1. `schemaVersion: 2 — build script writes this. If absent, treat as legacy (widget list array).
 2. `widgets` is now a map of `{ hash, tier, metric }` — not a string array.
 3. `routingName` never changes once set. Not even on upgrades.
 4. `hash` used for hand-edit detection — compare to current file content before CHANGE/REMOVE.
@@ -2133,7 +2133,7 @@ Expected: `tier-resolution.md`, `build-plan.md`, `state-file.md`, `incremental-e
 
 ```bash
 git add skills/uipath-coded-apps/references/dashboards/
-git commit -m "docs(dashboards): rewrite all reference docs for v2 — intent.json, tiered resolution, state schema v2, edit-intent"
+git commit -m "docs(dashboards): rewrite all reference docs for intent-based build — intent.json, tiered resolution, state schema v2, edit-intent"
 ```
 
 ---
@@ -2232,6 +2232,6 @@ git commit -m "test(dashboards): fix any issues found during smoke test"
 | §8.2 Hand-edit protection | Task 9 |
 | §8.3 Routing name permanence | Tasks 8, 10 |
 | §9 All error events | Tasks 7, 8, 9 |
-| §10 State file v2 schema | Tasks 8, 9, 10 |
-| §11 What changes vs v1 | Tasks 8 (backward compat), 10 |
+| §10 State file schema | Tasks 8, 9, 10 |
+| §11 What changes from legacy plan.json | Tasks 8 (backward compat), 10 |
 | §12 Files affected list | All tasks |

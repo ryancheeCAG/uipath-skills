@@ -1,0 +1,176 @@
+<h2>Dashboard Generation v2 — Implementation Plan</h2>
+<p class="subtitle">11 tasks, TDD, no placeholders · saved to <code>docs/superpowers/plans/2026-06-04-dashboard-generation-v2.md</code></p>
+
+<div style="margin: 24px 0; display: flex; flex-direction: column; gap: 10px;">
+
+  <!-- Task 1 -->
+  <div style="border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; padding: 14px 18px; background: rgba(16,185,129,0.04);">
+    <div style="display: flex; align-items: flex-start; gap: 16px;">
+      <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(16,185,129,0.15); color: #10b981; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;">1</div>
+      <div style="flex: 1;">
+        <div style="font-size: 14px; font-weight: 600; color: #e5e7eb; margin-bottom: 4px;">Capability Registry JSON</div>
+        <div style="font-size: 12px; color: #6b7280; margin-bottom: 6px;">Create <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">assets/scripts/capability-registry.json</code></div>
+        <div style="font-size: 12px; color: #9ca3af;">8 T1 catalog entries · 2 T2 parametric entries · 6 hard-refuse patterns · alias table for every metric · unit tests verifying alias lookup</div>
+      </div>
+      <div style="font-size: 11px; color: #10b981; background: rgba(16,185,129,0.1); padding: 2px 8px; border-radius: 4px; flex-shrink: 0;">FOUNDATION</div>
+    </div>
+  </div>
+
+  <!-- Task 2 -->
+  <div style="border: 1px solid rgba(99,102,241,0.3); border-radius: 8px; padding: 14px 18px; background: rgba(99,102,241,0.04);">
+    <div style="display: flex; align-items: flex-start; gap: 16px;">
+      <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99,102,241,0.15); color: #818cf8; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;">2</div>
+      <div style="flex: 1;">
+        <div style="font-size: 14px; font-weight: 600; color: #e5e7eb; margin-bottom: 4px;">intent.json Schema Validator</div>
+        <div style="font-size: 12px; color: #6b7280; margin-bottom: 6px;">Add <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">validateIntent()</code> export to <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">build-dashboard.mjs</code></div>
+        <div style="font-size: 12px; color: #9ca3af;">Validates dashboardName, timeRange, metric tier fields, T2 params, T3 fnBody presence · 5 unit tests · guards main pipeline entry</div>
+      </div>
+      <div style="font-size: 11px; color: #818cf8; background: rgba(99,102,241,0.1); padding: 2px 8px; border-radius: 4px; flex-shrink: 0;">SCHEMA</div>
+    </div>
+  </div>
+
+  <!-- Task 3 -->
+  <div style="border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; padding: 14px 18px; background: rgba(16,185,129,0.04);">
+    <div style="display: flex; align-items: flex-start; gap: 16px;">
+      <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(16,185,129,0.15); color: #10b981; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;">3</div>
+      <div style="flex: 1;">
+        <div style="font-size: 14px; font-weight: 600; color: #e5e7eb; margin-bottom: 4px;">Tier 1 Resolution — Alias Lookup + Spec Builder</div>
+        <div style="font-size: 12px; color: #6b7280; margin-bottom: 6px;">Add <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">resolveMetric()</code> + <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">buildT1WidgetSpec()</code> to build script</div>
+        <div style="font-size: 12px; color: #9ca3af;">Registry lookup by exact name · merges registry defaults with intent overrides · derives <code>useInsights()</code> call with correct time constant · 5 unit tests</div>
+      </div>
+      <div style="font-size: 11px; color: #10b981; background: rgba(16,185,129,0.1); padding: 2px 8px; border-radius: 4px; flex-shrink: 0;">T1</div>
+    </div>
+  </div>
+
+  <!-- Task 4 -->
+  <div style="border: 1px solid rgba(99,102,241,0.3); border-radius: 8px; padding: 14px 18px; background: rgba(99,102,241,0.04);">
+    <div style="display: flex; align-items: flex-start; gap: 16px;">
+      <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99,102,241,0.15); color: #818cf8; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;">4</div>
+      <div style="flex: 1;">
+        <div style="font-size: 14px; font-weight: 600; color: #e5e7eb; margin-bottom: 4px;">Tier 2 Descriptor Compiler</div>
+        <div style="font-size: 12px; color: #6b7280; margin-bottom: 6px;">Add <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">compileT2ToTypeScript()</code> + <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">buildT2WidgetSpec()</code></div>
+        <div style="font-size: 12px; color: #9ca3af;">Validates op (gt/lt/eq/gte/lte/neq) · generates TypeScript SDK hook + filter expression from JSON values only · agent never writes raw TS · 3 unit tests</div>
+      </div>
+      <div style="font-size: 11px; color: #818cf8; background: rgba(99,102,241,0.1); padding: 2px 8px; border-radius: 4px; flex-shrink: 0;">T2</div>
+    </div>
+  </div>
+
+  <!-- Task 5 -->
+  <div style="border: 1px solid rgba(245,158,11,0.3); border-radius: 8px; padding: 14px 18px; background: rgba(245,158,11,0.04);">
+    <div style="display: flex; align-items: flex-start; gap: 16px;">
+      <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(245,158,11,0.15); color: #fbbf24; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;">5</div>
+      <div style="flex: 1;">
+        <div style="font-size: 14px; font-weight: 600; color: #e5e7eb; margin-bottom: 4px;">T3 Shell Template + Injector</div>
+        <div style="font-size: 12px; color: #6b7280; margin-bottom: 6px;">Create <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">t3-shell.tsx.template</code> · add <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">buildT3WidgetFile()</code></div>
+        <div style="font-size: 12px; color: #9ca3af;">Deterministic React shell with <code>&lt;&lt;FN_BODY&gt;&gt;</code> injection point · agent writes only async fn body · component structure always script-generated · 2 unit tests</div>
+      </div>
+      <div style="font-size: 11px; color: #fbbf24; background: rgba(245,158,11,0.1); padding: 2px 8px; border-radius: 4px; flex-shrink: 0;">T3</div>
+    </div>
+  </div>
+
+  <!-- Task 6 -->
+  <div style="border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 14px 18px; background: rgba(239,68,68,0.03);">
+    <div style="display: flex; align-items: flex-start; gap: 16px;">
+      <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(239,68,68,0.15); color: #f87171; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;">6</div>
+      <div style="flex: 1;">
+        <div style="font-size: 14px; font-weight: 600; color: #e5e7eb; margin-bottom: 4px;">Event Streaming Protocol</div>
+        <div style="font-size: 12px; color: #6b7280; margin-bottom: 6px;">Replace <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">log()</code> with <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">emit()</code> + <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">parseEvent()</code></div>
+        <div style="font-size: 12px; color: #9ca3af;"><code>WIDGET_READY</code> · <code>T3_RETRY</code> · <code>TSC_PASS</code> · <code>SERVER_READY</code> · <code>BUILD_RESULT</code> · <code>PREWARM_FAILED</code> and 8 more · 5 unit tests</div>
+      </div>
+      <div style="font-size: 11px; color: #f87171; background: rgba(239,68,68,0.1); padding: 2px 8px; border-radius: 4px; flex-shrink: 0;">UX</div>
+    </div>
+  </div>
+
+  <!-- Task 7 -->
+  <div style="border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 14px 18px; background: rgba(239,68,68,0.03);">
+    <div style="display: flex; align-items: flex-start; gap: 16px;">
+      <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(239,68,68,0.15); color: #f87171; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;">7</div>
+      <div style="flex: 1;">
+        <div style="font-size: 14px; font-weight: 600; color: #e5e7eb; margin-bottom: 4px;">Pre-warm Polling Guarantee</div>
+        <div style="font-size: 12px; color: #6b7280; margin-bottom: 6px;">Replace timing-based pre-warm with <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">runPrewarm()</code> + <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">waitForPrewarm()</code></div>
+        <div style="font-size: 12px; color: #9ca3af;">Polls <code>node_modules/.package-lock.json</code> before any code gen · <code>.prewarm.lock</code> sentinel · PREWARM_FAILED event with stderr excerpt · 60s timeout</div>
+      </div>
+      <div style="font-size: 11px; color: #f87171; background: rgba(239,68,68,0.1); padding: 2px 8px; border-radius: 4px; flex-shrink: 0;">PERF</div>
+    </div>
+  </div>
+
+  <!-- Task 8 -->
+  <div style="border: 1px solid rgba(251,191,36,0.4); border-radius: 8px; padding: 14px 18px; background: rgba(251,191,36,0.04);">
+    <div style="display: flex; align-items: flex-start; gap: 16px;">
+      <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(251,191,36,0.2); color: #fcd34d; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;">8</div>
+      <div style="flex: 1;">
+        <div style="font-size: 14px; font-weight: 600; color: #e5e7eb; margin-bottom: 4px;">Main Pipeline v2 — <code style="font-size:13px;">runIntentBuild()</code></div>
+        <div style="font-size: 12px; color: #6b7280; margin-bottom: 6px;">Wire all pieces into the new execution path · preserve backward compat for v1 <code>plan.json</code></div>
+        <div style="font-size: 12px; color: #9ca3af;">T1/T2 parallel via <code>Promise.all</code> · T3 sequential with exit-code-2 retry · <code>.build-in-progress</code> sentinel · auto-generate <code>Dashboard.tsx</code> + <code>index.ts</code> · full pipeline from scaffold → server</div>
+      </div>
+      <div style="font-size: 11px; color: #fcd34d; background: rgba(251,191,36,0.1); padding: 2px 8px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(251,191,36,0.3);">CORE</div>
+    </div>
+  </div>
+
+  <!-- Task 9 -->
+  <div style="border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; padding: 14px 18px; background: rgba(16,185,129,0.04);">
+    <div style="display: flex; align-items: flex-start; gap: 16px;">
+      <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(16,185,129,0.15); color: #10b981; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;">9</div>
+      <div style="flex: 1;">
+        <div style="font-size: 14px; font-weight: 600; color: #e5e7eb; margin-bottom: 4px;">State File v2 + Incremental Editing</div>
+        <div style="font-size: 12px; color: #6b7280; margin-bottom: 6px;">Add <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">classifyEditIntent()</code> + <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;">runIncrementalEdit()</code></div>
+        <div style="font-size: 12px; color: #9ca3af;">Widget hash tracking (sha256) for hand-edit detection · ADD/REMOVE/CHANGE ops · HAND_EDIT_DETECTED event · state.json v2 with <code>schemaVersion:2</code> · 4 unit tests</div>
+      </div>
+      <div style="font-size: 11px; color: #10b981; background: rgba(16,185,129,0.1); padding: 2px 8px; border-radius: 4px; flex-shrink: 0;">EDIT</div>
+    </div>
+  </div>
+
+  <!-- Task 10 -->
+  <div style="border: 1px solid rgba(99,102,241,0.3); border-radius: 8px; padding: 14px 18px; background: rgba(99,102,241,0.04);">
+    <div style="display: flex; align-items: flex-start; gap: 16px;">
+      <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99,102,241,0.15); color: #818cf8; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;">10</div>
+      <div style="flex: 1;">
+        <div style="font-size: 14px; font-weight: 600; color: #e5e7eb; margin-bottom: 4px;">Skill Reference Documentation</div>
+        <div style="font-size: 12px; color: #6b7280; margin-bottom: 6px;">Rewrite 5 files · create 1 new file</div>
+        <div style="font-size: 12px; color: #9ca3af;">
+          <code>impl.md</code> → 5-phase v2 build flow ·
+          <code>build-plan.md</code> → intent.json schema ·
+          <code>state-file.md</code> → v2 schema ·
+          <code>incremental-editor.md</code> → edit-intent.json ·
+          <code>CAPABILITY.md</code> → updated router ·
+          <span style="color:#10b981"><code>tier-resolution.md</code> → NEW agent classification guide</span>
+        </div>
+      </div>
+      <div style="font-size: 11px; color: #818cf8; background: rgba(99,102,241,0.1); padding: 2px 8px; border-radius: 4px; flex-shrink: 0;">DOCS</div>
+    </div>
+  </div>
+
+  <!-- Task 11 -->
+  <div style="border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 14px 18px; background: rgba(255,255,255,0.02);">
+    <div style="display: flex; align-items: flex-start; gap: 16px;">
+      <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.05); color: #9ca3af; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;">11</div>
+      <div style="flex: 1;">
+        <div style="font-size: 14px; font-weight: 600; color: #e5e7eb; margin-bottom: 4px;">Full Test Suite + Smoke Test</div>
+        <div style="font-size: 12px; color: #6b7280; margin-bottom: 6px;">Run all unit tests · validate registry · check T3 shell has no unresolved placeholders</div>
+        <div style="font-size: 12px; color: #9ca3af;">All tests pass · registry reports 8 T1 + 2 T2 + 6 hard-refuse · <code>node --check</code> clean · T3 injection verified end-to-end</div>
+      </div>
+      <div style="font-size: 11px; color: #9ca3af; background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 4px; flex-shrink: 0;">VERIFY</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Summary bar -->
+<div style="margin-top: 8px; padding: 16px 20px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; background: rgba(255,255,255,0.02); display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; text-align: center;">
+  <div>
+    <div style="font-size: 22px; font-weight: 700; color: #e5e7eb;">11</div>
+    <div style="font-size: 11px; color: #6b7280;">tasks</div>
+  </div>
+  <div>
+    <div style="font-size: 22px; font-weight: 700; color: #10b981;">TDD</div>
+    <div style="font-size: 11px; color: #6b7280;">test-first throughout</div>
+  </div>
+  <div>
+    <div style="font-size: 22px; font-weight: 700; color: #818cf8;">30+</div>
+    <div style="font-size: 11px; color: #6b7280;">unit tests</div>
+  </div>
+  <div>
+    <div style="font-size: 22px; font-weight: 700; color: #fbbf24;">0</div>
+    <div style="font-size: 11px; color: #6b7280;">placeholders</div>
+  </div>
+</div>

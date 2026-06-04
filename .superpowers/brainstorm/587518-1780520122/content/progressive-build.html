@@ -1,0 +1,97 @@
+<h2>Sections 4 & 5: Progressive Build + Incremental Editing</h2>
+<p class="subtitle">How the build stays fast and how users keep shaping the dashboard after it's running</p>
+
+<div style="margin: 24px 0;">
+
+  <!-- Section 4 -->
+  <h3 style="font-size: 14px; color: #e5e7eb; margin-bottom: 16px;">Section 4 — Progressive Build & Pre-warm Guarantee</h3>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px;">
+
+    <div style="border: 1px solid rgba(245,158,11,0.3); border-radius: 8px; padding: 16px;">
+      <h3 style="color: #fbbf24; font-size: 13px; margin: 0 0 10px;">Pre-warm — guaranteed, not timed</h3>
+      <div style="font-size: 12px; color: #6b7280; line-height: 1.8;">
+        <strong style="color: #9ca3af;">Current problem:</strong> pre-warm fires and build continues regardless — if npm is slow, build-dashboard.mjs fails mid-flight.<br/><br/>
+        <strong style="color: #9ca3af;">New design:</strong> build script writes a <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">.prewarm.lock</code> file when npm ci starts. Code generation phase polls for <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">node_modules/.package-lock.json</code> before writing any widget file.<br/><br/>
+        If pre-warm hasn't finished when user confirms: build script shows "Installing dependencies (5s)..." — still inside build phase, not a failure.<br/><br/>
+        <strong style="color: #10b981;">Result:</strong> pre-warm is decoupled from plan review timing. Works even if user confirms instantly.
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(245,158,11,0.3); border-radius: 8px; padding: 16px;">
+      <h3 style="color: #fbbf24; font-size: 13px; margin: 0 0 10px;">Event streaming protocol</h3>
+      <div style="font-family: monospace; font-size: 11px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px; color: #d1d5db; line-height: 2; margin-bottom: 10px;">
+        PREWARM_DONE<br/>
+        SCAFFOLD_READY<br/>
+        ENV_WRITTEN<br/>
+        WIDGET_READY:{"name":"ErrorRateTrend","index":1,"total":4}<br/>
+        WIDGET_READY:{"name":"InvocationVolume","index":2,"total":4}<br/>
+        T3_RETRY:{"widget":"CustomQuery","errors":["TS2339: ..."]}<br/>
+        WIDGET_READY:{"name":"CustomQuery","index":3,"total":4}<br/>
+        WIDGET_READY:{"name":"HighFailureQueues","index":4,"total":4}<br/>
+        TSC_PASS<br/>
+        SERVER_READY:{"port":5173,"url":"http://localhost:5173"}<br/>
+        BUILD_RESULT:{"success":true,"widgets":[...]}
+      </div>
+      <div style="font-size: 11px; color: #6b7280;">Agent parses stdout line-by-line. Each WIDGET_READY line prints a progress tick. T3_RETRY triggers agent to rewrite fn body — build script reads the fix from stdin and continues.</div>
+    </div>
+
+  </div>
+
+  <div style="border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 14px 18px; background: rgba(255,255,255,0.02); margin-bottom: 28px;">
+    <h3 style="font-size: 13px; color: #e5e7eb; margin: 0 0 8px;">Widget generation is parallel inside the build script</h3>
+    <div style="font-size: 12px; color: #6b7280; line-height: 1.8;">
+      T1 and T2 widgets generate in parallel (Promise.all). T3 widgets run sequentially because they require agent interaction (T3_RETRY round-trips). A dashboard with 4 widgets where 3 are T1/T2 takes the time of the slowest T1/T2 widget (~1s) plus T3 resolution time (~5–10s) — not 4× sequential.
+    </div>
+  </div>
+
+  <!-- Section 5 -->
+  <h3 style="font-size: 14px; color: #e5e7eb; margin-bottom: 16px;">Section 5 — Incremental Editing</h3>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+
+    <div style="border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; padding: 16px;">
+      <h3 style="color: #10b981; font-size: 13px; margin: 0 0 10px;">Classification — what the agent determines</h3>
+      <div style="font-family: monospace; font-size: 11px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px; color: #d1d5db; line-height: 2;">
+        type EditIntent =<br/>
+        &nbsp;| { op: "ADD"; metric: MetricRef }<br/>
+        &nbsp;| { op: "REMOVE"; target: string }&nbsp;&nbsp;<span style="color: #6b7280;">// widget name</span><br/>
+        &nbsp;| { op: "CHANGE"; target: string; delta: Partial&lt;MetricRef&gt; }<br/>
+        &nbsp;| { op: "REBUILD" }&nbsp;&nbsp;<span style="color: #6b7280;">// full regeneration</span>
+      </div>
+      <div style="font-size: 11px; color: #6b7280; margin-top: 10px;">
+        Agent writes a single edit-intent.json. Build script reads state.json, applies the diff, regenerates only affected files, hot-reload fires automatically.
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; padding: 16px;">
+      <h3 style="color: #10b981; font-size: 13px; margin: 0 0 10px;">Hand-edit protection</h3>
+      <div style="font-size: 12px; color: #6b7280; line-height: 1.8;">
+        Build script hashes each generated widget file at write time and stores in state.json:<br/><br/>
+        <code style="background:rgba(0,0,0,0.3);padding:2px 4px;border-radius:3px; font-size:11px;">"ErrorRateTrend": { "hash": "a3f7...", "tier": "T1" }</code><br/><br/>
+        On CHANGE/REMOVE: if current file hash ≠ stored hash, the file was hand-edited. Build script emits <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">HAND_EDIT_DETECTED</code> event — agent warns user before overwriting.<br/><br/>
+        REBUILD always asks for confirmation before overwriting any hand-edited file.
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; padding: 16px;">
+      <h3 style="color: #10b981; font-size: 13px; margin: 0 0 10px;">Routing name is permanent</h3>
+      <div style="font-size: 12px; color: #6b7280; line-height: 1.8;">
+        Derived at first build from dashboard name + 4-char random suffix. Stored in state.json. Never changes on edits, never changes on deploy upgrades. This ensures the app's URL slug and Orchestrator package identity remain stable across the dashboard's lifetime.
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; padding: 16px;">
+      <h3 style="color: #10b981; font-size: 13px; margin: 0 0 10px;">New session resume</h3>
+      <div style="font-size: 12px; color: #6b7280; line-height: 1.8;">
+        On fresh session start, agent checks for <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">.dashboard/state.json</code>. If found:<br/><br/>
+        1. Reads widget list, org, tenant, routing name<br/>
+        2. Starts dev server (no rebuild needed)<br/>
+        3. Reports: "Found existing dashboard with N widgets. Server running at http://localhost:5173. What would you like to change?"<br/><br/>
+        Zero re-prompting. Zero re-setup.
+      </div>
+    </div>
+
+  </div>
+
+</div>

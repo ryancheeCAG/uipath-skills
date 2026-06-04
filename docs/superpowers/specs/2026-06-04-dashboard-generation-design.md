@@ -1,4 +1,4 @@
-# Dashboard Generation v2 — Design Spec
+# Dashboard Generation — Design Spec
 
 **Date:** 2026-06-04
 **Branch:** feat/uipath-dashboards-skill

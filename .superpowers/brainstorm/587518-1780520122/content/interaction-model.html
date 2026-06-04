@@ -1,0 +1,49 @@
+<h2>How does the user trigger dashboard generation?</h2>
+<p class="subtitle">This is the single biggest architectural decision — it determines latency, complexity, and how much guidance the user needs</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Natural language → done</h3>
+      <p>User types one sentence: <em>"Show me agent error rates and invocation volume for the last 30 days."</em> Claude interprets intent, picks widgets, builds, and opens a preview URL — no plan review, no back-and-forth. Sub-60 second target.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Fastest experience</li><li>Zero decisions from user</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>User may not know what data exists</li><li>First attempt may miss intent</li></ul></div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Natural language → quick plan → build</h3>
+      <p>User types intent. Claude shows a 10-second summary ("I'll build 4 widgets: Error Rate, Invocation Volume, Top Failing Agents, Active Jobs — confirm?"). One confirmation, then builds. 90–120 second target.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>User stays in control</li><li>Catches misunderstandings early</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>One extra step</li><li>User must understand widget names</li></ul></div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Named dashboard catalog</h3>
+      <p>A curated set of pre-defined dashboards: <em>"Agent Health"</em>, <em>"RPA Operations"</em>, <em>"Governance & Compliance"</em>, <em>"Job Performance"</em>. User picks a name, optionally customises time range. Deterministic, fast, zero ambiguity.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Fully deterministic</li><li>Best performance (templates preloaded)</li><li>No hallucination risk</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Limited to what's in catalog</li><li>Requires maintaining catalog</li></ul></div>
+      </div>
+    </div>
+  </div>
+  <div class="option" data-choice="d" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Catalog + natural language customisation</h3>
+      <p>Start with named templates (Option C) for speed and reliability. Add a customisation layer — user can say "same as Agent Health but also show memory usage." Combines determinism with flexibility.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Best of both worlds</li><li>Fast common path, flexible edge cases</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>More complex to build</li><li>Catalog maintenance needed</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

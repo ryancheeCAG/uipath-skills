@@ -1,0 +1,80 @@
+<h2>Section 6: Error Handling & Resilience</h2>
+<p class="subtitle">Every failure mode has a defined recovery path. Nothing silently produces broken output.</p>
+
+<div style="margin: 24px 0;">
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+
+    <div style="border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 16px; background: rgba(239,68,68,0.03);">
+      <h3 style="color: #f87171; font-size: 13px; margin: 0 0 10px;">Tier 3 tsc failure → retry loop</h3>
+      <div style="font-size: 12px; color: #6b7280; line-height: 1.8;">
+        <strong style="color: #9ca3af;">Signal:</strong> <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">T3_RETRY:{"errors":["TS2339: Property 'x' does not exist..."]}</code><br/><br/>
+        <strong style="color: #9ca3af;">Agent action:</strong> reads error, rewrites fn body addressing the specific TypeScript error, pipes new body back via stdin<br/><br/>
+        <strong style="color: #9ca3af;">Max retries:</strong> 3 attempts. On 3rd failure: build script emits <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">T3_FAILED</code> with all errors. Agent reports to user with plain-English explanation and suggests removing the widget or reformulating the request.<br/><br/>
+        <strong style="color: #10b981;">Other widgets are not blocked</strong> — T1/T2 widgets continue generating while T3 retry is in flight.
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 16px; background: rgba(239,68,68,0.03);">
+      <h3 style="color: #f87171; font-size: 13px; margin: 0 0 10px;">npm install failure</h3>
+      <div style="font-size: 12px; color: #6b7280; line-height: 1.8;">
+        <strong style="color: #9ca3af;">Signal:</strong> <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">PREWARM_FAILED:{"exitCode":1,"stderr":"..."}</code><br/><br/>
+        <strong style="color: #9ca3af;">Recovery:</strong> build script reports failure to agent with npm error excerpt. Agent surfaces to user: "Dependency install failed — this is usually a network issue or missing npm token. Run <code>npm ci</code> manually in [dir] to see the full error."<br/><br/>
+        <strong style="color: #9ca3af;">Prevention:</strong> build script validates <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">GH_NPM_REGISTRY_TOKEN</code> is set in env before starting pre-warm. Emits <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">AUTH_MISSING:{"var":"GH_NPM_REGISTRY_TOKEN"}</code> early if not.
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 16px; background: rgba(239,68,68,0.03);">
+      <h3 style="color: #f87171; font-size: 13px; margin: 0 0 10px;">UiPath auth failure</h3>
+      <div style="font-size: 12px; color: #6b7280; line-height: 1.8;">
+        <strong style="color: #9ca3af;">When:</strong> <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">uip login status</code> returns not-logged-in, or token is expired<br/><br/>
+        <strong style="color: #9ca3af;">Recovery:</strong> agent immediately runs <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">uip login</code> and waits for user to complete browser auth. Does not proceed to pre-warm until login is confirmed.<br/><br/>
+        <strong style="color: #9ca3af;">Build-time auth:</strong> if token expires during a long build, the dashboard's runtime auth (PKCE in browser) is independent — build-time auth is only for reading org/tenant/tenantId from login status. Token expiry during build does not break the generated dashboard.
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 16px; background: rgba(239,68,68,0.03);">
+      <h3 style="color: #f87171; font-size: 13px; margin: 0 0 10px;">Partial build recovery</h3>
+      <div style="font-size: 12px; color: #6b7280; line-height: 1.8;">
+        <strong style="color: #9ca3af;">When:</strong> build script crashes mid-flight (process kill, disk full, network drop during npm)<br/><br/>
+        <strong style="color: #9ca3af;">Detection:</strong> build script writes a <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">.build-in-progress</code> sentinel at start, deletes it on clean exit. If agent runs build-dashboard.mjs and sentinel exists from prior run: emits <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">PARTIAL_BUILD_DETECTED</code>.<br/><br/>
+        <strong style="color: #9ca3af;">Recovery options:</strong> (1) resume — skip scaffold copy + npm if already done, regenerate missing widgets only; (2) clean rebuild — delete project dir and start fresh. Agent asks user which to prefer.
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 16px; background: rgba(239,68,68,0.03);">
+      <h3 style="color: #f87171; font-size: 13px; margin: 0 0 10px;">Port conflict (dev server)</h3>
+      <div style="font-size: 12px; color: #6b7280; line-height: 1.8;">
+        <strong style="color: #9ca3af;">When:</strong> localhost:5173 already in use (another Vite app, prior dashboard)<br/><br/>
+        <strong style="color: #9ca3af;">Recovery:</strong> Vite auto-increments port (5174, 5175, …). Build script captures actual port from Vite stdout, emits <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">SERVER_READY:{"port":5174}</code> with actual port. Agent always reports the actual URL, never assumes 5173.
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 16px; background: rgba(239,68,68,0.03);">
+      <h3 style="color: #f87171; font-size: 13px; margin: 0 0 10px;">Metric hard-refuse + partial dashboards</h3>
+      <div style="font-size: 12px; color: #6b7280; line-height: 1.8;">
+        <strong style="color: #9ca3af;">When:</strong> user requests 4 metrics, one is in the hard-refuse table<br/><br/>
+        <strong style="color: #9ca3af;">Behaviour:</strong> agent does NOT refuse the entire dashboard. It refuses only the hard-refuse metric, explains why, and offers to build the other 3. Plan clearly marks the refused metric with the reason.<br/><br/>
+        <code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:3px;font-size:11px;">~~Agent cost in dollars~~ — the platform tracks AGU units, not currency. I'll show AGU consumption instead.</code>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Error surface summary -->
+  <div style="margin-top: 20px; padding: 14px 18px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; background: rgba(255,255,255,0.02);">
+    <h3 style="font-size: 13px; color: #e5e7eb; margin: 0 0 8px;">Failure mode coverage summary</h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 11px; color: #6b7280;">
+      <div>✓ T3 TypeScript error → retry (max 3)</div>
+      <div>✓ npm install failure → surface + diagnose</div>
+      <div>✓ Token/auth expiry → re-login prompt</div>
+      <div>✓ Partial build crash → resume or clean</div>
+      <div>✓ Port conflict → auto-detect actual port</div>
+      <div>✓ Hard-refuse metric → partial build offer</div>
+      <div>✓ Hand-edited file on CHANGE → warn before overwrite</div>
+      <div>✓ Missing env var → early signal before pre-warm</div>
+      <div>✓ T2 descriptor schema violation → validation error before compile</div>
+    </div>
+  </div>
+
+</div>

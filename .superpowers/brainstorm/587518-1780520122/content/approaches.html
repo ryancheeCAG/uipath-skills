@@ -1,0 +1,61 @@
+<h2>Three architectural approaches to robust dashboard generation</h2>
+<p class="subtitle">Each makes a different bet on where intelligence and complexity should live</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Approach A — Optimised Instruction-Driven</h3>
+      <p><strong>What it is:</strong> Improve the current 7-phase approach. Better pre-warming, cleaner plan format, progress updates during build. The AI agent still orchestrates every phase.</p>
+      <div style="margin: 12px 0; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px; font-family: monospace; font-size: 12px; line-height: 1.8;">
+        User NLP → Agent derives full widget config → Agent writes plan.json → build script executes
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Least new work — incremental</li><li>Agent flexibility for unusual requests</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Agent still writes TypeScript config — hallucination risk</li><li>7 phases = 7 failure points</li><li>Hard to make faster without structural change</li></ul></div>
+      </div>
+      <p style="margin-top: 8px; color: #f59e0b; font-size: 13px;"><strong>Speed:</strong> 90–150s typical. Hard floor at ~60s due to npm install.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Approach B — Code-as-Orchestrator ⭐ Recommended</h3>
+      <p><strong>What it is:</strong> The build script becomes the brain. The agent's only job is NLP → a simple intent JSON (metric names + time range). All metric routing, template selection, widget config generation, and code writing happens in deterministic Node.js code — not the AI.</p>
+      <div style="margin: 12px 0; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px; font-family: monospace; font-size: 12px; line-height: 1.8;">
+        User NLP → Agent writes 10-line intent.json → build-dashboard.mjs does everything else
+      </div>
+      <div style="margin: 10px 0; font-size: 13px;">
+        <strong>Intent JSON is tiny and safe:</strong><br/>
+        <code style="background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 4px;">{ "name": "Agent Health", "metrics": ["agent-errors", "invocation-volume", "top-failing-agents"], "timeRange": "30d" }</code>
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Agent can't hallucinate widget TypeScript</li><li>Build script is testable, versioned, deterministic</li><li>Progressive disclosure is natural (stream build phases)</li><li>Easy to add new metric types without skill changes</li><li>Agent failure is contained — code handles the hard part</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Larger build script to maintain</li><li>Unusual/custom metrics need extension points</li></ul></div>
+      </div>
+      <p style="margin-top: 8px; color: #10b981; font-size: 13px;"><strong>Speed:</strong> 30–60s for standard metrics. Pre-warm hidden behind plan. Progressive: first widget visible in browser while rest build.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Approach C — Catalog + NLP Customisation</h3>
+      <p><strong>What it is:</strong> 6–8 fully pre-compiled dashboard bundles (Agent Health, RPA Operations, Governance, Job Performance, etc.). Agent maps NLP to the nearest catalog entry and applies deltas (add/remove widgets). Common case: zero npm install (bundle already built).</p>
+      <div style="margin: 12px 0; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px; font-family: monospace; font-size: 12px; line-height: 1.8;">
+        User NLP → Agent matches catalog entry → Apply customisation delta → Dev server (pre-built)
+      </div>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Fastest possible — catalog dashboards open in &lt;15s</li><li>Zero AI-generated code in hot path</li><li>Perfect for common use cases</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Catalog must be maintained as APIs evolve</li><li>Custom requests fall back to Approach B anyway</li><li>Binary files in repo (pre-built bundles)</li></ul></div>
+      </div>
+      <p style="margin-top: 8px; color: #6366f1; font-size: 13px;"><strong>Speed:</strong> &lt;15s for catalog match. Falls back to 30–60s for custom. Best average case, worst maintenance burden.</p>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top: 24px; padding: 16px; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; background: rgba(16, 185, 129, 0.05);">
+  <h3 style="color: #10b981; margin: 0 0 8px;">My recommendation: B, with C as a future optimisation</h3>
+  <p style="margin: 0; font-size: 13px; color: #9ca3af;">Approach B gives the best robustness/speed balance without maintaining a catalog. Once B is proven, adding a catalog layer (C) for the 6 most common dashboards is a straightforward optimisation — the catalog entries are just pre-run outputs of B.</p>
+</div>

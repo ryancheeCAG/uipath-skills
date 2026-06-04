@@ -1,0 +1,147 @@
+<h2>Section 3: Tiered Resolution Engine — Full Detail</h2>
+<p class="subtitle">The deterministic brain of the system. The agent produces intent.json; everything else is code.</p>
+
+<div style="margin: 24px 0;">
+
+  <!-- intent.json schema -->
+  <h3 style="font-size: 14px; color: #e5e7eb; margin-bottom: 12px;">intent.json — the only thing the agent writes</h3>
+  <div style="font-family: monospace; font-size: 12px; background: rgba(0,0,0,0.4); padding: 16px; border-radius: 6px; color: #d1d5db; margin-bottom: 28px; line-height: 1.8;">
+    <span style="color: #6b7280;">// Agent produces this. Nothing else.</span><br/>
+    {<br/>
+    &nbsp;&nbsp;<span style="color: #818cf8;">"dashboardName"</span>: <span style="color: #10b981;">"Operations Health"</span>,<br/>
+    &nbsp;&nbsp;<span style="color: #818cf8;">"timeRange"</span>: <span style="color: #10b981;">"30d"</span>,&nbsp;&nbsp;<span style="color: #6b7280;">// "1d" | "7d" | "30d" | "90d"</span><br/>
+    &nbsp;&nbsp;<span style="color: #818cf8;">"metrics"</span>: [<br/>
+    &nbsp;&nbsp;&nbsp;&nbsp;{ <span style="color: #818cf8;">"name"</span>: <span style="color: #10b981;">"agent-errors"</span>, <span style="color: #818cf8;">"tier"</span>: <span style="color: #fbbf24;">"T1"</span> },<br/>
+    &nbsp;&nbsp;&nbsp;&nbsp;{ <span style="color: #818cf8;">"name"</span>: <span style="color: #10b981;">"invocation-volume"</span>, <span style="color: #818cf8;">"tier"</span>: <span style="color: #fbbf24;">"T1"</span> },<br/>
+    &nbsp;&nbsp;&nbsp;&nbsp;{ <span style="color: #818cf8;">"name"</span>: <span style="color: #10b981;">"queue-failure-threshold"</span>, <span style="color: #818cf8;">"tier"</span>: <span style="color: #fbbf24;">"T2"</span>,<br/>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #818cf8;">"params"</span>: { <span style="color: #818cf8;">"threshold"</span>: <span style="color: #f87171;">0.2</span>, <span style="color: #818cf8;">"direction"</span>: <span style="color: #10b981;">"gt"</span> } }<br/>
+    &nbsp;&nbsp;]<br/>
+    }
+  </div>
+
+  <!-- T1 detail -->
+  <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 28px;">
+
+    <div style="border: 1px solid rgba(16,185,129,0.4); border-radius: 8px; padding: 16px; background: rgba(16,185,129,0.04);">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+        <span style="font-size: 11px; font-weight: 700; color: #10b981; letter-spacing: 1px; background: rgba(16,185,129,0.15); padding: 3px 8px; border-radius: 4px;">TIER 1 — CATALOG</span>
+        <span style="font-size: 12px; color: #6b7280;">Exact alias match in capability registry → pure template substitution</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div>
+          <div style="font-size: 12px; color: #9ca3af; font-weight: 600; margin-bottom: 6px;">Resolution algorithm</div>
+          <div style="font-size: 11px; color: #6b7280; line-height: 1.8; font-family: monospace; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px;">
+            metric.name → alias table → capability entry<br/>
+            capability entry → template key (e.g. "line-chart")<br/>
+            capability entry → API namespace + method<br/>
+            capability entry → default chartType, deltaDir, icon<br/>
+            build script: load template file<br/>
+            → replace all &lt;PLACEHOLDER&gt; markers<br/>
+            → inject time constants<br/>
+            → write widget file atomically
+          </div>
+        </div>
+        <div>
+          <div style="font-size: 12px; color: #9ca3af; font-weight: 600; margin-bottom: 6px;">What the agent provides</div>
+          <div style="font-size: 11px; color: #6b7280; line-height: 1.8;">
+            Only the metric name + time range.<br/><br/>
+            Build script derives everything else from the capability registry:<br/>
+            template, API call, chart type, axis keys, delta direction, icon name, title text, description.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(99,102,241,0.4); border-radius: 8px; padding: 16px; background: rgba(99,102,241,0.04);">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+        <span style="font-size: 11px; font-weight: 700; color: #818cf8; letter-spacing: 1px; background: rgba(99,102,241,0.15); padding: 3px 8px; border-radius: 4px;">TIER 2 — PARAMETRIC</span>
+        <span style="font-size: 12px; color: #6b7280;">Known SDK service + custom filter/transform → typed descriptor → build script compiles to TS</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div>
+          <div style="font-size: 12px; color: #9ca3af; font-weight: 600; margin-bottom: 6px;">Typed descriptor schema (agent fills values)</div>
+          <div style="font-family: monospace; font-size: 11px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px; color: #d1d5db; line-height: 1.8;">
+            {<br/>
+            &nbsp;"service": "queues",&nbsp;&nbsp;<span style="color: #6b7280;">// SDK module</span><br/>
+            &nbsp;"method": "getAll",<br/>
+            &nbsp;"filter": {<br/>
+            &nbsp;&nbsp;"field": "failureRate",<br/>
+            &nbsp;&nbsp;"op": "gt",&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #6b7280;">// gt|lt|eq|gte|lte</span><br/>
+            &nbsp;&nbsp;"value": 0.2<br/>
+            &nbsp;},<br/>
+            &nbsp;"sort": { "field": "failureRate", "dir": "desc" },<br/>
+            &nbsp;"displayAs": "ranked-table",<br/>
+            &nbsp;"title": "High-Failure Queues",<br/>
+            &nbsp;"columns": ["name","failureRate","total"]<br/>
+            }
+          </div>
+        </div>
+        <div>
+          <div style="font-size: 12px; color: #9ca3af; font-weight: 600; margin-bottom: 6px;">Build script compiles descriptor → safe TS</div>
+          <div style="font-size: 11px; color: #6b7280; line-height: 1.8;">
+            Descriptor is validated by JSON schema before compilation.<br/><br/>
+            Build script generates the SDK hook, filter expression, and column definitions from the descriptor fields — no arbitrary code paths.<br/><br/>
+            Agent provides values, not code. Hallucination risk: values only (field names, threshold numbers).
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="border: 1px solid rgba(245,158,11,0.4); border-radius: 8px; padding: 16px; background: rgba(245,158,11,0.04);">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+        <span style="font-size: 11px; font-weight: 700; color: #fbbf24; letter-spacing: 1px; background: rgba(245,158,11,0.15); padding: 3px 8px; border-radius: 4px;">TIER 3 — SANDBOXED CUSTOM</span>
+        <span style="font-size: 12px; color: #6b7280;">Novel query → agent writes typed async fn body only → shell is always deterministic</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div>
+          <div style="font-size: 12px; color: #9ca3af; font-weight: 600; margin-bottom: 6px;">Constrained interface (agent must satisfy)</div>
+          <div style="font-family: monospace; font-size: 11px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px; color: #d1d5db; line-height: 1.8;">
+            <span style="color: #6b7280;">// This interface never changes</span><br/>
+            type Row = Record&lt;string, unknown&gt;<br/>
+            type DataFn = (<br/>
+            &nbsp;&nbsp;sdk: UiPathClient,<br/>
+            &nbsp;&nbsp;getToken: () =&gt; Promise&lt;string&gt;<br/>
+            ) =&gt; Promise&lt;Row[]&gt;<br/><br/>
+            <span style="color: #6b7280;">// Agent writes ONLY this body:</span><br/>
+            <span style="color: #fbbf24;">const r = await sdk.queues<br/>
+            &nbsp;&nbsp;.getAll({ state: 'Faulted' })<br/>
+            return r.items?.map(q =&gt; ({<br/>
+            &nbsp;&nbsp;name: q.name,<br/>
+            &nbsp;&nbsp;pending: q.pendingCount<br/>
+            })) ?? []</span>
+          </div>
+        </div>
+        <div>
+          <div style="font-size: 12px; color: #9ca3af; font-weight: 600; margin-bottom: 6px;">Retry protocol on tsc failure</div>
+          <div style="font-size: 11px; color: #6b7280; line-height: 1.8;">
+            1. Build script injects fn body into typed template<br/>
+            2. Runs <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">tsc --noEmit</code> on that file only<br/>
+            3. If error: emits <code style="background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;">T3_RETRY:{"errors":[...]}</code> to stdout<br/>
+            4. Agent reads error, rewrites fn body<br/>
+            5. Repeat max 3 times<br/>
+            6. If 3 failures: report to user with reason<br/><br/>
+            Component shell (card, loading state, error boundary) is generated by build script — agent never writes JSX.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Hard refuse -->
+  <div style="border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 14px 18px; background: rgba(239,68,68,0.04);">
+    <h3 style="color: #f87171; margin: 0 0 10px; font-size: 13px;">Hard Refuse — before any tier routing</h3>
+    <p style="font-size: 12px; color: #6b7280; margin: 0 0 8px;">Checked first, before classification. Agent refuses immediately with a plain-English reason + alternative suggestion.</p>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px; color: #9ca3af;">
+      <div>• Agent cost in dollars (platform tracks AGU, not $)</div>
+      <div>• Real-time CPU/memory per agent (not exposed)</div>
+      <div>• Per-user job attribution (no end-user identity in records)</div>
+      <div>• Cross-tenant comparison (dashboards are single-tenant)</div>
+      <div>• SLA breach % (raw counts only, no SLA metadata)</div>
+      <div>• Per-agent memory profiling (fleet-level only)</div>
+      <div>• Historical queue throughput (no endpoint)</div>
+      <div>• Error message text / stack traces (no aggregation)</div>
+    </div>
+  </div>
+
+</div>
