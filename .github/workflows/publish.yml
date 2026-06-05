@@ -94,7 +94,9 @@ jobs:
 
       # Node 22 ships npm 10.x; OIDC trusted publishing needs npm >= 11.5.1.
       - name: Upgrade npm for trusted publishing
-        run: npm install -g npm@latest
+        run: |
+          npm install -g npm@latest
+          echo "npm $(npm --version) / node $(node --version)"
 
       # No auth token and no setup-node registry-url — a token would make npm
       # use token auth and bypass OIDC. We only pin the scoped package to
