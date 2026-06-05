@@ -42,7 +42,7 @@ Both tracks are **manually triggered** — there is no auto-publish on push to `
 | Job | registry | Auth |
 |-----|----------|------|
 | `publish-alpha` | GitHub Packages (`npm.pkg.github.com`) | built-in `GITHUB_TOKEN` |
-| `publish-release` | npmjs (`registry.npmjs.org`) | **OIDC trusted publishing** (no token) |
+| `publish-release` | npmjs (`registry.npmjs.org`) | **OIDC trusted publishing** (no token) + signed `--provenance` |
 
 ## Cutting a stable release
 
