@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { WidgetBoundary } from '@/dashboard/chrome/WidgetBoundary'
 import { LoadingState, EmptyState } from '@/dashboard/chrome'
+import { RecordsTable, type ColumnDef } from '@/dashboard/chrome/RecordsTable'
 import { <<ICON_NAME>> } from 'lucide-react'
 
 type Row = Record<string, unknown>
@@ -13,6 +14,10 @@ const customDataFn = async (sdk: any, getToken: () => Promise<string>): Promise<
 <<FN_BODY>>
 }
 // ─────────────────────────────────────────────────────────────────────────────
+
+const DISPLAY_AS = '<<DISPLAY_AS>>'
+
+const COLUMNS: ColumnDef<Row>[] = <<COLUMNS>>
 
 function use<<COMPONENT_NAME>>Data() {
   const { sdk, getToken } = useAuth()
@@ -34,6 +39,31 @@ function use<<COMPONENT_NAME>>Data() {
 export function <<COMPONENT_NAME>>() {
   const { data, loading, error } = use<<COMPONENT_NAME>>Data()
 
+  const renderContent = () => {
+    if (loading) return <LoadingState height="h-32" />
+    if (error)   return <EmptyState message={error.message} />
+    if (data.length === 0) return <EmptyState message="No data" />
+
+    if (DISPLAY_AS === 'ranked-table' || DISPLAY_AS === 'data-table') {
+      return (
+        <RecordsTable
+          rows={data}
+          columns={COLUMNS}
+          defaultSortKey={COLUMNS[0]?.key as string}
+        />
+      )
+    }
+
+    // KPI / fallback: show count or first numeric value
+    const firstNumeric = Object.values(data[0] ?? {}).find(v => typeof v === 'number')
+    const display = firstNumeric !== undefined ? String(firstNumeric) : String(data.length)
+    return (
+      <div className="flex items-baseline gap-1">
+        <span className="text-3xl font-bold tabular-nums">{display}</span>
+      </div>
+    )
+  }
+
   return (
     <WidgetBoundary label="<<TITLE>>">
       <Card>
@@ -45,16 +75,7 @@ export function <<COMPONENT_NAME>>() {
           <CardDescription><<DESCRIPTION>></CardDescription>
         </CardHeader>
         <CardContent>
-          {loading && <LoadingState height="h-32" />}
-          {error && <EmptyState message={error.message} />}
-          {!loading && !error && (
-            <div className="text-sm">
-              {data.length === 0
-                ? <EmptyState message="No data" />
-                : <span className="text-2xl font-bold">{data.length} items</span>
-              }
-            </div>
-          )}
+          {renderContent()}
         </CardContent>
       </Card>
     </WidgetBoundary>

@@ -58,9 +58,15 @@ export function validateIntent(intent) {
     if (!m.name) errors.push('metric missing name')
     if (!['T1','T2','T3'].includes(m.tier)) errors.push(`metric "${m.name}" has invalid tier: ${m.tier}`)
     if (m.tier === 'T2' && !m.params) errors.push(`T2 metric "${m.name}" missing params`)
-    if (m.tier === 'T3' && !m.fnBody) errors.push(`T3 metric "${m.name}" missing fnBody`)
-    if (m.tier === 'T3' && !m.displayAs) errors.push(`T3 metric "${m.name}" missing displayAs`)
-    if (m.tier === 'T3' && !m.title) errors.push(`T3 metric "${m.name}" missing title`)
+    if (m.tier === 'T3') {
+      if (!m.title) errors.push(`T3 metric "${m.name}" missing title`)
+      const hasSdkPath = !!m.fnBody
+      const hasInsightsPath = !!(m.namespace && m.method && m.template)
+      if (!hasSdkPath && !hasInsightsPath) {
+        errors.push(`T3 metric "${m.name}" needs either fnBody (SDK path) or namespace+method+template (Insights path)`)
+      }
+      if (hasSdkPath && !m.displayAs) errors.push(`T3 metric "${m.name}" with fnBody needs displayAs`)
+    }
   }
   return errors
 }
@@ -167,14 +173,67 @@ export function buildT2WidgetSpec(metric, entry) {
   }
 }
 
-export function buildT3WidgetFile(metric) {
+export function buildT3WidgetFile(metric, timeRange = '30d') {
+  if (!metric.title) throw new Error(`T3 metric "${metric.name}" missing title`)
+
+  const componentName = metric.componentName ?? toPascalCase(metric.name)
+
+  // T3-Insights path: uses useInsights hook + standard template
+  if (metric.namespace && metric.method && metric.template) {
+    const startConst = TIME_RANGE_CONSTANTS[timeRange] ?? 'THIRTY_DAYS_AGO'
+    const responseType = '{ data: Array<Record<string, unknown>> }'
+    const dataHook = metric.dataHook
+      ?? `useInsights<${responseType}>('${metric.namespace}.${metric.method}', { startTime: ${startConst}, endTime: NOW })`
+    const spec = {
+      componentName,
+      template: metric.template,
+      detailRoute: metric.detailRoute ?? `/${componentName.toLowerCase()}`,
+      icon: metric.icon ?? 'Activity',
+      title: metric.title,
+      description: metric.description ?? '',
+      dataHook,
+      dataSelector: metric.dataSelector ?? '(data as any)?.data ?? []',
+      xKey: metric.xKey ?? 'date',
+      yKey: metric.yKey ?? 'value',
+      valueExpression: metric.valueExpression ?? "'—'",
+      columns: metric.columns ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]',
+      deltaDir: metric.deltaDir ?? 'neutral',
+      deltaText: metric.deltaText ?? '',
+      series: metric.series ?? '[{key:"value",color:"hsl(var(--chart-1))"}]',
+      pivotExpression: metric.pivotExpression ?? 'rawData',
+    }
+    return applyTemplate(spec.template, {
+      COMPONENT_NAME: spec.componentName,
+      TITLE: spec.title,
+      DESCRIPTION: spec.description,
+      DETAIL_ROUTE: spec.detailRoute,
+      ICON: spec.icon,
+      DATA_HOOK: spec.dataHook,
+      DATA_SELECTOR: spec.dataSelector,
+      X_KEY: spec.xKey,
+      Y_KEY: spec.yKey,
+      VALUE_EXPRESSION: spec.valueExpression,
+      COLUMNS: spec.columns,
+      DELTA_DIR: spec.deltaDir,
+      DELTA_TEXT: spec.deltaText,
+      SERIES: spec.series,
+      PIVOT_EXPRESSION: spec.pivotExpression,
+      SDK_IMPORT: '', SDK_SERVICE: '', SDK_CALL: '', SDK_RESULT_TYPE: '',
+    })
+  }
+
+  // T3-SDK path: injects fnBody into shell template
   if (!metric.fnBody) throw new Error(`T3 metric "${metric.name}" missing fnBody`)
+  if (!metric.displayAs) throw new Error(`T3 metric "${metric.name}" with fnBody needs displayAs`)
+
   if (!existsSync(T3_SHELL_TEMPLATE_PATH)) {
     throw new Error(`T3 shell template not found at ${T3_SHELL_TEMPLATE_PATH}`)
   }
-  const componentName = metric.componentName ?? toPascalCase(metric.name)
+
   const iconName = metric.icon ?? 'Activity'
   const indentedFnBody = metric.fnBody.split('\n').map(l => '  ' + l).join('\n')
+  const columns = metric.columns
+    ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]'
   let content = readFileSync(T3_SHELL_TEMPLATE_PATH, 'utf8')
   content = content
     .split('<<FN_BODY>>').join(indentedFnBody)
@@ -182,6 +241,8 @@ export function buildT3WidgetFile(metric) {
     .split('<<TITLE>>').join(metric.title ?? componentName)
     .split('<<DESCRIPTION>>').join(metric.description ?? '')
     .split('<<ICON_NAME>>').join(iconName)
+    .split('<<DISPLAY_AS>>').join(metric.displayAs ?? 'ranked-table')
+    .split('<<COLUMNS>>').join(columns)
   return content
 }
 
@@ -609,7 +670,7 @@ async function runDashboardBuild(intent, intentPath) {
         const currentMetric = currentIntent.metrics.find(m => m.name === metric.name) ?? metric
         let widgetContent
         try {
-          widgetContent = buildT3WidgetFile(currentMetric)
+          widgetContent = buildT3WidgetFile(currentMetric, timeRange)
         } catch (e) {
           emit('T3_FAILED', { widget: metric.name, reason: e.message })
           fail(`T3 widget "${metric.name}" failed: ${e.message}`)

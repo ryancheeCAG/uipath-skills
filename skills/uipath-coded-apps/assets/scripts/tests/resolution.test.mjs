@@ -131,9 +131,9 @@ test('validateIntent: rejects T2 metric without params', () => {
   assert.ok(errors.some(e => e.includes('T2') && e.includes('params')))
 })
 
-test('validateIntent: rejects T3 metric without fnBody', () => {
+test('validateIntent: rejects T3 metric without fnBody or namespace+method+template', () => {
   const errors = validateIntent({ dashboardName: 'x', timeRange: '7d', metrics: [{ name: 'custom', tier: 'T3', displayAs: 'ranked-table', title: 'Custom' }] })
-  assert.ok(errors.some(e => e.includes('T3') && e.includes('fnBody')))
+  assert.ok(errors.some(e => e.includes('T3') && (e.includes('fnBody') || e.includes('namespace'))))
 })
 
 // ── resolveMetric + buildT1WidgetSpec tests ───────────────────────────────────
@@ -216,7 +216,7 @@ test('buildT3WidgetFile: injects fnBody into shell template', () => {
   const content = buildT3WidgetFile({
     name: 'faulted-queues', tier: 'T3', title: 'Faulted Queues', description: 'Queues with faults',
     displayAs: 'ranked-table', fnBody: "const r = await sdk.queues.getAll({})\nreturn r.items ?? []"
-  })
+  }, '30d')
   assert.ok(content.includes('FaultedQueues'), 'component name not injected')
   assert.ok(content.includes('Faulted Queues'), 'title not injected')
   assert.ok(content.includes('sdk.queues.getAll'), 'fnBody not injected')
@@ -224,11 +224,32 @@ test('buildT3WidgetFile: injects fnBody into shell template', () => {
   assert.ok(!content.includes('<<COMPONENT_NAME>>'), 'COMPONENT_NAME placeholder not replaced')
 })
 
-test('buildT3WidgetFile: throws if fnBody is missing', () => {
+test('buildT3WidgetFile: injects DISPLAY_AS and COLUMNS into shell template', () => {
+  const content = buildT3WidgetFile({
+    name: 'faulted-queues', tier: 'T3', title: 'Faulted Queues',
+    displayAs: 'ranked-table', fnBody: "return []"
+  }, '30d')
+  assert.ok(content.includes("'ranked-table'"), 'DISPLAY_AS not injected')
+  assert.ok(!content.includes('<<DISPLAY_AS>>'), 'DISPLAY_AS placeholder not replaced')
+  assert.ok(!content.includes('<<COLUMNS>>'), 'COLUMNS placeholder not replaced')
+})
+
+test('buildT3WidgetFile: throws if fnBody is missing and no Insights path', () => {
   assert.throws(
-    () => buildT3WidgetFile({ name: 'x', tier: 'T3', title: 'X', displayAs: 'kpi-card' }),
+    () => buildT3WidgetFile({ name: 'x', tier: 'T3', title: 'X', displayAs: 'kpi-card' }, '30d'),
     /fnBody/
   )
+})
+
+test('buildT3WidgetFile: T3-Insights path uses applyTemplate', () => {
+  const content = buildT3WidgetFile({
+    name: 'incident-dist', tier: 'T3', title: 'Incidents',
+    namespace: 'agents', method: 'getIncidentDistribution',
+    template: 'donut-chart', dataSelector: '(data as any)?.data ?? []',
+  }, '30d')
+  assert.ok(content.includes('IncidentDist'), 'component name not injected')
+  assert.ok(content.includes('Incidents'), 'title not injected')
+  assert.ok(!content.includes('<<FN_BODY>>'), 'FN_BODY placeholder should not be present')
 })
 
 // ── emit + parseEvent tests ───────────────────────────────────────────────────

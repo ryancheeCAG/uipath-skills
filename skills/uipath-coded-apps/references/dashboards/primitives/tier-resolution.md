@@ -40,26 +40,50 @@ T2 params format:
 { "name": "queue-failure-threshold", "tier": "T2", "params": { "threshold": 20, "direction": "gt" } }
 ```
 
-## Tier 3 — Custom function body
+## Tier 3 — Custom metrics
 
-Use when metric doesn't match T1 or T2. Write a typed async function body:
+Use when the metric doesn't match T1 or T2. Two sub-paths:
 
-```typescript
-const r = await sdk.queues.getAll({ state: 'Faulted' })
-return r.items?.map(q => ({ name: q.name, count: q.pendingCount })) ?? []
-```
+### T3-Insights: custom Insights RTM endpoint
 
-Rules for T3 fnBody:
-- Must return `Promise<Array<Record<string, unknown>>>`
-- Use `sdk.*` for SDK calls — imports provided by shell template
-- Use `await` for all async operations
-- No `import` statements
-- No JSX
+Any `useInsights` endpoint not in the T1 catalog. Provide the namespace, method, and template:
 
-T3 fields required in intent.json:
 ```json
-{ "name": "my-metric", "tier": "T3", "title": "Human Title", "displayAs": "ranked-table", "fnBody": "..." }
+{
+  "name": "incident-distribution",
+  "tier": "T3",
+  "title": "Incident Distribution",
+  "namespace": "agents",
+  "method": "getIncidentDistribution",
+  "template": "donut-chart",
+  "dataSelector": "(data as any)?.data ?? []",
+  "xKey": "name",
+  "yKey": "value",
+  "description": "Incident types as a breakdown"
+}
 ```
+
+### T3-SDK: custom SDK query
+
+For data not available via Insights RTM. Provide an async function body using `sdk.*`:
+
+```json
+{
+  "name": "faulted-queues",
+  "tier": "T3",
+  "title": "Faulted Queue Items",
+  "displayAs": "ranked-table",
+  "columns": "[{key:\"name\",label:\"Queue\"},{key:\"count\",label:\"Faulted\",align:\"right\" as const}]",
+  "fnBody": "const r = await sdk.queues.getAll({ state: 'Faulted' })\nreturn (r?.items ?? []).map((q: any) => ({ name: q.name ?? '', count: q.transactionsCount ?? 0 }))"
+}
+```
+
+T3-SDK rules for fnBody:
+- Must return `Promise<Array<Record<string, unknown>>>`
+- Use `sdk.*` for SDK calls
+- Use `await` for all async operations
+- No `import` statements (shell provides all imports)
+- No JSX
 
 ## Hard Refuse List
 
