@@ -1,62 +1,457 @@
 #!/usr/bin/env node
 /**
- * build-dashboard.mjs — Single-shot dashboard builder
+ * build-dashboard.mjs — Dashboard build pipeline
  *
- * Reads an approved build plan from stdin (JSON), then:
- *   1. Copies scaffold to PROJECT_DIR (Node.js fs — cross-platform, no cp -r)
- *   2. Checks pre-warm; runs npm ci if not done
- *   3. Writes .env.local
- *   4. Writes all widget + view + Dashboard.tsx + index.ts files
- *   5. Updates App.tsx route markers
- *   6. Runs tsc --noEmit
- *   7. Writes .dashboard/state.json
- *   8. Starts dev server and outputs the URL
+ * Accepts an intent.json, edit-intent.json, or legacy plan.json as a file
+ * path argument and generates a complete React dashboard project.
  *
- * Plan JSON supports two modes for widget content:
- *
- *   Mode A — files map (legacy / agent-authored TypeScript):
- *     "files": { "src/dashboard/widgets/Foo.tsx": "<full tsx>", ... }
- *
- *   Mode B — widgets array (template substitution — preferred):
- *     "widgets": [ { "componentName": "Foo", "template": "kpi-card", ... } ]
- *     The script loads pre-tested template files and applies <PLACEHOLDER> substitution.
- *     TypeScript is always correct because templates are pre-validated.
- *
- * Both modes may coexist: widgets[] generates widget + view files; files{} writes
- * Dashboard.tsx, index.ts, App.tsx (anything the agent still authors directly).
+ * Input routing:
+ *   intent.json     (has "metrics" field)  → runDashboardBuild()
+ *   edit-intent.json (has "op" field)      → runIncrementalEdit()
+ *   legacy plan.json (has "widgets" field) → runLegacyPlanBuild()
  *
  * Usage:
- *   node build-dashboard.mjs <plan.json>          ← recommended (cross-platform)
- *   node build-dashboard.mjs /path/to/plan.json
+ *   node build-dashboard.mjs <path-to-json>
  *
- * Exit 0 = success, exit 1 = failure (message on stderr).
+ * Exit codes:
+ *   0 — success
+ *   1 — fatal error (message on stderr)
+ *   2 — T3 widget needs retry (update fnBody in intent.json and re-run)
  */
 
-import { readFileSync, writeFileSync, copyFileSync, mkdirSync, readdirSync, existsSync, renameSync, unlinkSync } from 'fs';
-import { join, dirname, resolve } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
-import { execSync, spawn } from 'child_process';
-import { createHash } from 'crypto';
+import { readFileSync, writeFileSync, copyFileSync, mkdirSync, readdirSync, existsSync, renameSync, unlinkSync, rmSync } from 'fs'
+import { createConnection } from 'net'
+import { join, dirname, resolve } from 'path'
+import { fileURLToPath, pathToFileURL } from 'url'
+import { execSync, spawn } from 'child_process'
+import { createHash } from 'crypto'
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SCAFFOLD_DIR = resolve(__dirname, '../templates/dashboard/scaffold');
-const WIDGETS_DIR = resolve(__dirname, '../templates/dashboard/widgets');
-const T3_SHELL_TEMPLATE_PATH = resolve(__dirname, '../templates/dashboard/widgets/t3-shell.tsx.template');
+// ── Path constants ─────────────────────────────────────────────────────────────
 
-// ── Capability registry ───────────────────────────────────────────────────────
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const SCAFFOLD_DIR = resolve(__dirname, '../templates/dashboard/scaffold')
+const WIDGETS_DIR = resolve(__dirname, '../templates/dashboard/widgets')
+const T3_SHELL_TEMPLATE_PATH = resolve(__dirname, '../templates/dashboard/widgets/t3-shell.tsx.template')
 
-const REGISTRY = JSON.parse(readFileSync(resolve(__dirname, 'capability-registry.json'), 'utf8'));
+// ── Capability registry ────────────────────────────────────────────────────────
 
-// ── intent.json validator ─────────────────────────────────────────────────────
+const REGISTRY = JSON.parse(readFileSync(resolve(__dirname, 'capability-registry.json'), 'utf8'))
 
+// ── Type definitions (JSDoc only — this file is plain JavaScript) ────────────
+
+/**
+ * @typedef {'T1'|'T2'|'T3'} MetricTier
+ */
+
+/**
+ * A single metric entry inside intent.json.
+ * @typedef {Object} IntentMetric
+ * @property {string}      name          - Kebab-case metric identifier
+ * @property {MetricTier}  tier          - Resolution tier
+ * @property {string}      [title]       - Display title (required for T3)
+ * @property {string}      [description] - One-line description
+ * @property {string}      [componentName] - Override PascalCase component name
+ * @property {string}      [icon]        - lucide-react icon name
+ * @property {string}      [detailRoute] - HashRouter path for drilldown
+ * @property {Object}      [params]      - T2 filter params
+ * @property {number}      [params.threshold]
+ * @property {string}      [params.direction] - 'gt'|'lt'|'eq'|'gte'|'lte'|'neq'
+ * @property {string}      [fnBody]      - T3-SDK: async function body using sdk.*
+ * @property {string}      [namespace]   - T3-Insights: Insights RTM namespace
+ * @property {string}      [method]      - T3-Insights: endpoint method name
+ * @property {string}      [template]    - T3-Insights: widget template name
+ * @property {string}      [displayAs]   - T3-SDK: widget template name
+ * @property {string}      [dataSelector]
+ * @property {string}      [dataHook]
+ * @property {string}      [columns]     - ColumnDef array literal string
+ */
+
+/**
+ * The full intent.json structure.
+ * @typedef {Object} DashboardIntent
+ * @property {string}        dashboardName
+ * @property {'1d'|'7d'|'30d'|'90d'} timeRange
+ * @property {IntentMetric[]} metrics
+ * @property {string}        projectDir  - Absolute path for generated project
+ * @property {string}        routingName - Permanent URL slug (e.g. "agent-health-x7k2")
+ * @property {string}        orgName
+ * @property {string}        tenantName
+ * @property {string}        cloudUrl    - e.g. https://alpha.uipath.com
+ * @property {string}        apiUrl      - e.g. https://alpha.api.uipath.com
+ * @property {string}        tenantId    - UUID from ~/.uipath/.auth
+ * @property {string}        [clientId]  - External OAuth app client ID
+ */
+
+/**
+ * Derived widget specification — all fields resolved, ready for template substitution.
+ * @typedef {Object} WidgetSpec
+ * @property {string} componentName
+ * @property {string} template
+ * @property {string} title
+ * @property {string} description
+ * @property {string} icon
+ * @property {string} detailRoute
+ * @property {string} dataHook
+ * @property {string} dataSelector
+ * @property {string} xKey
+ * @property {string} yKey
+ * @property {string} valueExpression
+ * @property {string} columns
+ * @property {string} deltaDir
+ * @property {string} deltaText
+ * @property {string} series
+ * @property {string} pivotExpression
+ */
+
+/**
+ * Minimal widget descriptor used for layout classification.
+ * @typedef {Object} WidgetMeta
+ * @property {string} componentName
+ * @property {string} template
+ */
+
+/**
+ * Per-widget entry persisted in state.json.
+ * @typedef {Object} WidgetHashEntry
+ * @property {string}     hash     - SHA-256 prefix of generated file content
+ * @property {MetricTier} tier
+ * @property {string}     metric   - Original metric name from intent
+ * @property {string}     template - Template used for layout classification
+ */
+
+// ── Constants ──────────────────────────────────────────────────────────────────
+
+const TIME_RANGE_CONSTANTS = {
+  '1d':  'ONE_DAY_AGO',
+  '7d':  'SEVEN_DAYS_AGO',
+  '30d': 'THIRTY_DAYS_AGO',
+  '90d': 'NINETY_DAYS_AGO',
+}
+
+const TIME_CONSTANTS = `const NOW = new Date().toISOString()
+const ONE_DAY_AGO = new Date(Date.now() - 86_400_000).toISOString()
+const SEVEN_DAYS_AGO = new Date(Date.now() - 604_800_000).toISOString()
+const THIRTY_DAYS_AGO = new Date(Date.now() - 2_592_000_000).toISOString()
+const NINETY_DAYS_AGO = new Date(Date.now() - 7_776_000_000).toISOString()
+`
+
+const KNOWN_EVENTS = new Set([
+  'PREWARM_START', 'PREWARM_DONE', 'PREWARM_FAILED', 'SCAFFOLD_READY', 'ENV_WRITTEN',
+  'WIDGET_READY', 'T3_RETRY', 'T3_FAILED', 'TSC_PASS', 'TSC_FAIL',
+  'SERVER_READY', 'BUILD_RESULT', 'PARTIAL_BUILD_DETECTED', 'AUTH_MISSING',
+  'HAND_EDIT_DETECTED', 'T2_SCHEMA_ERROR', 'INCREMENTAL_READY',
+])
+
+const VALID_T2_OPS = ['gt', 'lt', 'eq', 'gte', 'lte', 'neq']
+const T2_OP_TO_JS = { gt: '>', lt: '<', eq: '===', gte: '>=', lte: '<=', neq: '!==' }
+
+const VALID_EDIT_OPS = ['ADD', 'REMOVE', 'CHANGE', 'REBUILD']
+
+// ── Low-level utilities ────────────────────────────────────────────────────────
+
+function fail(msg) {
+  process.stderr.write(`ERROR: ${msg}\n`)
+  process.exit(1)
+}
+
+function log(msg) {
+  process.stdout.write(msg + '\n')
+}
+
+/** Recursive directory copy — Node.js only, no cp -r, works on Windows */
+function copyDir(src, dest) {
+  mkdirSync(dest, { recursive: true })
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    const srcPath = join(src, entry.name)
+    const destPath = join(dest, entry.name)
+    if (entry.isDirectory()) {
+      copyDir(srcPath, destPath)
+    } else {
+      copyFileSync(srcPath, destPath)
+    }
+  }
+}
+
+/** Atomic file write — write to .tmp then rename on success */
+function writeAtomic(filePath, content) {
+  mkdirSync(dirname(filePath), { recursive: true })
+  const tmp = filePath + '.tmp'
+  writeFileSync(tmp, content, 'utf8')
+  renameSync(tmp, filePath)
+}
+
+function hashContent(content) {
+  return createHash('sha256').update(content).digest('hex').slice(0, 16)
+}
+
+function toPascalCase(str) {
+  return str.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join('')
+}
+
+// ── Pre-warm ───────────────────────────────────────────────────────────────────
+
+/**
+ * Run npm ci in the given project directory with a pre-warm lock sentinel.
+ * Emits PREWARM_START, PREWARM_DONE, or PREWARM_FAILED events.
+ * @param {string} projectPath - Absolute path to project directory
+ * @returns {Promise<void>}
+ */
+export async function runPrewarm(projectPath) {
+  emit('PREWARM_START')
+  const prewarmLock = join(projectPath, '.prewarm.lock')
+  writeAtomic(prewarmLock, String(Date.now()))
+  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+  try {
+    execSync(`${npmCmd} ci --prefer-offline`, { cwd: projectPath, stdio: 'pipe' })
+  } catch {
+    try {
+      execSync(`${npmCmd} ci`, { cwd: projectPath, stdio: 'pipe' })
+    } catch (e) {
+      const stderr = (e.stderr?.toString() ?? String(e)).slice(0, 500)
+      emit('PREWARM_FAILED', { exitCode: e.status ?? 1, stderr })
+      try { unlinkSync(prewarmLock) } catch { /* ignore */ }
+      throw new Error(`npm ci failed: ${stderr}`)
+    }
+  }
+  try { unlinkSync(prewarmLock) } catch { /* ignore */ }
+  emit('PREWARM_DONE')
+}
+
+/**
+ * Block until node_modules/.package-lock.json appears (written by npm ci).
+ * Used when pre-warm was started in the background during plan review.
+ * Emits PREWARM_DONE or PREWARM_FAILED.
+ * @param {string} projectPath
+ * @param {number} [timeoutMs=60000]
+ */
+export function waitForPrewarm(projectPath, timeoutMs = 60_000) {
+  const signal = join(projectPath, 'node_modules', '.package-lock.json')
+  const deadline = Date.now() + timeoutMs
+  while (!existsSync(signal)) {
+    if (Date.now() > deadline) {
+      emit('PREWARM_FAILED', { exitCode: -1, stderr: 'Timed out waiting for pre-warm' })
+      throw new Error('Pre-warm timed out after 60s')
+    }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500)
+  }
+  emit('PREWARM_DONE')
+}
+
+// ── Event streaming ────────────────────────────────────────────────────────────
+
+/**
+ * Emit a structured event line to stdout (or a custom writer for testing).
+ * @param {string} type  - Must be one of KNOWN_EVENTS
+ * @param {object|null} [payload=null]
+ * @param {{ write: (s: string) => void }} [writer=process.stdout]
+ */
+export function emit(type, payload = null, writer = process.stdout) {
+  const line = payload != null ? `${type}:${JSON.stringify(payload)}` : type
+  writer.write(line + '\n')
+}
+
+/**
+ * Parse a stdout line back to a structured event, or null if not a known event.
+ * @param {string} line
+ * @returns {{ type: string, payload: object|null }|null}
+ */
+export function parseEvent(line) {
+  const trimmed = line.trim()
+  const colonIdx = trimmed.indexOf(':')
+  if (colonIdx === -1) {
+    return KNOWN_EVENTS.has(trimmed) ? { type: trimmed, payload: null } : null
+  }
+  const type = trimmed.slice(0, colonIdx)
+  if (!KNOWN_EVENTS.has(type)) return null
+  try {
+    return { type, payload: JSON.parse(trimmed.slice(colonIdx + 1)) }
+  } catch {
+    return null
+  }
+}
+
+// ── Template helpers ───────────────────────────────────────────────────────────
+
+/**
+ * Load a widget template and apply <PLACEHOLDER> substitutions.
+ * Injects time constants after the last import line.
+ * @param {string} templateName
+ * @param {Record<string, string>} subs
+ * @returns {string}
+ */
+function applyTemplate(templateName, subs) {
+  const templatePath = join(WIDGETS_DIR, `${templateName}.tsx`)
+  if (!existsSync(templatePath)) fail(`Template not found: ${templateName}.tsx in ${WIDGETS_DIR}`)
+  let content = readFileSync(templatePath, 'utf8')
+
+  for (const [key, value] of Object.entries(subs)) {
+    content = content.split(`<${key}>`).join(value)
+  }
+
+  // Inject time constants after the last import line
+  const lines = content.split('\n')
+  let lastImportIdx = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith('import ')) lastImportIdx = i
+  }
+  if (lastImportIdx >= 0) {
+    lines.splice(lastImportIdx + 1, 0, '', TIME_CONSTANTS.trimEnd())
+    content = lines.join('\n')
+  }
+
+  return content
+}
+
+/**
+ * Generate a detail view file (always DetailViewShell + RecordsTable).
+ * This is always script-generated — agents never write view files directly.
+ * @param {{ componentName: string, title?: string, description?: string, dataHook?: string, dataSelector?: string, columns?: string }} widget
+ * @returns {string}
+ */
+function generateViewFile(widget) {
+  const { componentName, title, description, dataHook, dataSelector, columns } = widget
+  const cols = columns ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]'
+  return `import React from 'react'
+import { DetailViewShell } from '@/dashboard/chrome/DetailViewShell'
+import { RecordsTable, type ColumnDef } from '@/dashboard/chrome/RecordsTable'
+import { useInsights } from '@/hooks/useInsights'
+import { LoadingState, EmptyState } from '@/dashboard/chrome'
+
+${TIME_CONSTANTS.trimEnd()}
+
+const COLUMNS: ColumnDef<Record<string, unknown>>[] = ${cols}
+
+export function ${componentName}View() {
+  const { data, loading, error } = ${dataHook}
+  const rows: Record<string, unknown>[] = ${dataSelector ?? '[]'}
+  if (loading) return <DetailViewShell title="${title ?? componentName}" description="${description ?? ''}"><LoadingState height="h-96" /></DetailViewShell>
+  if (error)   return <DetailViewShell title="${title ?? componentName}" description="${description ?? ''}"><EmptyState message={error.message} /></DetailViewShell>
+  return (
+    <DetailViewShell title="${title ?? componentName}" description="${description ?? ''}">
+      <RecordsTable rows={rows} columns={COLUMNS} defaultSortKey={COLUMNS[0]?.key as string} />
+    </DetailViewShell>
+  )
+}
+`
+}
+
+/**
+ * Generate Dashboard.tsx and widgets/index.ts from resolved widget metadata.
+ * @param {string} projectPath
+ * @param {WidgetMeta[]} widgetMeta
+ * @param {string} dashboardName
+ */
+function generateDashboardFiles(projectPath, widgetMeta, dashboardName) {
+  const widgetNames = widgetMeta.map(w => w.componentName)
+
+  const kpis   = widgetMeta.filter(w => widgetLayoutGroup(w.template) === 'kpi')
+  const charts = widgetMeta.filter(w => widgetLayoutGroup(w.template) === 'chart')
+  const tables = widgetMeta.filter(w => widgetLayoutGroup(w.template) === 'table')
+
+  const kpiCols = Math.min(kpis.length, 4)
+  const kpiGrid = kpiCols === 1 ? 'grid-cols-1'
+    : kpiCols === 2 ? 'grid-cols-1 sm:grid-cols-2'
+    : kpiCols === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+    : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+
+  const imports = widgetNames.map(n => `import { ${n} } from './widgets/${n}'`).join('\n')
+  const indexTs = widgetNames.map(n => `export { ${n} } from './${n}'`).join('\n') + '\n'
+
+  const kpiSection = kpis.length ? `
+        {/* KPI row */}
+        <div className="grid ${kpiGrid} gap-4">
+          ${kpis.map(w => `<${w.componentName} />`).join('\n          ')}
+        </div>` : ''
+
+  const chartSection = charts.length ? `
+        {/* Charts */}
+        <div className="grid grid-cols-1 ${charts.length > 1 ? 'lg:grid-cols-2' : ''} gap-4 mt-6">
+          ${charts.map(w => `<${w.componentName} />`).join('\n          ')}
+        </div>` : ''
+
+  const tableSection = tables.length ? `
+        {/* Tables */}
+        <div className="space-y-4 mt-6">
+          ${tables.map(w => `<${w.componentName} />`).join('\n          ')}
+        </div>` : ''
+
+  const dashboardJsx = `import React from 'react'
+import { Header } from '@/dashboard/chrome/Header'
+${imports}
+
+export function Dashboard() {
+  return (
+    <div className="min-h-screen bg-background">
+      <Header title="${dashboardName}" description="Operational metrics dashboard" />
+      <div className="p-4 md:p-8">${kpiSection}${chartSection}${tableSection}
+      </div>
+    </div>
+  )
+}
+`
+  writeAtomic(join(projectPath, 'src', 'dashboard', 'Dashboard.tsx'), dashboardJsx)
+  writeAtomic(join(projectPath, 'src', 'dashboard', 'widgets', 'index.ts'), indexTs)
+}
+
+/**
+ * Classify a widget template into its layout group for Dashboard.tsx grid placement.
+ * @param {string} template
+ * @returns {'kpi'|'table'|'chart'}
+ */
+function widgetLayoutGroup(template) {
+  if (['kpi-card', 'kpi-with-sparkline'].includes(template)) return 'kpi'
+  if (['data-table', 'ranked-table', 'progress-bar-list'].includes(template)) return 'table'
+  return 'chart'
+}
+
+/**
+ * Inject generated import and route blocks into App.tsx markers.
+ * @param {string} projectPath
+ * @param {string[]} widgetNames
+ * @param {string[]} viewNames
+ */
+function injectAppRoutes(projectPath, widgetNames, viewNames) {
+  const appPath = join(projectPath, 'src', 'App.tsx')
+  let content = readFileSync(appPath, 'utf8')
+
+  const imports = [
+    `import { Dashboard } from '@/dashboard/Dashboard'`,
+    ...viewNames.map(n => `import { ${n}View } from '@/dashboard/views/${n}View'`),
+  ].join('\n')
+
+  const routes = [
+    `        <Route path="/" element={<Dashboard />} />`,
+    ...viewNames.map(n => `        <Route path="/${n.toLowerCase()}" element={<${n}View />} />`),
+  ].join('\n')
+
+  content = content.replace(
+    /\/\/ GENERATED_IMPORTS_START[\s\S]*?\/\/ GENERATED_IMPORTS_END/,
+    `// GENERATED_IMPORTS_START\n${imports}\n// GENERATED_IMPORTS_END`
+  )
+  content = content.replace(
+    /\{\/\* GENERATED_ROUTES_START \*\/\}[\s\S]*?\{\/\* GENERATED_ROUTES_END \*\/\}/,
+    `{/* GENERATED_ROUTES_START */}\n${routes}\n        {/* GENERATED_ROUTES_END */}`
+  )
+
+  writeAtomic(appPath, content)
+}
+
+// ── Resolution Engine ──────────────────────────────────────────────────────────
+
+/**
+ * Validate a DashboardIntent object and return an array of error messages.
+ * Returns an empty array when the intent is valid.
+ * @param {DashboardIntent} intent
+ * @returns {string[]}
+ */
 export function validateIntent(intent) {
   const errors = []
   if (!intent.dashboardName || typeof intent.dashboardName !== 'string') errors.push('dashboardName must be a non-empty string')
-  if (!['1d','7d','30d','90d'].includes(intent.timeRange)) errors.push(`timeRange must be one of: 1d, 7d, 30d, 90d`)
+  if (!['1d', '7d', '30d', '90d'].includes(intent.timeRange)) errors.push(`timeRange must be one of: 1d, 7d, 30d, 90d`)
   if (!Array.isArray(intent.metrics) || intent.metrics.length === 0) errors.push('metrics must be a non-empty array')
   for (const m of (intent.metrics ?? [])) {
     if (!m.name) errors.push('metric missing name')
-    if (!['T1','T2','T3'].includes(m.tier)) errors.push(`metric "${m.name}" has invalid tier: ${m.tier}`)
+    if (!['T1', 'T2', 'T3'].includes(m.tier)) errors.push(`metric "${m.name}" has invalid tier: ${m.tier}`)
     if (m.tier === 'T2' && !m.params) errors.push(`T2 metric "${m.name}" missing params`)
     if (m.tier === 'T3') {
       if (!m.title) errors.push(`T3 metric "${m.name}" missing title`)
@@ -71,19 +466,13 @@ export function validateIntent(intent) {
   return errors
 }
 
-// ── Resolution Engine ─────────────────────────────────────────────────────────
-
-const TIME_RANGE_CONSTANTS = {
-  '1d':  'ONE_DAY_AGO',
-  '7d':  'SEVEN_DAYS_AGO',
-  '30d': 'THIRTY_DAYS_AGO',
-  '90d': 'NINETY_DAYS_AGO',
-}
-
-function toPascalCase(str) {
-  return str.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join('')
-}
-
+/**
+ * Look up a metric in the capability registry.
+ * T3 metrics always resolve (they carry their own generation logic).
+ * Throws if a T1/T2 metric name is not found in the registry.
+ * @param {IntentMetric} metric
+ * @returns {{ tier: MetricTier, key: string, entry: object|null }}
+ */
 export function resolveMetric(metric) {
   if (metric.tier === 'T3') return { tier: 'T3', key: metric.name, entry: null }
   const registrySection = metric.tier === 'T1' ? REGISTRY.t1 : REGISTRY.t2
@@ -94,6 +483,13 @@ export function resolveMetric(metric) {
   return { tier: metric.tier, key: metric.name, entry }
 }
 
+/**
+ * Build a complete WidgetSpec from a T1 registry entry, merging any intent overrides.
+ * @param {IntentMetric} metric
+ * @param {object} entry  - Registry entry from capability-registry.json
+ * @param {'1d'|'7d'|'30d'|'90d'} timeRange
+ * @returns {WidgetSpec}
+ */
 export function buildT1WidgetSpec(metric, entry, timeRange) {
   const startConst = TIME_RANGE_CONSTANTS[timeRange] ?? 'THIRTY_DAYS_AGO'
   const componentName = metric.componentName ?? toPascalCase(metric.name)
@@ -119,9 +515,12 @@ export function buildT1WidgetSpec(metric, entry, timeRange) {
   }
 }
 
-const VALID_T2_OPS = ['gt', 'lt', 'eq', 'gte', 'lte', 'neq']
-const T2_OP_TO_JS = { gt: '>', lt: '<', eq: '===', gte: '>=', lte: '<=', neq: '!==' }
-
+/**
+ * Compile a T2 filter descriptor into a TypeScript async arrow function string.
+ * Used to generate the SDK data-fetching hook for parametric metrics.
+ * @param {{ sdkService: string, method: string, filterField: string, filterOp: string, filterValue: number, sortField: string, sortDir: string }} descriptor
+ * @returns {string} TypeScript function expression starting with "async (sdk, _getToken) =>"
+ */
 export function compileT2ToTypeScript(descriptor) {
   const { sdkService, method, filterField, filterOp, filterValue, sortField, sortDir } = descriptor
   if (!VALID_T2_OPS.includes(filterOp)) {
@@ -141,6 +540,12 @@ export function compileT2ToTypeScript(descriptor) {
 }`
 }
 
+/**
+ * Build a widget spec for a T2 parametric metric.
+ * @param {IntentMetric} metric
+ * @param {object} entry - T2 registry entry
+ * @returns {object}
+ */
 export function buildT2WidgetSpec(metric, entry) {
   const componentName = metric.componentName ?? toPascalCase(metric.name)
   const { params } = metric
@@ -173,6 +578,14 @@ export function buildT2WidgetSpec(metric, entry) {
   }
 }
 
+/**
+ * Generate the TypeScript source for a T3 widget file.
+ * T3-Insights path: uses applyTemplate() with a custom useInsights hook.
+ * T3-SDK path: injects fnBody into the t3-shell.tsx.template.
+ * @param {IntentMetric} metric
+ * @param {'1d'|'7d'|'30d'|'90d'} [timeRange='30d']
+ * @returns {string} Full TypeScript file content
+ */
 export function buildT3WidgetFile(metric, timeRange = '30d') {
   if (!metric.title) throw new Error(`T3 metric "${metric.name}" missing title`)
 
@@ -246,269 +659,38 @@ export function buildT3WidgetFile(metric, timeRange = '30d') {
   return content
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Build pipelines ────────────────────────────────────────────────────────────
 
-function fail(msg) {
-  process.stderr.write(`ERROR: ${msg}\n`);
-  process.exit(1);
-}
-
-const KNOWN_EVENTS = new Set([
-  'PREWARM_START','PREWARM_DONE','PREWARM_FAILED','SCAFFOLD_READY','ENV_WRITTEN',
-  'WIDGET_READY','T3_RETRY','T3_FAILED','TSC_PASS','TSC_FAIL',
-  'SERVER_READY','BUILD_RESULT','PARTIAL_BUILD_DETECTED','AUTH_MISSING',
-  'HAND_EDIT_DETECTED','T2_SCHEMA_ERROR','INCREMENTAL_READY'
-])
-
-export function emit(type, payload = null, writer = process.stdout) {
-  const line = payload != null ? `${type}:${JSON.stringify(payload)}` : type
-  writer.write(line + '\n')
-}
-
-export function parseEvent(line) {
-  const trimmed = line.trim()
-  const colonIdx = trimmed.indexOf(':')
-  if (colonIdx === -1) {
-    return KNOWN_EVENTS.has(trimmed) ? { type: trimmed, payload: null } : null
-  }
-  const type = trimmed.slice(0, colonIdx)
-  if (!KNOWN_EVENTS.has(type)) return null
-  try {
-    return { type, payload: JSON.parse(trimmed.slice(colonIdx + 1)) }
-  } catch {
-    return null
-  }
-}
-
-function log(msg) {
-  process.stdout.write(msg + '\n');
-}
-
-/** Recursive directory copy — Node.js only, no cp -r, works on Windows */
-function copyDir(src, dest) {
-  mkdirSync(dest, { recursive: true });
-  for (const entry of readdirSync(src, { withFileTypes: true })) {
-    const srcPath = join(src, entry.name);
-    const destPath = join(dest, entry.name);
-    if (entry.isDirectory()) {
-      copyDir(srcPath, destPath);
-    } else {
-      copyFileSync(srcPath, destPath);
-    }
-  }
-}
-
-/** Atomic file write — write to .tmp then rename on success */
-function writeAtomic(filePath, content) {
-  mkdirSync(dirname(filePath), { recursive: true });
-  const tmp = filePath + '.tmp';
-  writeFileSync(tmp, content, 'utf8');
-  renameSync(tmp, filePath);
-}
-
-// ── Pre-warm ──────────────────────────────────────────────────────────────────
-
-export async function runPrewarm(projectPath) {
-  emit('PREWARM_START')
-  const prewarmLock = join(projectPath, '.prewarm.lock')
-  writeAtomic(prewarmLock, String(Date.now()))
-  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-  try {
-    execSync(`${npmCmd} ci --prefer-offline`, { cwd: projectPath, stdio: 'pipe' })
-  } catch {
-    try {
-      execSync(`${npmCmd} ci`, { cwd: projectPath, stdio: 'pipe' })
-    } catch (e) {
-      const stderr = (e.stderr?.toString() ?? String(e)).slice(0, 500)
-      emit('PREWARM_FAILED', { exitCode: e.status ?? 1, stderr })
-      try { unlinkSync(prewarmLock) } catch { /* ignore */ }
-      throw new Error(`npm ci failed: ${stderr}`)
-    }
-  }
-  try { unlinkSync(prewarmLock) } catch { /* ignore */ }
-  emit('PREWARM_DONE')
-}
-
-export function waitForPrewarm(projectPath, timeoutMs = 60_000) {
-  const signal = join(projectPath, 'node_modules', '.package-lock.json')
+/**
+ * Poll until a TCP port accepts connections or the deadline passes.
+ * Returns the port that responded, or the starting port if none responded.
+ * @param {number} startPort
+ * @param {number} timeoutMs
+ * @returns {Promise<number>}
+ */
+async function detectDevServerPort(startPort, timeoutMs) {
   const deadline = Date.now() + timeoutMs
-  while (!existsSync(signal)) {
-    if (Date.now() > deadline) {
-      emit('PREWARM_FAILED', { exitCode: -1, stderr: 'Timed out waiting for pre-warm' })
-      throw new Error('Pre-warm timed out after 60s')
-    }
-    execSync('node -e "setTimeout(()=>{},500)"', { stdio: 'pipe' })
+  let port = startPort
+  while (Date.now() < deadline) {
+    const open = await new Promise(resolve => {
+      const socket = createConnection({ port, host: 'localhost' })
+      socket.once('connect', () => { socket.destroy(); resolve(true) })
+      socket.once('error', () => resolve(false))
+      socket.setTimeout(500, () => { socket.destroy(); resolve(false) })
+    })
+    if (open) return port
+    port++
+    if (port > startPort + 10) port = startPort
   }
-  emit('PREWARM_DONE')
-}
-
-// ── Content hashing ───────────────────────────────────────────────────────────
-
-function hashContent(content) {
-  return createHash('sha256').update(content).digest('hex').slice(0, 16)
-}
-
-// ── Dashboard file generation ─────────────────────────────────────────────────
-
-function widgetLayoutGroup(template) {
-  if (['kpi-card', 'kpi-with-sparkline'].includes(template)) return 'kpi'
-  if (['data-table', 'ranked-table', 'progress-bar-list'].includes(template)) return 'table'
-  return 'chart'
-}
-
-function generateDashboardFiles(projectPath, widgetMeta, dashboardName) {
-  // widgetMeta: Array of { componentName, template }
-  const widgetNames = widgetMeta.map(w => w.componentName)
-
-  const kpis   = widgetMeta.filter(w => widgetLayoutGroup(w.template) === 'kpi')
-  const charts = widgetMeta.filter(w => widgetLayoutGroup(w.template) === 'chart')
-  const tables = widgetMeta.filter(w => widgetLayoutGroup(w.template) === 'table')
-
-  const kpiCols = Math.min(kpis.length, 4)
-  const kpiGrid = kpiCols === 1 ? 'grid-cols-1'
-    : kpiCols === 2 ? 'grid-cols-1 sm:grid-cols-2'
-    : kpiCols === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
-    : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
-
-  const imports = widgetNames.map(n => `import { ${n} } from './widgets/${n}'`).join('\n')
-  const indexTs = widgetNames.map(n => `export { ${n} } from './${n}'`).join('\n') + '\n'
-
-  const kpiSection = kpis.length ? `
-        {/* KPI row */}
-        <div className="grid ${kpiGrid} gap-4">
-          ${kpis.map(w => `<${w.componentName} />`).join('\n          ')}
-        </div>` : ''
-
-  const chartSection = charts.length ? `
-        {/* Charts */}
-        <div className="grid grid-cols-1 ${charts.length > 1 ? 'lg:grid-cols-2' : ''} gap-4 mt-6">
-          ${charts.map(w => `<${w.componentName} />`).join('\n          ')}
-        </div>` : ''
-
-  const tableSection = tables.length ? `
-        {/* Tables */}
-        <div className="space-y-4 mt-6">
-          ${tables.map(w => `<${w.componentName} />`).join('\n          ')}
-        </div>` : ''
-
-  const dashboardJsx = `import React from 'react'
-import { Header } from '@/dashboard/chrome/Header'
-${imports}
-
-export function Dashboard() {
-  return (
-    <div className="min-h-screen bg-background">
-      <Header title="${dashboardName}" description="Operational metrics dashboard" />
-      <div className="p-4 md:p-8">${kpiSection}${chartSection}${tableSection}
-      </div>
-    </div>
-  )
-}
-`
-  writeAtomic(join(projectPath, 'src', 'dashboard', 'Dashboard.tsx'), dashboardJsx)
-  writeAtomic(join(projectPath, 'src', 'dashboard', 'widgets', 'index.ts'), indexTs)
-}
-
-// ── Template substitution ─────────────────────────────────────────────────────
-
-const TIME_CONSTANTS = `const NOW = new Date().toISOString()
-const ONE_DAY_AGO = new Date(Date.now() - 86_400_000).toISOString()
-const SEVEN_DAYS_AGO = new Date(Date.now() - 604_800_000).toISOString()
-const THIRTY_DAYS_AGO = new Date(Date.now() - 2_592_000_000).toISOString()
-const NINETY_DAYS_AGO = new Date(Date.now() - 7_776_000_000).toISOString()
-`;
-
-/**
- * Load a widget template and apply <PLACEHOLDER> substitutions.
- * Injects time constants after the last import line.
- */
-function applyTemplate(templateName, subs) {
-  const templatePath = join(WIDGETS_DIR, `${templateName}.tsx`);
-  if (!existsSync(templatePath)) fail(`Template not found: ${templateName}.tsx in ${WIDGETS_DIR}`);
-  let content = readFileSync(templatePath, 'utf8');
-
-  // Apply all substitutions
-  for (const [key, value] of Object.entries(subs)) {
-    content = content.split(`<${key}>`).join(value);
-  }
-
-  // Inject time constants after the last import line
-  const lines = content.split('\n');
-  let lastImportIdx = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].startsWith('import ')) lastImportIdx = i;
-  }
-  if (lastImportIdx >= 0) {
-    lines.splice(lastImportIdx + 1, 0, '', TIME_CONSTANTS.trimEnd());
-    content = lines.join('\n');
-  }
-
-  return content;
+  return startPort
 }
 
 /**
- * Generate a detail view file (always DetailViewShell + RecordsTable).
- * This is always script-generated — agents never write view files directly.
+ * Main intent.json build pipeline.
+ * @param {DashboardIntent} intent
+ * @param {string} intentPath - Absolute path to intent.json on disk (for T3 re-reads)
+ * @returns {Promise<void>}
  */
-function generateViewFile(widget) {
-  const { componentName, title, description, dataHook, dataSelector, columns } = widget;
-  const cols = columns ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]';
-  return `import React from 'react'
-import { DetailViewShell } from '@/dashboard/chrome/DetailViewShell'
-import { RecordsTable, type ColumnDef } from '@/dashboard/chrome/RecordsTable'
-import { useInsights } from '@/hooks/useInsights'
-import { LoadingState, EmptyState } from '@/dashboard/chrome'
-
-${TIME_CONSTANTS.trimEnd()}
-
-const COLUMNS: ColumnDef<Record<string, unknown>>[] = ${cols}
-
-export function ${componentName}View() {
-  const { data, loading, error } = ${dataHook}
-  const rows: Record<string, unknown>[] = ${dataSelector ?? '[]'}
-  if (loading) return <DetailViewShell title="${title ?? componentName}" description="${description ?? ''}"><LoadingState height="h-96" /></DetailViewShell>
-  if (error)   return <DetailViewShell title="${title ?? componentName}" description="${description ?? ''}"><EmptyState message={error.message} /></DetailViewShell>
-  return (
-    <DetailViewShell title="${title ?? componentName}" description="${description ?? ''}">
-      <RecordsTable rows={rows} columns={COLUMNS} defaultSortKey={COLUMNS[0]?.key as string} />
-    </DetailViewShell>
-  )
-}
-`;
-}
-
-// ── App.tsx route injection ───────────────────────────────────────────────────
-
-function injectAppRoutes(projectPath, widgetNames, viewNames) {
-  const appPath = join(projectPath, 'src', 'App.tsx')
-  let content = readFileSync(appPath, 'utf8')
-
-  // Build imports block
-  const imports = [
-    `import { Dashboard } from '@/dashboard/Dashboard'`,
-    ...viewNames.map(n => `import { ${n}View } from '@/dashboard/views/${n}View'`),
-  ].join('\n')
-
-  // Build routes block (2-space indent to match JSX inside Routes)
-  const routes = [
-    `        <Route path="/" element={<Dashboard />} />`,
-    ...viewNames.map(n => `        <Route path="/${n.toLowerCase()}" element={<${n}View />} />`),
-  ].join('\n')
-
-  content = content.replace(
-    /\/\/ GENERATED_IMPORTS_START[\s\S]*?\/\/ GENERATED_IMPORTS_END/,
-    `// GENERATED_IMPORTS_START\n${imports}\n// GENERATED_IMPORTS_END`
-  )
-  content = content.replace(
-    /\{\/\* GENERATED_ROUTES_START \*\/\}[\s\S]*?\{\/\* GENERATED_ROUTES_END \*\/\}/,
-    `{/* GENERATED_ROUTES_START */}\n${routes}\n        {/* GENERATED_ROUTES_END */}`
-  )
-
-  writeAtomic(appPath, content)
-}
-
-// ── runDashboardBuild pipeline ────────────────────────────────────────────────
-
 async function runDashboardBuild(intent, intentPath) {
   const {
     dashboardName, timeRange, metrics,
@@ -532,10 +714,7 @@ async function runDashboardBuild(intent, intentPath) {
     if (!existsSync(join(P, 'package.json'))) {
       if (!existsSync(SCAFFOLD_DIR)) fail(`Scaffold not found at ${SCAFFOLD_DIR}`)
       copyDir(SCAFFOLD_DIR, P)
-      try {
-        execSync(`node -e "require('fs').rmSync(${JSON.stringify(join(P,'node_modules'))},{recursive:true,force:true})"`,
-          { stdio: 'pipe' })
-      } catch { /* ignore */ }
+      try { rmSync(join(P, 'node_modules'), { recursive: true, force: true }) } catch { /* ignore */ }
     }
     emit('SCAFFOLD_READY')
 
@@ -582,8 +761,8 @@ async function runDashboardBuild(intent, intentPath) {
     const t1t2Metrics = metrics.filter(m => m.tier !== 'T3')
     const t3Metrics = metrics.filter(m => m.tier === 'T3')
     const widgetHashes = {}
-    const widgetMeta = []  // { componentName, template }
-    const widgetSpecs = {}  // componentName → { componentName, title, description, dataHook, dataSelector, columns }
+    const widgetMeta = []    // { componentName, template }
+    const widgetSpecs = {}   // componentName → { componentName, title, description, dataHook, dataSelector, columns }
     let widgetIndex = 0
     const total = metrics.length
 
@@ -753,17 +932,7 @@ async function runDashboardBuild(intent, intentPath) {
     server.on('error', () => {})
     server.unref()
 
-    let port = 5173
-    const deadline = Date.now() + 8000
-    while (Date.now() < deadline) {
-      try {
-        execSync(
-          `node -e "require('http').get('http://localhost:${port}',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"`,
-          { stdio: 'pipe', timeout: 1000 }
-        )
-        break
-      } catch { port++; if (port > 5183) { port = 5173; break } }
-    }
+    const port = await detectDevServerPort(5173, 8000)
 
     emit('SERVER_READY', { port, url: `http://localhost:${port}` })
     emit('BUILD_RESULT', {
@@ -778,10 +947,12 @@ async function runDashboardBuild(intent, intentPath) {
   }
 }
 
-// ── Incremental editing ───────────────────────────────────────────────────────
-
-const VALID_EDIT_OPS = ['ADD', 'REMOVE', 'CHANGE', 'REBUILD']
-
+/**
+ * Validate an edit-intent.json operation and return it unchanged.
+ * Throws for unknown operation types.
+ * @param {{ op: string, projectDir: string, target?: string, metric?: IntentMetric, delta?: object }} editIntent
+ * @returns {typeof editIntent}
+ */
 export function classifyEditIntent(editIntent) {
   if (!VALID_EDIT_OPS.includes(editIntent.op)) {
     throw new Error(`classifyEditIntent: invalid op "${editIntent.op}". Must be one of: ${VALID_EDIT_OPS.join(', ')}`)
@@ -789,6 +960,12 @@ export function classifyEditIntent(editIntent) {
   return editIntent
 }
 
+/**
+ * Apply an incremental edit (ADD / REMOVE / CHANGE / REBUILD) to an existing project.
+ * @param {{ op: string, projectDir: string, target?: string, metric?: IntentMetric, delta?: object }} editIntent
+ * @param {string} intentPath
+ * @returns {Promise<void>}
+ */
 async function runIncrementalEdit(editIntent, intentPath) {
   const { projectDir } = editIntent
   if (!projectDir) fail('edit-intent.projectDir is required')
@@ -880,7 +1057,7 @@ async function runIncrementalEdit(editIntent, intentPath) {
   // Regenerate Dashboard.tsx + index.ts
   const widgetMeta = Object.entries(state.widgets ?? {}).map(([name, info]) => ({
     componentName: name,
-    template: info.template ?? 'ranked-table'
+    template: info.template ?? 'ranked-table',
   }))
   generateDashboardFiles(P, widgetMeta, state.app?.name ?? 'Dashboard')
 
@@ -898,32 +1075,13 @@ async function runIncrementalEdit(editIntent, intentPath) {
   emit('INCREMENTAL_READY', { op, widget: target ?? toPascalCase(metric?.name ?? '') })
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
-
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-
-// Accept plan as file path argument — cross-platform, no /dev/stdin issues on Windows
-const planArg = process.argv[2];
-if (!planArg) fail('Usage: node build-dashboard.mjs <plan.json>');
-
-let plan;
-try {
-  plan = JSON.parse(readFileSync(planArg, 'utf8'));
-} catch (e) {
-  fail(`Could not read plan JSON from ${planArg}: ${e.message}`);
-}
-
-// Route based on input type
-if (plan.metrics) {
-  // New intent.json path
-  const intentErrors = validateIntent(plan)
-  if (intentErrors.length > 0) fail(`Invalid intent.json:\n${intentErrors.map(e => '  • ' + e).join('\n')}`)
-  await runDashboardBuild(plan, planArg)
-} else if (plan.op) {
-  const { op } = classifyEditIntent(plan)
-  await runIncrementalEdit(plan, planArg)
-} else {
-  // Legacy plan.json path — unchanged
+/**
+ * Handle the legacy plan.json format for backward compatibility.
+ * Accepts the full plan object as-is — no schema changes.
+ * @param {object} plan - Legacy plan.json object
+ * @returns {Promise<void>}
+ */
+async function runLegacyPlanBuild(plan) {
   const {
     projectDir,
     dashboardName,
@@ -938,26 +1096,23 @@ if (plan.metrics) {
     widgets: planWidgets = [],   // widget config array — script generates TypeScript via templates
     appTsxImports,
     appTsxRoutes,
-  } = plan;
+  } = plan
 
-  if (!projectDir) fail('plan.projectDir is required');
-  if (!routingName) fail('plan.routingName is required');
+  if (!projectDir) fail('plan.projectDir is required')
+  if (!routingName) fail('plan.routingName is required')
 
-  const P = resolve(projectDir);
+  const P = resolve(projectDir)
 
   // Step 1 — Copy scaffold (cross-platform Node.js, no cp -r)
-  log('⚙ Copying scaffold…');
-  if (!existsSync(SCAFFOLD_DIR)) fail(`Scaffold not found at ${SCAFFOLD_DIR}`);
-  copyDir(SCAFFOLD_DIR, P);
+  log('⚙ Copying scaffold…')
+  if (!existsSync(SCAFFOLD_DIR)) fail(`Scaffold not found at ${SCAFFOLD_DIR}`)
+  copyDir(SCAFFOLD_DIR, P)
 
   // Remove stale node_modules if present in scaffold (prevents npm ci ENOTEMPTY)
-  try {
-    execSync(`node -e "require('fs').rmSync(${JSON.stringify(join(P, 'node_modules'))},{recursive:true,force:true})"`,
-      { stdio: 'pipe' });
-  } catch { /* ignore */ }
+  try { rmSync(join(P, 'node_modules'), { recursive: true, force: true }) } catch { /* ignore */ }
 
   // Step 2 — Write .env.local
-  log('⚙ Writing environment config…');
+  log('⚙ Writing environment config…')
   writeAtomic(join(P, '.env.local'), [
     `VITE_UIPATH_CLOUD_URL=${cloudUrl}`,
     `VITE_UIPATH_BASE_URL=${apiUrl}`,
@@ -966,14 +1121,14 @@ if (plan.metrics) {
     `VITE_INSIGHTS_TENANT_ID=${tenantId}`,
     `VITE_UIPATH_CLIENT_ID=${clientId}`,
     `VITE_UIPATH_SCOPE=OR.Assets.Read OR.Jobs OR.Folders.Read OR.Buckets.Read OR.Execution.Read OR.Tasks OR.Queues.Read OR.Users.Read Insights Insights.RealTimeData`,
-  ].join('\n'));
+  ].join('\n'))
 
   // Update uipath.json with clientId from plan
-  const uipathJsonPath = join(P, 'uipath.json');
+  const uipathJsonPath = join(P, 'uipath.json')
   if (existsSync(uipathJsonPath) && clientId) {
-    const uj = JSON.parse(readFileSync(uipathJsonPath, 'utf8'));
-    uj.clientId = clientId;
-    writeAtomic(uipathJsonPath, JSON.stringify(uj, null, 2));
+    const uj = JSON.parse(readFileSync(uipathJsonPath, 'utf8'))
+    uj.clientId = clientId
+    writeAtomic(uipathJsonPath, JSON.stringify(uj, null, 2))
   }
 
   // Warn if clientId is missing — dashboard auth will fail at runtime without it
@@ -983,8 +1138,8 @@ if (plan.metrics) {
   }
 
   // Step 3 — Pre-warm guarantee: ensure dependencies installed before any code gen
-  const LOCK_SIGNAL = join(P, 'node_modules', '.package-lock.json');
-  const PREWARM_LOCK = join(P, '.prewarm.lock');
+  const LOCK_SIGNAL = join(P, 'node_modules', '.package-lock.json')
+  const PREWARM_LOCK = join(P, '.prewarm.lock')
   if (!existsSync(LOCK_SIGNAL)) {
     if (existsSync(PREWARM_LOCK)) {
       log('⏳ Waiting for pre-warm to complete…')
@@ -999,24 +1154,23 @@ if (plan.metrics) {
   }
 
   // Step 4 — Write agent-authored files (files map — Dashboard.tsx, index.ts, etc.)
-  log('⚙ Writing dashboard files…');
+  log('⚙ Writing dashboard files…')
   for (const [relativePath, content] of Object.entries(files)) {
-    writeAtomic(join(P, relativePath), content);
+    writeAtomic(join(P, relativePath), content)
   }
 
   // Step 4b — Process widgets array via template substitution
-  const generatedWidgetNames = [];
+  const generatedWidgetNames = []
 
   if (planWidgets.length > 0) {
-    log(`⚙ Generating ${planWidgets.length} widget(s) from templates…`);
+    log(`⚙ Generating ${planWidgets.length} widget(s) from templates…`)
   }
 
   for (const widget of planWidgets) {
-    const { componentName, template } = widget;
-    if (!componentName) fail(`Widget entry missing required field: componentName`);
-    if (!template) fail(`Widget "${componentName}" missing required field: template`);
+    const { componentName, template } = widget
+    if (!componentName) fail(`Widget entry missing required field: componentName`)
+    if (!template) fail(`Widget "${componentName}" missing required field: template`)
 
-    // Build substitution map — all known placeholders with defaults
     const subs = {
       COMPONENT_NAME: componentName,
       TITLE: widget.title ?? componentName,
@@ -1039,64 +1193,61 @@ if (plan.metrics) {
       SDK_SERVICE: widget.sdkService ?? '',
       SDK_CALL: widget.sdkCall ?? '',
       SDK_RESULT_TYPE: widget.sdkResultType ?? '{ items?: Array<Record<string, unknown>> }',
-    };
+    }
 
-    // Generate widget file from template
-    const widgetContent = applyTemplate(template, subs);
-    writeAtomic(join(P, 'src', 'dashboard', 'widgets', `${componentName}.tsx`), widgetContent);
+    const widgetContent = applyTemplate(template, subs)
+    writeAtomic(join(P, 'src', 'dashboard', 'widgets', `${componentName}.tsx`), widgetContent)
 
-    // Generate view file (always DetailViewShell + RecordsTable)
-    const viewContent = generateViewFile(widget);
-    writeAtomic(join(P, 'src', 'dashboard', 'views', `${componentName}View.tsx`), viewContent);
+    const viewContent = generateViewFile(widget)
+    writeAtomic(join(P, 'src', 'dashboard', 'views', `${componentName}View.tsx`), viewContent)
 
-    generatedWidgetNames.push(componentName);
+    generatedWidgetNames.push(componentName)
   }
 
   // Step 5 — Update App.tsx route markers
   if (appTsxImports || appTsxRoutes) {
-    const appPath = join(P, 'src', 'app', 'App.tsx');
+    const appPath = join(P, 'src', 'app', 'App.tsx')
     // Fall back to src/App.tsx if src/app/App.tsx doesn't exist
-    const appFile = existsSync(appPath) ? appPath : join(P, 'src', 'App.tsx');
-    let appContent = readFileSync(appFile, 'utf8');
+    const appFile = existsSync(appPath) ? appPath : join(P, 'src', 'App.tsx')
+    let appContent = readFileSync(appFile, 'utf8')
 
     if (appTsxImports) {
       appContent = appContent.replace(
         /\/\/ GENERATED_IMPORTS_START[\s\S]*?\/\/ GENERATED_IMPORTS_END/,
         `// GENERATED_IMPORTS_START\n${appTsxImports}// GENERATED_IMPORTS_END`
-      );
+      )
     }
     if (appTsxRoutes) {
       appContent = appContent.replace(
         /\{\/\* GENERATED_ROUTES_START \*\/\}[\s\S]*?\{\/\* GENERATED_ROUTES_END \*\/\}/,
         `{/* GENERATED_ROUTES_START */}\n${appTsxRoutes}{/* GENERATED_ROUTES_END */}`
-      );
+      )
     }
-    writeFileSync(appFile, appContent, 'utf8');
+    writeAtomic(appFile, appContent)
   }
 
   // Step 6 — tsc --noEmit
-  log('⚙ Validating TypeScript…');
+  log('⚙ Validating TypeScript…')
   try {
-    execSync('npx tsc --noEmit', { cwd: P, stdio: 'pipe' });
-    log('✓ TypeScript clean');
+    execSync('npx tsc --noEmit', { cwd: P, stdio: 'pipe' })
+    log('✓ TypeScript clean')
   } catch (e) {
-    const err = e.stdout?.toString() || e.stderr?.toString() || String(e);
-    fail(`TypeScript errors:\n${err}`);
+    const err = e.stdout?.toString() || e.stderr?.toString() || String(e)
+    fail(`TypeScript errors:\n${err}`)
   }
 
   // Step 7 — Write state.json
-  const stateDir = join(P, '.dashboard');
-  mkdirSync(stateDir, { recursive: true });
-  const statePath = join(stateDir, 'state.json');
+  const stateDir = join(P, '.dashboard')
+  mkdirSync(stateDir, { recursive: true })
+  const statePath = join(stateDir, 'state.json')
   const existingState = existsSync(statePath)
     ? JSON.parse(readFileSync(statePath, 'utf8'))
-    : {};
+    : {}
 
-  // Collect widget names from both modes
   const filesWidgetNames = Object.keys(files)
     .filter(p => p.startsWith('src/dashboard/widgets/') && p.endsWith('.tsx'))
-    .map(p => p.replace('src/dashboard/widgets/', '').replace('.tsx', ''));
-  const allWidgetNames = [...new Set([...filesWidgetNames, ...generatedWidgetNames])];
+    .map(p => p.replace('src/dashboard/widgets/', '').replace('.tsx', ''))
+  const allWidgetNames = [...new Set([...filesWidgetNames, ...generatedWidgetNames])]
 
   const newState = {
     ...existingState,
@@ -1107,40 +1258,23 @@ if (plan.metrics) {
     cloudUrl,
     widgets: allWidgetNames,
     deployment: existingState.deployment ?? { systemName: null, folderKey: null, appUrl: null, lastDeployedAt: null },
-  };
-  writeAtomic(statePath, JSON.stringify(newState, null, 2));
+  }
+  writeAtomic(statePath, JSON.stringify(newState, null, 2))
 
   // Step 8 — Start dev server
-  // Use shell:true so npm resolves correctly on Windows (npm.cmd vs npm)
-  log('⚙ Starting preview server…');
-  const isWindows = process.platform === 'win32';
+  log('⚙ Starting preview server…')
+  const isWindows = process.platform === 'win32'
   const server = spawn('npm', ['run', 'dev'], {
     cwd: P,
     detached: true,
     stdio: 'pipe',
     shell: isWindows,   // required on Windows — npm is npm.cmd
-  });
-  server.on('error', () => {});  // suppress unhandled error if server fails to start
-  server.unref();
+  })
+  server.on('error', () => {})  // suppress unhandled error if server fails to start
+  server.unref()
 
-  // Give server 5s to bind, then output result regardless
-  // (user runs `npm run dev` themselves if this poll times out)
-  let port = 5173;
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
-    try {
-      execSync(
-        `node -e "require('http').get('http://localhost:${port}',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"`,
-        { stdio: 'pipe', timeout: 1000 }
-      );
-      break;
-    } catch {
-      port++;
-      if (port > 5180) { port = 5173; break; }
-    }
-  }
+  const port = await detectDevServerPort(5173, 5000)
 
-  // Output structured result — always exit 0 after this point (server runs independently)
   const result = {
     success: true,
     projectDir: P,
@@ -1148,59 +1282,37 @@ if (plan.metrics) {
     previewUrl: `http://localhost:${port}`,
     widgets: allWidgetNames,
     dashboardName,
-  };
-  log('\nBUILD_RESULT:' + JSON.stringify(result));
-  process.exit(0);  // exit before server's detached process can throw
+  }
+  log('\nBUILD_RESULT:' + JSON.stringify(result))
+  process.exit(0)  // exit before server's detached process can throw
 }
 
-} // end entry-point guard
+// ── Entry point ────────────────────────────────────────────────────────────────
 
-/**
- * PLAN JSON SCHEMA
- * ─────────────────
- * {
- *   "projectDir":    string  — absolute path where dashboard will be created
- *   "dashboardName": string  — human display name (e.g. "Agent Health Dashboard")
- *   "routingName":   string  — URL slug (e.g. "agent-health-x7k2")
- *   "orgName":       string  — from uip login (Data.Organization)
- *   "tenantName":    string  — from uip login (Data.Tenant)
- *   "cloudUrl":      string  — from uip login (Data.BaseUrl)
- *   "apiUrl":        string  — derived ("alpha" → https://alpha.api.uipath.com etc.)
- *   "tenantId":      string  — UUID from ~/.uipath/.auth UIPATH_TENANT_ID
- *   "clientId":      string  — external OAuth app client ID (from uip admin external-apps create)
- *
- *   "widgets": [            — PREFERRED: agent provides config, script generates TypeScript
- *     {
- *       "componentName": string   — PascalCase; used as filename and export name
- *       "template":      string   — one of: line-chart | area-chart | bar-chart | donut-chart |
- *                                           kpi-card | kpi-with-sparkline | data-table |
- *                                           ranked-table | progress-bar-list | multi-line-chart
- *       "detailRoute":   string   — HashRouter path, e.g. "/error-rate"
- *       "icon":          string   — any lucide-react icon name
- *       "title":         string   — human label shown in CardTitle
- *       "description":   string   — one line in CardDescription
- *       "dataHook":      string   — full useInsights<ResponseType>(...) call expression
- *       "dataSelector":  string   — expression extracting array/value from response data
- *       "xKey":          string   — (line/area/bar) X-axis field name
- *       "yKey":          string   — (line/area/bar) Y-axis field name
- *       "valueExpression": string — (kpi-card/kpi-with-sparkline) expression evaluating to string
- *       "columns":       string   — (data-table/ranked-table) ColumnDef array literal
- *       "deltaDir":      string   — up-good | up-bad | down-good | down-bad | neutral
- *       "deltaText":     string   — text shown in DeltaBadge
- *       "series":        string   — (multi-line-chart) series array literal
- *       "pivotExpression": string — (multi-line-chart) expression pivoting flat array to series map
- *       "sdkImport":     string   — (sdk-* templates) npm subpath, e.g. "@uipath/uipath-typescript/jobs"
- *       "sdkService":    string   — (sdk-* templates) class name, e.g. "Jobs"
- *       "sdkCall":       string   — (sdk-* templates) method call expression, e.g. "getAll({ state: 'Running' })"
- *       "sdkResultType": string   — (sdk-* templates) TypeScript type literal, e.g. "{ items?: Array<{ state: string }> }"
- *     }
- *   ],
- *
- *   "files": {              — agent-authored files (Dashboard.tsx, index.ts, App.tsx)
- *     "src/dashboard/Dashboard.tsx": "...",
- *     "src/dashboard/widgets/index.ts": "..."
- *   },
- *   "appTsxImports": string  — lines to inject between GENERATED_IMPORTS markers
- *   "appTsxRoutes":  string  — JSX to inject between GENERATED_ROUTES markers
- * }
- */
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+
+  const planArg = process.argv[2]
+  if (!planArg) fail('Usage: node build-dashboard.mjs <plan.json>')
+
+  let plan
+  try {
+    plan = JSON.parse(readFileSync(planArg, 'utf8'))
+  } catch (e) {
+    fail(`Could not read plan JSON from ${planArg}: ${e.message}`)
+  }
+
+  if (plan.metrics) {
+    // intent.json path
+    const intentErrors = validateIntent(plan)
+    if (intentErrors.length > 0) fail(`Invalid intent.json:\n${intentErrors.map(e => '  • ' + e).join('\n')}`)
+    await runDashboardBuild(plan, planArg)
+  } else if (plan.op) {
+    // edit-intent.json path
+    classifyEditIntent(plan)  // validates op before passing to runIncrementalEdit
+    await runIncrementalEdit(plan, planArg)
+  } else {
+    // Legacy plan.json path
+    await runLegacyPlanBuild(plan)
+  }
+
+} // end entry-point guard
