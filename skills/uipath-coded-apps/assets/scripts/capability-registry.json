@@ -2,11 +2,11 @@
   "t1": {
     "agent-errors": {
       "aliases": ["agent errors", "error count", "errors over time", "agent failures", "error rate trend", "error spikes", "which agents are failing"],
-      "sdkImport": "@uipath/uipath-typescript/insights",
-      "sdkService": "AgentsInsights",
-      "sdkMethod": "getErrors",
+      "sdkImport": "@uipath/uipath-typescript/agents",
+      "sdkService": "Agents",
+      "sdkMethod": "getErrorsTimeline",
       "template": "line-chart",
-      "responseType": "AgentErrorsResponse",
+      "responseType": "AgentErrorsTimelineResponse",
       "defaults": {
         "title": "Agent Error Rate",
         "description": "Daily error counts — spot spikes early",
@@ -21,11 +21,11 @@
     },
     "invocation-volume": {
       "aliases": ["invocation volume", "total runs", "agent runs", "invocations", "run volume", "execution volume", "agu consumption", "consumption timeline"],
-      "sdkImport": "@uipath/uipath-typescript/insights",
-      "sdkService": "AgentsInsights",
+      "sdkImport": "@uipath/uipath-typescript/agents",
+      "sdkService": "Agents",
       "sdkMethod": "getConsumptionTimeline",
       "template": "area-chart",
-      "responseType": "ConsumptionTimelineResponse",
+      "responseType": "AgentConsumptionTimelineResponse",
       "defaults": {
         "title": "Invocation Volume",
         "description": "Agent AGU consumption over time",
@@ -40,11 +40,11 @@
     },
     "top-failing-agents": {
       "aliases": ["top failing agents", "most errors by agent", "agent leaderboard errors", "which agents fail most"],
-      "sdkImport": "@uipath/uipath-typescript/insights",
-      "sdkService": "AgentsInsights",
+      "sdkImport": "@uipath/uipath-typescript/agents",
+      "sdkService": "Agents",
       "sdkMethod": "getTopErroredAgents",
       "template": "ranked-table",
-      "responseType": "TopErroredAgentsResponse",
+      "responseType": "AgentTopErroredAgentsResponse",
       "defaults": {
         "title": "Top Failing Agents",
         "description": "Agents with the most errors",
@@ -57,28 +57,28 @@
     },
     "active-agents-kpi": {
       "aliases": ["active agents", "active agent count", "how many agents", "agent count", "agents running"],
-      "sdkImport": "@uipath/uipath-typescript/insights",
-      "sdkService": "AgentsInsights",
-      "sdkMethod": "getAgents",
+      "sdkImport": "@uipath/uipath-typescript/agents",
+      "sdkService": "Agents",
+      "sdkMethod": "getAll",
       "template": "kpi-card",
-      "responseType": "AgentsResponse",
+      "responseType": "AgentListResponse",
       "defaults": {
         "title": "Active Agents",
         "description": "Agents with at least one run",
         "icon": "Bot",
-        "valueExpression": "String(data?.data?.agents?.length ?? 0)",
-        "dataSelector": "data?.data?.agents ?? []",
+        "valueExpression": "String(data?.items?.length ?? 0)",
+        "dataSelector": "data?.items ?? []",
         "deltaDir": "up-good",
         "deltaText": "active agents"
       }
     },
     "agent-latency": {
       "aliases": ["agent latency", "p95 latency", "response time", "execution time", "latency trend"],
-      "sdkImport": "@uipath/uipath-typescript/insights",
-      "sdkService": "AgentsInsights",
+      "sdkImport": "@uipath/uipath-typescript/agents",
+      "sdkService": "Agents",
       "sdkMethod": "getLatencyTimeline",
       "template": "multi-line-chart",
-      "responseType": "LatencyTimelineResponse",
+      "responseType": "AgentLatencyTimelineResponse",
       "defaults": {
         "title": "Agent Latency",
         "description": "P50 and P95 execution time",
@@ -94,11 +94,11 @@
     },
     "job-failures": {
       "aliases": ["job failures", "job failure rate", "rpa failures", "process failures", "failed jobs"],
-      "sdkImport": "@uipath/uipath-typescript/insights",
+      "sdkImport": "@uipath/uipath-typescript/jobs-insights",
       "sdkService": "JobsInsights",
       "sdkMethod": "getTopFailures",
       "template": "ranked-table",
-      "responseType": "TopFailuresResponse",
+      "responseType": "JobTopFailuresResponse",
       "defaults": {
         "title": "Top Job Failures",
         "description": "Processes with the most failures",
@@ -111,11 +111,11 @@
     },
     "job-completion-trend": {
       "aliases": ["job completions", "completed jobs", "jobs over time", "job volume", "rpa throughput"],
-      "sdkImport": "@uipath/uipath-typescript/insights",
+      "sdkImport": "@uipath/uipath-typescript/jobs-insights",
       "sdkService": "JobsInsights",
       "sdkMethod": "getCompletedTimeline",
       "template": "area-chart",
-      "responseType": "CompletedTimelineResponse",
+      "responseType": "JobCompletedTimelineResponse",
       "defaults": {
         "title": "Job Completions",
         "description": "Jobs completed per day",

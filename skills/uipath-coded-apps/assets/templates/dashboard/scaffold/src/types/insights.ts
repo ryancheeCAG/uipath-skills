@@ -1,90 +1,74 @@
 /**
  * Insights response type stubs.
  *
- * These will be replaced by SDK imports once Insights ships in the TypeScript SDK:
- *   import type { AgentErrorsResponse, ... } from '@uipath/uipath-typescript/insights'
+ * These mirror the actual types exported by the SDK's Insights services.
+ * Replace this file with direct SDK imports when the packages are published:
+ *
+ *   import type { AgentErrorsTimelineResponse } from '@uipath/uipath-typescript/agents'
+ *   import type { GovernanceOperationSummary }  from '@uipath/uipath-typescript/governance'
+ *   import type { MemoryTimelinePoint }         from '@uipath/uipath-typescript/memory'
  */
 
-// ── Agents namespace ──────────────────────────────────────────────────────────
+// ── Agents service (@uipath/uipath-typescript/agents) ────────────────────────
 
-export interface AgentErrorItem {
-  name: string
-  value: number
-  date: string
+/** getErrorsTimeline() — /Agents/errors */
+export interface AgentErrorItem { name: string; value: number; date: string }
+export interface AgentErrorsTimelineResponse { data: AgentErrorItem[] }
+
+/** getConsumptionTimeline() — /Agents/consumptionTimeline */
+export interface ConsumptionPoint { timeSlice: string; aguConsumption: number }
+export interface AgentConsumptionTimelineResponse { data: ConsumptionPoint[] }
+
+/** getTopErroredAgents() — /Agents/topErroredAgents */
+export interface AgentRankedItem { name: string; count: number }
+export interface AgentTopErroredAgentsResponse { data: AgentRankedItem[] }
+
+/** getAll() — /Agents/agents (paginated) */
+export interface AgentListItem {
+  agentId: string; agentName: string; folderPath: string
+  lastRun: string; healthScore: number; lastIncidentType: string
+  unitsQuantity: number; quantityAGU: number
+}
+export interface AgentListTotals {
+  totalAGUUnitsConsumed: number; totalPLTUUnitsConsumed: number; totalUnitsConsumed: number
+}
+export interface AgentListResponse { items: AgentListItem[]; totalCount?: number }
+
+/** getLatencyTimeline() — /Agents/latencyTimeline */
+export interface LatencyPoint { name: 'P50' | 'P95'; value: number; date: string }
+export interface AgentLatencyTimelineResponse { data: LatencyPoint[] }
+
+// ── Jobs Insights service (@uipath/uipath-typescript/jobs-insights) ──────────
+// Note: import path pending SDK release confirmation
+
+/** getTopFailures() */
+export interface JobRankedItem { processName: string; failureCount: number }
+export interface JobTopFailuresResponse { data: JobRankedItem[] }
+
+/** getCompletedTimeline() */
+export interface JobCompletionPoint { date: string; count: number; state: 'Successful' | 'Faulted' | 'Stopped' }
+export interface JobCompletedTimelineResponse { data: JobCompletionPoint[] }
+
+// ── Governance service (@uipath/uipath-typescript/governance) ────────────────
+
+/** getOperationSummary() — /Governance/operation/summary */
+export interface GovernanceOperationSummary {
+  totalEvaluations: number; allow: number; deny: number; noOp: number
 }
 
-export interface AgentErrorsResponse {
-  data: AgentErrorItem[]
-  totalErrors?: number
+/** getPolicyTraces() — /Governance/policy/traces (paginated) */
+export interface PolicyTrace {
+  traceId: string; policyId: string; policyEvaluationResult: string
+  agentId?: string; userId?: string; timestamp: string
 }
 
-export interface ConsumptionPoint {
-  timeSlice: string
-  aguConsumption: number
-}
+// ── Memory service (@uipath/uipath-typescript/memory) ────────────────────────
 
-export interface ConsumptionTimelineResponse {
-  data: ConsumptionPoint[]
-}
+/** getTimeline() — /Traceview/memoryTimeline (bare array, envelope unwrapped) */
+export interface MemoryTimelinePoint { timeSlice: string; inMemoryCount: number }
 
-export interface AgentRankedItem {
-  name: string
-  count: number
-}
+/** getCallsTimeline() — /Traceview/memoryCallsTimeline */
+export interface MemoryCallsTimelinePoint { timeSlice: string; memoryCallsCount: number }
 
-export interface TopErroredAgentsResponse {
-  data: AgentRankedItem[]
-  totalErrors?: number
-}
-
-export interface AgentItem {
-  agentId: string
-  agentName: string
-  folderPath: string
-  lastRun: string
-  healthScore: number
-  lastIncidentType: string
-  unitsQuantity: number
-  quantityAGU: number
-}
-
-export interface AgentsResponse {
-  data: {
-    agents: AgentItem[]
-    totalAGUUnitsConsumed: number
-    totalPLTUUnitsConsumed: number
-    totalUnitsConsumed: number
-  }
-  pagination?: { totalCount: number; pageNumber: number; pageSize: number }
-}
-
-export interface LatencyPoint {
-  name: 'P50' | 'P95'
-  value: number
-  date: string
-}
-
-export interface LatencyTimelineResponse {
-  data: LatencyPoint[]
-}
-
-// ── Jobs namespace ────────────────────────────────────────────────────────────
-
-export interface JobRankedItem {
-  processName: string
-  failureCount: number
-}
-
-export interface TopFailuresResponse {
-  data: JobRankedItem[]
-}
-
-export interface JobCompletionPoint {
-  date: string
-  count: number
-  state: 'Successful' | 'Faulted' | 'Stopped'
-}
-
-export interface CompletedTimelineResponse {
-  data: JobCompletionPoint[]
-}
+/** getTopSpaces() — /Traceview/topMemorySpaces */
+export interface MemorySpace { memorySpaceName: string; memoryCount: number }

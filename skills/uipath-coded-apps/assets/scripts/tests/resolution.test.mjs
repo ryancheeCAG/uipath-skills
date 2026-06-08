@@ -172,12 +172,13 @@ test('buildT1WidgetSpec: merges registry defaults with intent overrides', () => 
   assert.equal(spec.template, 'line-chart')
   assert.equal(spec.title, 'My Error Chart')
   assert.equal(spec.icon, 'AlertTriangle')
-  assert.ok(spec.dataHook.includes('AgentsInsights'), 'dataHook should reference AgentsInsights')
-  assert.ok(spec.dataHook.includes('getErrors'), 'dataHook should reference getErrors')
+  assert.ok(spec.dataHook.includes('Agents'), 'dataHook should reference Agents service')
+  assert.ok(spec.dataHook.includes('getErrorsTimeline'), 'dataHook should reference getErrorsTimeline')
   assert.ok(spec.dataHook.includes('THIRTY_DAYS_AGO'), 'dataHook should include time range constant')
   assert.ok(spec.dataHook.includes('useInsightsSDK'), 'dataHook should use useInsightsSDK')
-  assert.ok(spec.sdkImportLine.includes('AgentsInsights'), 'sdkImportLine should reference AgentsInsights')
-  assert.ok(spec.responseTypeImport.includes('AgentErrorsResponse'), 'responseTypeImport should reference AgentErrorsResponse')
+  assert.ok(!spec.dataHook.includes('startTime:'), 'dataHook should use positional params not options object')
+  assert.ok(spec.sdkImportLine.includes('Agents'), 'sdkImportLine should reference Agents service')
+  assert.ok(spec.responseTypeImport.includes('AgentErrorsTimelineResponse'), 'responseTypeImport should reference AgentErrorsTimelineResponse')
 })
 
 test('buildT1WidgetSpec: uses 7d time range constant', () => {

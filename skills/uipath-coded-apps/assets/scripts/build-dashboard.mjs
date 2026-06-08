@@ -132,11 +132,11 @@ const TIME_RANGE_CONSTANTS = {
   '90d': 'NINETY_DAYS_AGO',
 }
 
-const TIME_CONSTANTS = `const NOW = new Date().toISOString()
-const ONE_DAY_AGO = new Date(Date.now() - 86_400_000).toISOString()
-const SEVEN_DAYS_AGO = new Date(Date.now() - 604_800_000).toISOString()
-const THIRTY_DAYS_AGO = new Date(Date.now() - 2_592_000_000).toISOString()
-const NINETY_DAYS_AGO = new Date(Date.now() - 7_776_000_000).toISOString()
+const TIME_CONSTANTS = `const NOW = new Date()
+const ONE_DAY_AGO = new Date(Date.now() - 86_400_000)
+const SEVEN_DAYS_AGO = new Date(Date.now() - 604_800_000)
+const THIRTY_DAYS_AGO = new Date(Date.now() - 2_592_000_000)
+const NINETY_DAYS_AGO = new Date(Date.now() - 7_776_000_000)
 `
 
 const KNOWN_EVENTS = new Set([
@@ -587,8 +587,8 @@ export function buildT1WidgetSpec(metric, entry, timeRange) {
   const componentName = metric.componentName ?? toPascalCase(metric.name)
   const { sdkService, sdkMethod, sdkImport, responseType } = entry
 
-  // Generate the typed SDK hook call — no more string keys, no more as any
-  const dataHook = `useInsightsSDK<${responseType}>(sdk => new ${sdkService}(sdk as never).${sdkMethod}({ startTime: ${startConst}, endTime: NOW }), [])`
+  // Generate the typed SDK hook call — positional Date params match actual SDK signatures
+  const dataHook = `useInsightsSDK<${responseType}>(sdk => new ${sdkService}(sdk as never).${sdkMethod}(${startConst}, NOW), [])`
 
   // Static SDK service import — injected into the template before the component
   const sdkImportLine = `import { ${sdkService} } from '${sdkImport}'`

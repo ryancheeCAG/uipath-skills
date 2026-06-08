@@ -72,7 +72,7 @@ All Insights metrics that aren't in the T1 catalog should use T3-SDK with the In
   "description": "Types of agent incidents",
   "displayAs": "ranked-table",
   "columns": "[{key:\"name\",label:\"Type\"},{key:\"count\",label:\"Count\",align:\"right\" as const}]",
-  "fnBody": "const { AgentsInsights } = await import('@uipath/uipath-typescript/insights')\nconst svc = new AgentsInsights(sdk as never)\nconst result = await svc.getIncidentDistribution({ startTime: THIRTY_DAYS_AGO, endTime: NOW })\nreturn result?.data ?? []"
+  "fnBody": "const { Agents } = await import('@uipath/uipath-typescript/agents')\nconst svc = new Agents(sdk as never)\nconst result = await svc.getIncidentDistribution(THIRTY_DAYS_AGO, NOW)\nreturn result?.data ?? []"
 }
 ```
 
@@ -87,7 +87,7 @@ For `kpi-card`, also provide `valueField` (which field to display) and optionall
   "displayAs": "kpi-card",
   "valueField": "count",
   "valueLabel": "active agents",
-  "fnBody": "const { AgentsInsights } = await import('@uipath/uipath-typescript/insights')\nconst svc = new AgentsInsights(sdk as never)\nconst result = await svc.getAgents({ startTime: THIRTY_DAYS_AGO, endTime: NOW })\nreturn [{ count: result?.data?.agents?.length ?? 0 }]"
+  "fnBody": "const { Agents } = await import('@uipath/uipath-typescript/agents')\nconst svc = new Agents(sdk as never)\nconst result = await svc.getAll(THIRTY_DAYS_AGO, NOW)\nreturn [{ count: result?.items?.length ?? 0 }]"
 }
 ```
 
@@ -112,18 +112,31 @@ const results = await svc.getAll({})
 const results = await sdk.jobs.getAll({})
 ```
 
-| Service class | Import subpath | Key response fields |
-|--------------|----------------|---------------------|
-| `Jobs` | `@uipath/uipath-typescript/jobs` | `key`, `state`, `processName`, `startTime`, `endTime`, `createdTime` |
+| Service class | Import subpath | Key fields |
+|--------------|----------------|------------|
+| `Agents` | `@uipath/uipath-typescript/agents` | 14 Insights methods for agent metrics |
+| `Governance` | `@uipath/uipath-typescript/governance` | `getPolicyTraces()`, `getOperationSummary()` |
+| `Memory` | `@uipath/uipath-typescript/memory` | `getTimeline()`, `getCallsTimeline()`, `getTopSpaces()` |
+| `Jobs` | `@uipath/uipath-typescript/jobs` | `key`, `state`, `processName`, `startTime`, `endTime` |
 | `Queues` | `@uipath/uipath-typescript/queues` | `id`, `name`, `maxRetries`, `acceptsRejectedItems` |
 | `Assets` | `@uipath/uipath-typescript/assets` | `id`, `name`, `hasValue`, `value` |
-| `Tasks` | `@uipath/uipath-typescript/tasks` | `id`, `title`, `priority`, `status`, `assignedTo`, `createdTime` |
+| `Tasks` | `@uipath/uipath-typescript/tasks` | `id`, `title`, `priority`, `status`, `assignedTo` |
 | `Processes` | `@uipath/uipath-typescript/processes` | `id`, `name`, `key`, `processType` |
 | `Entities` | `@uipath/uipath-typescript/entities` | `id`, `name`, `displayName`, `entityType` |
 | `Cases` | `@uipath/uipath-typescript/cases` | `processKey`, `runningCount`, `completedCount` |
-| `MaestroProcesses` | `@uipath/uipath-typescript/maestro-processes` | varies |
 
-Note: `getAll()` returns paginated or non-paginated response. Access items via `result?.items ?? result?.value ?? []`.
+**Insights methods take positional Date params** (not options object):
+```typescript
+// Correct — startTime and endTime are positional Date arguments
+new Agents(sdk as never).getErrorsTimeline(THIRTY_DAYS_AGO, NOW)
+
+// Wrong — options style does not match SDK signature
+new Agents(sdk as never).getErrors({ startTime: THIRTY_DAYS_AGO, endTime: NOW })
+```
+
+Time constants are `Date` objects: `NOW`, `ONE_DAY_AGO`, `SEVEN_DAYS_AGO`, `THIRTY_DAYS_AGO`, `NINETY_DAYS_AGO`.
+
+Note: `getAll()` on non-Insights services returns paginated or non-paginated response. Access items via `result?.items ?? result?.value ?? []`.
 
 ## T0 Hard Refuse List
 
@@ -139,7 +152,7 @@ Checked before T1/T2/T3. If a metric matches any row below, it cannot be built i
 | Cross-tenant data | Single-tenant scope only | Multi-widget view within one tenant |
 | SLA breach % | No SLA metadata in platform | Success rate from `job-completion-trend` |
 | Error message text | No aggregation endpoint | `agent-errors` for counts |
-| Governance policy summary | Requires a specific policy UUID the build script cannot infer | Ask user for the UUID, then use T3-SDK with `GovernanceInsights.getPolicySummary({ policy: "<UUID>", ... })` |
+| Governance policy summary | Requires a specific policy UUID the build script cannot infer | Ask user for the UUID, then use T3-SDK with `Governance` from `@uipath/uipath-typescript/governance` |
 
 ## SDK usage patterns
 
