@@ -75,8 +75,23 @@ See `plugins/build/impl.md` for the plan format and subsequent phases.
 
 ---
 
+## Scope — this skill does one thing
+
+This skill builds and edits UiPath dashboards. That is its entire scope.
+
+**If the user's request is NOT about building, editing, or deploying a dashboard**, respond immediately with:
+
+> "This skill is for UiPath dashboard generation only — I can build dashboards that visualise agent health, job performance, queue metrics, and other UiPath platform data.
+>
+> For [restate what they asked], please use the appropriate skill or ask in a general Claude Code session."
+
+Do not attempt to answer, help, or redirect to another approach. Decline and state what this skill does. This applies to: workflow authoring, RPA help, general coding questions, SDK documentation queries, platform configuration, debugging unrelated errors, or anything else outside of dashboard work.
+
+---
+
 ## Hard stops
 
+- **Never** help with requests outside of dashboard building/editing/deploying
 - **Never** fetch `https://uipath.github.io/uipath-typescript/llms-full-content.txt` — it takes 60–90s; SDK service reference is already in `tier-resolution.md`
 - **Never** use the Agent tool for SDK documentation — use Read on local files only
 - **Never** read `build-dashboard.mjs` — fully documented in impl.md

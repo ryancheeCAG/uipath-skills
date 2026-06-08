@@ -6,14 +6,27 @@ Every metric in `intent.json` has a `tier` field you must set during Phase 3.
 
 ```
 User asks for metric
-  → Check hard-refuse list below
-    → If match: refuse metric (not whole dashboard), offer alternative
-  → Search T1 catalog: exact metric name or alias match?
+  ↓
+T0 — Impossible check (FIRST — before anything else)
+  → Does the metric match the Hard Refuse list?
+    → YES: refuse only that metric, explain why, offer the closest alternative
+           (other metrics in the request still build normally)
+  ↓
+T1 — Catalog check
+  → Exact name or alias match in capability-registry.json t1?
     → YES: tier = "T1"
-  → Search T2 catalog: maps to known SDK service + custom filter?
-    → YES: tier = "T2", provide compact params object
-  → Else: tier = "T3", write fnBody
+  ↓
+T2 — Parametric check
+  → Maps to a known SDK service + user-controlled filter parameter?
+    → YES: tier = "T2", include compact params object
+  ↓
+T3 — Custom
+  → tier = "T3"
+  → Has Insights SDK service + method? → T3-Insights (namespace + method + template)
+  → Else → T3-SDK (agent writes fnBody)
 ```
+
+## T0 — Impossible (Hard Refuse)
 
 ## Tier 1 — Known catalog metrics
 
@@ -158,9 +171,11 @@ const results = await sdk.jobs.getAll({})
 
 Note: `getAll()` returns paginated or non-paginated response. Access items via `result?.items ?? result?.value ?? []`.
 
-## Hard Refuse List
+## T0 Hard Refuse List
 
-Refuse ONLY the specific metric. Offer the dashboard with remaining metrics.
+**Refuse ONLY the specific metric — not the whole dashboard.** Offer to build the remaining metrics. Always provide the closest achievable alternative.
+
+Checked before T1/T2/T3. If a metric matches any row below, it cannot be built in any tier — the data simply does not exist in the platform.
 
 | User asks for | Reason | Suggest instead |
 |--------------|--------|----------------|
