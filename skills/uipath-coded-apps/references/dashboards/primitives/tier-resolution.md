@@ -31,13 +31,19 @@ User asks for metric
 
 | Metric name | What it does | Required params |
 |-------------|-------------|----------------|
-| `jobs-duration-threshold` | Jobs filtered by duration | `{ threshold: number, direction: "gt" }` |
-
-> Note: `queue-failure-threshold` was removed — the SDK `QueueGetResponse` does not expose failure counts (`id`, `name`, `maxRetries`, `acceptsRejectedItems` only). Use T3-Insights or T3-SDK for queue failure analysis.
+| `jobs-duration-threshold` | Jobs running longer than threshold (minutes) | `{ threshold: number, direction: "gt" }` |
+| `jobs-by-state` | Jobs filtered by execution state | `{ value: "Faulted" \| "Running" \| "Stopped" \| "Successful" }` |
+| `tasks-by-status` | Action Center tasks filtered by status | `{ value: "Pending" \| "Completed" \| "Unassigned" }` |
+| `cases-running-above` | Maestro processes where running case count exceeds threshold | `{ threshold: number, direction: "gt" }` |
 
 T2 params format:
 ```json
-{ "name": "jobs-duration-threshold", "tier": "T2", "params": { "threshold": 20, "direction": "gt" } }
+// Numeric filter
+{ "name": "jobs-duration-threshold", "tier": "T2", "params": { "threshold": 30, "direction": "gt" } }
+
+// String equality filter
+{ "name": "jobs-by-state", "tier": "T2", "params": { "value": "Faulted" } }
+{ "name": "tasks-by-status", "tier": "T2", "params": { "value": "Pending" } }
 ```
 
 ## Tier 3 — Custom metrics

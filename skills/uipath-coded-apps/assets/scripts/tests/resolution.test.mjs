@@ -350,3 +350,29 @@ test('buildT3WidgetFile: no unresolved << >> placeholders remain', () => {
   const unresolved = content.match(/<<[A-Z_]+>>/g)
   assert.equal(unresolved, null, `Unresolved placeholders: ${(unresolved ?? []).join(', ')}`)
 })
+
+// ── T2 string equality filter tests ──────────────────────────────────────────
+
+test('compileT2ToTypeScript: generates string equality filter for filterType:string', () => {
+  const code = compileT2ToTypeScript({
+    sdkService: 'Jobs', method: 'getAll',
+    filterField: 'state', filterType: 'string', filterValue: 'Faulted',
+    sortField: 'createdTime', sortDir: 'desc'
+  })
+  assert.ok(code.includes("item.state === 'Faulted'"))
+  assert.ok(code.startsWith('async (sdk'))
+})
+
+test('resolveMetric: T2 jobs-by-state resolves correctly', () => {
+  const result = resolveMetric({ name: 'jobs-by-state', tier: 'T2', params: { value: 'Faulted' } })
+  assert.equal(result.tier, 'T2')
+  assert.equal(result.entry.filterType, 'string')
+})
+
+test('validateIntent: rejects T2 string metric without params.value', () => {
+  const errors = validateIntent({
+    dashboardName: 'x', timeRange: '7d',
+    metrics: [{ name: 'jobs-by-state', tier: 'T2', params: { threshold: 5 } }]
+  })
+  assert.ok(errors.some(e => e.includes('params.value')))
+})

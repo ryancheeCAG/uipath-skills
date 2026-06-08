@@ -129,6 +129,7 @@
       "sdkService": "Jobs",
       "method": "getAll",
       "filterField": "duration",
+      "filterType": "number",
       "sortField": "duration",
       "defaultDisplayAs": "data-table",
       "defaults": {
@@ -139,6 +140,69 @@
         "dataSelector": "(data as any)?.items ?? []",
         "deltaDir": "neutral",
         "deltaText": ""
+      }
+    },
+    "jobs-by-state": {
+      "aliases": ["faulted jobs", "running jobs", "stopped jobs", "successful jobs", "jobs in state", "jobs by state", "failed jobs", "active jobs"],
+      "service": "jobs",
+      "sdkImport": "@uipath/uipath-typescript/jobs",
+      "sdkService": "Jobs",
+      "method": "getAll",
+      "filterField": "state",
+      "filterType": "string",
+      "sortField": "createdTime",
+      "sortDir": "desc",
+      "defaultDisplayAs": "data-table",
+      "defaults": {
+        "title": "Jobs by State",
+        "description": "Jobs filtered by execution state",
+        "icon": "Play",
+        "columns": "[{key:\"processName\",label:\"Process\"},{key:\"state\",label:\"State\"},{key:\"createdTime\",label:\"Started\"}]",
+        "deltaDir": "neutral",
+        "deltaText": "",
+        "dataSelector": "(data as any)?.items ?? []"
+      }
+    },
+    "tasks-by-status": {
+      "aliases": ["pending tasks", "completed tasks", "open tasks", "tasks by status", "action center tasks", "human tasks", "unassigned tasks"],
+      "service": "tasks",
+      "sdkImport": "@uipath/uipath-typescript/tasks",
+      "sdkService": "Tasks",
+      "method": "getAll",
+      "filterField": "status",
+      "filterType": "string",
+      "sortField": "createdTime",
+      "sortDir": "desc",
+      "defaultDisplayAs": "data-table",
+      "defaults": {
+        "title": "Tasks by Status",
+        "description": "Action Center tasks filtered by status",
+        "icon": "CheckSquare",
+        "columns": "[{key:\"title\",label:\"Task\"},{key:\"status\",label:\"Status\"},{key:\"priority\",label:\"Priority\"},{key:\"createdTime\",label:\"Created\"}]",
+        "deltaDir": "neutral",
+        "deltaText": "",
+        "dataSelector": "(data as any)?.items ?? []"
+      }
+    },
+    "cases-running-above": {
+      "aliases": ["cases with many running", "high volume processes", "running case count above", "active cases above", "maestro cases", "process instances above"],
+      "service": "cases",
+      "sdkImport": "@uipath/uipath-typescript/cases",
+      "sdkService": "Cases",
+      "method": "getAll",
+      "filterField": "runningCount",
+      "filterType": "number",
+      "sortField": "runningCount",
+      "sortDir": "desc",
+      "defaultDisplayAs": "ranked-table",
+      "defaults": {
+        "title": "High-Volume Cases",
+        "description": "Processes with running case count above threshold",
+        "icon": "GitBranch",
+        "columns": "[{key:\"processKey\",label:\"Process\"},{key:\"runningCount\",label:\"Running\",align:\"right\" as const},{key:\"completedCount\",label:\"Completed\",align:\"right\" as const}]",
+        "deltaDir": "neutral",
+        "deltaText": "",
+        "dataSelector": "(data as any) ?? []"
       }
     }
   },

@@ -555,7 +555,19 @@ export function validateIntent(intent) {
   for (const m of (intent.metrics ?? [])) {
     if (!m.name) errors.push('metric missing name')
     if (!['T1', 'T2', 'T3'].includes(m.tier)) errors.push(`metric "${m.name}" has invalid tier: ${m.tier}`)
-    if (m.tier === 'T2' && !m.params) errors.push(`T2 metric "${m.name}" missing params`)
+    if (m.tier === 'T2') {
+      if (!m.params) {
+        errors.push(`T2 metric "${m.name}" missing params`)
+      } else {
+        const entry = REGISTRY.t2[m.name]
+        if (entry?.filterType === 'string' && m.params.value === undefined) {
+          errors.push(`T2 metric "${m.name}" needs params.value (string) — e.g. { "value": "Faulted" }`)
+        }
+        if (entry?.filterType !== 'string' && m.params.threshold === undefined) {
+          errors.push(`T2 metric "${m.name}" needs params.threshold (number) — e.g. { "threshold": 30, "direction": "gt" }`)
+        }
+      }
+    }
     if (m.tier === 'T3') {
       if (!m.title) errors.push(`T3 metric "${m.name}" missing title`)
       const hasSdkPath = !!m.fnBody
@@ -631,11 +643,28 @@ export function buildT1WidgetSpec(metric, entry, timeRange) {
 /**
  * Compile a T2 filter descriptor into a TypeScript async arrow function string.
  * Used to generate the SDK data-fetching hook for parametric metrics.
- * @param {{ sdkService: string, method: string, filterField: string, filterOp: string, filterValue: number, sortField: string, sortDir: string }} descriptor
+ * @param {{ sdkService: string, method: string, filterField: string, filterOp?: string, filterValue: number|string, filterType?: string, sortField: string, sortDir: string }} descriptor
  * @returns {string} TypeScript function expression starting with "async (sdk, _getToken) =>"
  */
 export function compileT2ToTypeScript(descriptor) {
-  const { sdkService, method, filterField, filterOp, filterValue, sortField, sortDir } = descriptor
+  const { sdkService, method, filterField, filterOp, filterValue, filterType, sortField, sortDir } = descriptor
+
+  // String equality filter (e.g. state === 'Faulted')
+  if (filterType === 'string') {
+    const sortFn = sortDir === 'asc'
+      ? `items.sort((a, b) => String(a.${sortField} ?? '').localeCompare(String(b.${sortField} ?? '')))`
+      : `items.sort((a, b) => String(b.${sortField} ?? '').localeCompare(String(a.${sortField} ?? '')))`
+    return `async (sdk, _getToken) => {
+  const svc = new ${sdkService}(sdk as never)
+  const result = await svc.${method}({})
+  const items = (result?.items ?? result?.value ?? []) as Array<Record<string, unknown>>
+  const filtered = items.filter(item => item.${filterField} === '${filterValue}')
+  ${sortFn}
+  return filtered
+}`
+  }
+
+  // Numeric comparison filter (existing behavior)
   if (!VALID_T2_OPS.includes(filterOp)) {
     throw new Error(`T2 descriptor has invalid op: ${filterOp}. Must be one of: ${VALID_T2_OPS.join(', ')}`)
   }
@@ -668,8 +697,9 @@ export function buildT2WidgetSpec(metric, entry) {
     sdkService: entry.sdkService,
     method: entry.method,
     filterField: params.field ?? entry.filterField,
+    filterType: entry.filterType ?? 'number',
     filterOp: params.direction ?? 'gt',
-    filterValue: params.threshold ?? params.value ?? 0,
+    filterValue: params.value !== undefined ? params.value : (params.threshold ?? 0),
     sortField: params.sortField ?? entry.sortField,
     sortDir: params.sortDir ?? 'desc',
   }
