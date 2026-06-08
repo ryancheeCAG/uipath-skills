@@ -241,7 +241,7 @@ rm -f "${TEMP_DIR}/uip-publish.json"
 
 ```bash
 uip codedapp deploy \
-  -n "${APP_SAFE_NAME}" \
+  -n "${APP_NAME}" \
   --path-name "${ROUTING_NAME}" \
   --folder-key "${FOLDER_KEY}" \
   --tags "governance,dashboard" \
@@ -252,21 +252,14 @@ uip codedapp deploy \
 
 ```bash
 uip codedapp deploy \
-  -n "${APP_SAFE_NAME}" \
+  -n "${APP_NAME}" \
   --path-name "${ROUTING_NAME}" \
   --folder-key "${FOLDER_KEY}" \
   --tags "governance" \
   --output json > "${TEMP_DIR}/uip-deploy.json" 2>&1
 ```
 
-`APP_SAFE_NAME` is the display name sanitized to lowercase-and-hyphens:
-
-```bash
-APP_SAFE_NAME=$(node -e "
-const n = process.argv[1]
-process.stdout.write(n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''))
-" "${APP_NAME}")
-```
+`APP_NAME` is the human-readable dashboard name from state.json (e.g. `"Agent Health Dashboard"`). Use it as-is — no sanitization.
 
 Handle path-name collision — if the routing slug is already taken in that folder, regenerate the suffix and retry:
 
@@ -283,7 +276,7 @@ while echo "${DEPLOY_OUT}" | grep -qiE "conflict|already.*exist|path.*name" && [
   uip codedapp publish      -n "${NEW_ROUTING}" -v "${NEXT_SEMVER}" --output json
   TAGS_ARG=$([ "${PIN_TO_GOVERNANCE}" = "true" ] && echo "governance,dashboard" || echo "governance")
   uip codedapp deploy \
-    -n "${APP_SAFE_NAME}" \
+    -n "${APP_NAME}" \
     --path-name "${NEW_ROUTING}" \
     --folder-key "${FOLDER_KEY}" \
     --tags "${TAGS_ARG}" \
@@ -372,6 +365,8 @@ Add in both cases:
 
 - Pack order is always: **build → pack → publish → deploy**
 - `--path-name` in the deploy command takes the routing slug (e.g. `agent-health-x7k2`)
+- `-n` in the deploy command takes the **human-readable dashboard name** from state.json (e.g. `"Agent Health Dashboard"`) — use it as-is, no sanitization
+- `--path-name` takes the **routing slug** (e.g. `"agent-health-x7k2"`) — this becomes the URL path
 - Always include `--tags` — minimum is `governance`, add `dashboard` if user opted to pin
 - Routing name is permanent after first successful deploy — never change it
 - PAT must not be in the production bundle — the Vite plugin enforces this
