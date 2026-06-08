@@ -52,7 +52,7 @@
         "columns": "[{key:\"name\",label:\"Agent\"},{key:\"count\",label:\"Errors\",align:\"right\" as const}]",
         "deltaDir": "neutral",
         "deltaText": "",
-        "viewColumns": "[{key:\"name\",label:\"Agent\"},{key:\"count\",label:\"Errors\",align:\"right\" as const}]"
+        "viewColumns": "[{key:\"name\",label:\"Agent Name\"},{key:\"count\",label:\"Error Count\",align:\"right\" as const}]"
       }
     },
     "active-agents-kpi": {
@@ -65,11 +65,11 @@
         "title": "Active Agents",
         "description": "Agents with at least one run",
         "icon": "Bot",
-        "valueExpression": "String((data as any)?.data?.agents?.length ?? (data as any)?.data?.length ?? 0)",
-        "dataSelector": "(data as any)?.data?.agents ?? (data as any)?.data ?? []",
+        "valueExpression": "String((data as any)?.data?.agents?.length ?? 0)",
+        "dataSelector": "(data as any)?.data?.agents ?? []",
         "deltaDir": "up-good",
         "deltaText": "active agents",
-        "viewColumns": "[{key:\"name\",label:\"Agent Name\"},{key:\"state\",label:\"State\"}]"
+        "viewColumns": "[{key:\"agentName\",label:\"Agent Name\"},{key:\"healthScore\",label:\"Health Score\",align:\"right\" as const},{key:\"lastRun\",label:\"Last Run\"},{key:\"folderPath\",label:\"Folder\"}]"
       }
     },
     "agent-latency": {
@@ -103,10 +103,10 @@
         "description": "Processes with the most failures",
         "icon": "XCircle",
         "dataSelector": "(data as any)?.data ?? []",
-        "columns": "[{key:\"name\",label:\"Process\"},{key:\"count\",label:\"Failures\",align:\"right\" as const}]",
+        "columns": "[{key:\"processName\",label:\"Process\"},{key:\"failureCount\",label:\"Failures\",align:\"right\" as const}]",
         "deltaDir": "down-good",
         "deltaText": "failures today",
-        "viewColumns": "[{key:\"name\",label:\"Process\"},{key:\"count\",label:\"Failures\",align:\"right\" as const}]"
+        "viewColumns": "[{key:\"processName\",label:\"Process\"},{key:\"failureCount\",label:\"Failures\",align:\"right\" as const}]"
       }
     },
     "job-completion-trend": {
@@ -120,11 +120,11 @@
         "description": "Jobs completed per day",
         "icon": "CheckCircle",
         "xKey": "date",
-        "yKey": "value",
+        "yKey": "count",
         "deltaDir": "up-good",
         "deltaText": "completions today",
         "dataSelector": "(data as any)?.data ?? []",
-        "viewColumns": "[{key:\"date\",label:\"Date\"},{key:\"value\",label:\"Completions\",align:\"right\" as const}]"
+        "viewColumns": "[{key:\"date\",label:\"Date\"},{key:\"count\",label:\"Completions\",align:\"right\" as const},{key:\"state\",label:\"State\"}]"
       }
     }
   },

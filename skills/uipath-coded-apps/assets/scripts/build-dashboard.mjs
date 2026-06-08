@@ -224,18 +224,31 @@ export async function runPrewarm(projectPath) {
  * Used when pre-warm was started in the background during plan review.
  * Emits PREWARM_DONE or PREWARM_FAILED.
  * @param {string} projectPath
- * @param {number} [timeoutMs=60000]
+ * @param {number} [timeoutMs=300000]
  */
-export function waitForPrewarm(projectPath, timeoutMs = 60_000) {
+export function waitForPrewarm(projectPath, timeoutMs = 300_000) {
   const signal = join(projectPath, 'node_modules', '.package-lock.json')
   const deadline = Date.now() + timeoutMs
+  const startedAt = Date.now()
+  let lastLogAt = 0
+
   while (!existsSync(signal)) {
+    const elapsed = Date.now() - startedAt
+
     if (Date.now() > deadline) {
-      emit('PREWARM_FAILED', { exitCode: -1, stderr: 'Timed out waiting for pre-warm' })
-      throw new Error('Pre-warm timed out after 60s')
+      emit('PREWARM_FAILED', { exitCode: -1, stderr: `Timed out after ${Math.round(timeoutMs / 1000)}s` })
+      throw new Error(`Pre-warm timed out after ${Math.round(timeoutMs / 1000)}s`)
     }
+
+    // Log progress every 20 seconds so the build output shows life
+    if (elapsed - lastLogAt >= 20_000) {
+      log(`⏳ Installing dependencies… (${Math.round(elapsed / 1000)}s)`)
+      lastLogAt = elapsed
+    }
+
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500)
   }
+
   emit('PREWARM_DONE')
 }
 
@@ -305,14 +318,24 @@ function applyTemplate(templateName, subs) {
 }
 
 /**
- * Generate a detail view file (always DetailViewShell + RecordsTable).
- * This is always script-generated — agents never write view files directly.
- * @param {{ componentName: string, title?: string, description?: string, dataHook?: string, dataSelector?: string, columns?: string }} widget
- * @returns {string}
+ * Generate a detail view file for a T1 or T3-Insights widget.
+ * Columns are auto-detected from the first data row at runtime unless viewColumns
+ * is explicitly provided in the widget spec.
+ * @param {{ componentName: string, title: string, description: string, dataHook: string, dataSelector: string, viewColumns?: string }} widget
+ * @returns {string} Full TypeScript file content
  */
 function generateViewFile(widget) {
-  const { componentName, title, description, dataHook, dataSelector, columns, viewColumns } = widget
-  const cols = viewColumns ?? columns ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]'
+  const { componentName, title, description, dataHook, dataSelector, viewColumns } = widget
+
+  // If explicit columns are provided, use them as a static constant.
+  // Otherwise, columns are computed at runtime from the actual data.
+  const staticColumnsDecl = viewColumns
+    ? `\nconst STATIC_COLUMNS: ColumnDef<Row>[] = ${viewColumns}\n`
+    : ''
+
+  const columnsExpr = viewColumns
+    ? 'STATIC_COLUMNS'
+    : 'autoColumns(rows)'
 
   return `import React from 'react'
 import { DetailViewShell } from '@/dashboard/chrome/DetailViewShell'
@@ -321,33 +344,58 @@ import { useInsights } from '@/hooks/useInsights'
 import { LoadingState, EmptyState } from '@/dashboard/chrome'
 
 ${TIME_CONSTANTS.trimEnd()}
+${staticColumnsDecl}
+type Row = Record<string, unknown>
 
-/** Safely extract a row array from any Insights API response shape */
-function toRows(raw: unknown): Record<string, unknown>[] {
-  if (!raw) return []
-  if (Array.isArray(raw)) return raw as Record<string, unknown>[]
-  if (typeof raw === 'object') {
-    // Nested: { data: { agents: [...] } } or { data: [...] }
-    const obj = raw as Record<string, unknown>
-    if (Array.isArray(obj.agents)) return obj.agents as Record<string, unknown>[]
-    if (Array.isArray(obj.data)) return obj.data as Record<string, unknown>[]
-    if (obj.data && typeof obj.data === 'object') return toRows(obj.data)
-  }
-  return []
+/**
+ * Auto-generate column definitions from the first data row.
+ * Only includes primitive fields (strings, numbers) — skips nested objects and nulls.
+ * Column labels are derived by splitting camelCase into words.
+ */
+function autoColumns(rows: Row[]): ColumnDef<Row>[] {
+  if (rows.length === 0) return [{ key: 'value', label: 'Value' }]
+  return Object.entries(rows[0])
+    .filter(([, v]) => v !== null && v !== undefined && typeof v !== 'object')
+    .map(([k, v]) => ({
+      key: k,
+      label: k.replace(/([A-Z])/g, ' $1').replace(/^(.)/, (s: string) => s.toUpperCase()).trim(),
+      ...(typeof v === 'number' && { align: 'right' as const }),
+    }))
 }
-
-const COLUMNS: ColumnDef<Record<string, unknown>>[] = ${cols}
 
 export function ${componentName}View() {
   const { data, loading, error } = ${dataHook}
+
+  /** Safely extract a row array from any Insights API response shape */
+  function toRows(raw: unknown): Row[] {
+    if (!raw) return []
+    if (Array.isArray(raw)) return raw as Row[]
+    if (typeof raw === 'object') {
+      const obj = raw as Record<string, unknown>
+      if (Array.isArray(obj.agents)) return obj.agents as Row[]
+      if (Array.isArray(obj.data)) return obj.data as Row[]
+      if (obj.data && typeof obj.data === 'object') return toRows(obj.data)
+    }
+    return []
+  }
+
   const raw: unknown = ${dataSelector ?? '(data as any)?.data ?? []'}
   const rows = toRows(raw)
+  const columns = ${columnsExpr}
 
-  if (loading) return <DetailViewShell title="${title ?? componentName}" description="${description ?? ''}"><LoadingState height="h-96" /></DetailViewShell>
-  if (error)   return <DetailViewShell title="${title ?? componentName}" description="${description ?? ''}"><EmptyState message={error.message} /></DetailViewShell>
+  if (loading) return (
+    <DetailViewShell title="${title ?? componentName}" description="${description ?? ''}">
+      <LoadingState height="h-96" />
+    </DetailViewShell>
+  )
+  if (error) return (
+    <DetailViewShell title="${title ?? componentName}" description="${description ?? ''}">
+      <EmptyState message={error.message} />
+    </DetailViewShell>
+  )
   return (
     <DetailViewShell title="${title ?? componentName}" description="${description ?? ''}">
-      <RecordsTable rows={rows} columns={COLUMNS} defaultSortKey={COLUMNS[0]?.key as string} />
+      <RecordsTable rows={rows} columns={columns} defaultSortKey={columns[0]?.key as string} />
     </DetailViewShell>
   )
 }
