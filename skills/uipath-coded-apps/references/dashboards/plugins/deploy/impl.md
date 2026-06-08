@@ -1,123 +1,181 @@
 # Dashboard Deploy Plugin
 
-Deploys a built dashboard to Automation Cloud as a Coded Web App.
+Publishes a built dashboard to Automation Cloud as a Coded Web App.
+
+**Order:** Build → Pack → Publish → Deploy. Each step must succeed before the next.
+
+---
 
 ## Pre-flight
 
 ```bash
-# 1. Verify login
-uip login status --output json   # must show Data.Status == "Logged in"
-
-# 2. Read state.json (must exist — run build first if missing)
-STATE=$(cat .dashboard/state.json 2>/dev/null || echo '{}')
-APP_NAME=$(node -e "const s=JSON.parse(process.argv[1]); process.stdout.write(s.app?.name||'')" "$STATE")
-ROUTING_NAME=$(node -e "const s=JSON.parse(process.argv[1]); process.stdout.write(s.app?.routingName||'')" "$STATE")
-SEMVER=$(node -e "const s=JSON.parse(process.argv[1]); process.stdout.write(s.app?.semver||'1.0.0')" "$STATE")
-SYSTEM_NAME=$(node -e "const s=JSON.parse(process.argv[1]); process.stdout.write(s.deployment?.systemName||'')" "$STATE")
-FOLDER_KEY=$(node -e "const s=JSON.parse(process.argv[1]); process.stdout.write(s.deployment?.folderKey||'')" "$STATE")
-
-# 3. Sanitize display name for the deploy command.
-# The CLI strips special chars from -n before matching the published package.
-# "Agent Health & Traceview" → "agenthealthtraceview" (no hyphens!) which won't
-# match the routing slug "agent-health-traceview". Sanitize the same way we built
-# the routing name: lowercase + hyphens only.
-APP_SAFE_NAME=$(node -e "
-  const n = process.argv[1];
-  process.stdout.write(n.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''));
-" "$APP_NAME")
+# Verify login
+uip login status --output json
 ```
 
-If `ROUTING_NAME` is empty → state.json is missing or corrupt. Tell user to run the build first.
+Check `Data.Status === "Logged in"`. If not, stop and ask the user to run `uip login`.
+
+Read state.json:
+
+```bash
+node -e "
+const fs   = require('fs')
+const state = JSON.parse(fs.readFileSync('.dashboard/state.json', 'utf8'))
+console.log(JSON.stringify({
+  appName:    state.app?.name       ?? '',
+  routingName: state.app?.routingName ?? '',
+  semver:     state.app?.semver     ?? '1.0.0',
+  systemName: state.deployment?.systemName ?? '',
+  folderKey:  state.deployment?.folderKey  ?? '',
+  folderName: state.deployment?.folderName ?? '',
+  appUrl:     state.deployment?.appUrl     ?? '',
+}))
+"
+```
+
+If `routingName` is empty — state.json is missing or the build never ran. Tell the user to run the build first.
+
+---
 
 ## Step 1 — Classify deploy type
 
-- `SYSTEM_NAME` empty → **Fresh deploy** (first time this dashboard is deployed)
-- `SYSTEM_NAME` non-empty → **Upgrade deploy** (update existing deployment)
+- `systemName` is empty → **Fresh deploy** (first time)
+- `systemName` is set → **Upgrade** (update existing deployment, folder already known)
 
-## Step 2 — Resolve folder key
+For upgrades, skip Step 2 (folder is already in state.json).
 
-If `FOLDER_KEY` is empty (fresh deploy or folder lost):
+---
+
+## Step 2 — Resolve folder (fresh deploy only)
+
+List all folders:
 
 ```bash
-# --all is required — without it the list is capped at 50 and may miss folders
-# Write to temp file — avoid /dev/stdin which doesn't work on Windows
 TEMP_DIR=$(node -e "process.stdout.write(require('os').tmpdir())")
 uip or folders list --all --output json > "${TEMP_DIR}/uip-folders.json"
 ```
 
-Present the list to the user. Ask: "Which folder should this dashboard live in?"
+Check if "Shared" folder exists:
 
-> **Note:** `--all` bypasses the 50-item default cap. If the org has many folders, response may be slow — this is expected.
+```bash
+node -e "
+const folders = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))
+const shared  = folders.find(f => f.Name === 'Shared' || f.DisplayName === 'Shared')
+process.stdout.write(shared ? JSON.stringify({ key: shared.Key, name: shared.Name }) : 'NONE')
+" "${TEMP_DIR}/uip-folders.json"
+```
 
-Once the user confirms a folder name:
+**If "Shared" exists:** use it automatically. Record `FOLDER_KEY` and `FOLDER_NAME = "Shared"`. No user prompt needed for the folder.
+
+**If "Shared" does not exist:** read the folder list and suggest the top options to the user:
+
+```bash
+node -e "
+const folders = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))
+const top = folders
+  .filter(f => f.Name && !f.Name.startsWith('_'))
+  .sort((a, b) => a.Name.localeCompare(b.Name))
+  .slice(0, 6)
+  .map(f => f.Name)
+process.stdout.write(top.join('\n'))
+" "${TEMP_DIR}/uip-folders.json"
+```
+
+Ask the user:
+
+> "There's no 'Shared' folder in this tenant. Which folder should the dashboard live in?
+> [list the top options above]
+> Or type a different folder name."
+
+Once the user confirms a folder name, look up its key:
+
 ```bash
 FOLDER_KEY=$(node -e "
-  const data = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
-  const match = data.find(f => f.Name === '<FOLDER_NAME>');
-  if (!match) { process.stderr.write('Folder not found\n'); process.exit(1); }
-  process.stdout.write(match.Key);
-" "${TEMP_DIR}/uip-folders.json")
+const folders = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))
+const match   = folders.find(f => f.Name === process.argv[2])
+if (!match) { process.stderr.write('Folder not found\n'); process.exit(1) }
+process.stdout.write(match.Key)
+" "${TEMP_DIR}/uip-folders.json" "<FOLDER_NAME>")
 rm -f "${TEMP_DIR}/uip-folders.json"
 ```
+
+---
 
 ## Step 3 — Bump version
 
 ```bash
 NEXT_SEMVER=$(node -e "
-  const [major, minor, patch] = process.argv[1].split('.').map(Number);
-  process.stdout.write([major, minor, patch + 1].join('.'));
-" "$SEMVER")
+const [major, minor, patch] = process.argv[1].split('.').map(Number)
+process.stdout.write([major, minor, patch + 1].join('.'))
+" "${SEMVER}")
 ```
 
-**Version pre-check** — avoid a publish 409 by confirming this version doesn't exist yet:
+Version conflict check — avoid a 409 on publish:
+
 ```bash
 TEMP_DIR=$(node -e "process.stdout.write(require('os').tmpdir())")
 uip codedapp list --output json > "${TEMP_DIR}/uip-apps.json" 2>/dev/null
 EXISTING=$(node -e "
-  try {
-    const d = JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));
-    const pkg = d.find(p => p.Name === process.argv[2] && p.Version === process.argv[3]);
-    process.stdout.write(pkg ? 'EXISTS' : 'OK');
-  } catch { process.stdout.write('SKIP'); }
+try {
+  const apps = JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))
+  const hit  = apps.find(p => p.Name === process.argv[2] && p.Version === process.argv[3])
+  process.stdout.write(hit ? 'EXISTS' : 'OK')
+} catch { process.stdout.write('SKIP') }
 " "${TEMP_DIR}/uip-apps.json" "${ROUTING_NAME}" "${NEXT_SEMVER}")
 rm -f "${TEMP_DIR}/uip-apps.json"
 if [ "${EXISTING}" = "EXISTS" ]; then
-  NEXT_SEMVER=$(node -e "const [a,b,c]=process.argv[1].split('.').map(Number); process.stdout.write([a,b,c+1].join('.'))" "$NEXT_SEMVER")
+  NEXT_SEMVER=$(node -e "
+  const [a,b,c] = process.argv[1].split('.').map(Number)
+  process.stdout.write([a, b, c + 1].join('.'))
+  " "${NEXT_SEMVER}")
 fi
 ```
 
-## Step 4 — Show plan + confirm
+---
 
-Show the user:
+## Step 4 — Show deploy plan and ask about Governance pinning
+
+Present this to the user:
+
 ```
-Deploy plan:
-  Dashboard:    <APP_NAME>
-  Version:      <SEMVER> → <NEXT_SEMVER>
-  Path name:    <ROUTING_NAME>
-  Type:         Fresh deploy  OR  Upgrade (<SYSTEM_NAME>)
-  Folder:       <folder name> (key: <FOLDER_KEY>)
+Your **[Dashboard Name]** is ready to be deployed.
+
+📦  Version:   [SEMVER] → [NEXT_SEMVER]
+🔗  URL path:  [ROUTING_NAME]
+📁  Folder:    [FOLDER_NAME]
+🔄  Type:      Fresh deploy  OR  Updating existing deployment
+
+📌  Do you want to pin this dashboard to the Governance UI?
+
+   → Say **"deploy and pin"** to make it visible in the Governance section
+   → Say **"deploy"** (or just **"yes"**) to deploy without pinning
 ```
 
-Ask: **"Confirm deploy?"** — wait for `y` before proceeding.
+Wait for the user's response:
+- `"deploy and pin"` / `"pin"` / `"yes, pin"` → set `PIN_TO_GOVERNANCE=true`
+- `"deploy"` / `"yes"` / `"go ahead"` / any other confirmation → set `PIN_TO_GOVERNANCE=false`
+- `"no"` / `"cancel"` → stop
 
-## Step 5 — Production build (strip PAT)
+---
 
-Temporarily move `.env.local` so PAT doesn't enter the bundle.
-Restore it regardless of build success or failure:
+## Step 5 — Production build
+
+Temporarily move `.env.local` so dev credentials don't enter the production bundle. Restore it regardless of success or failure:
 
 ```bash
 cd <PROJECT_DIR>
 [ -f .env.local ] && mv .env.local .env.local.deploy-bak
 npm run build
 BUILD_EXIT=$?
-# Restore unconditionally — runs on success AND failure
 [ -f .env.local.deploy-bak ] && mv .env.local.deploy-bak .env.local
-[ $BUILD_EXIT -ne 0 ] && echo "BUILD_FAILED" && exit 1
+[ $BUILD_EXIT -ne 0 ] && echo "Build failed — credentials restored" && exit 1
 ```
+
+---
 
 ## Step 6 — Pack
 
-`-n` here is the **routing slug** (package identifier, not display name):
+Uses the routing slug as the package identifier:
 
 ```bash
 uip codedapp pack dist \
@@ -126,9 +184,9 @@ uip codedapp pack dist \
   --output json
 ```
 
-## Step 7 — Publish (with transient-error retry)
+---
 
-`-n` here is the **routing slug** (same as pack):
+## Step 7 — Publish (with transient-error retry)
 
 ```bash
 TEMP_DIR=$(node -e "process.stdout.write(require('os').tmpdir())")
@@ -144,62 +202,91 @@ for ATTEMPT in 1 2 3 4; do
   # Success
   [ $PUBLISH_EXIT -eq 0 ] && break
 
-  # 409 version conflict — increment version and retry
+  # 409 version conflict — bump and retry
   if echo "${PUBLISH_OUT}" | grep -q "409\|already exists"; then
-    NEXT_SEMVER=$(node -e "const [a,b,c]=process.argv[1].split('.').map(Number); process.stdout.write([a,b,c+1].join('.'))" "$NEXT_SEMVER")
+    NEXT_SEMVER=$(node -e "
+    const [a,b,c] = process.argv[1].split('.').map(Number)
+    process.stdout.write([a, b, c + 1].join('.'))
+    " "${NEXT_SEMVER}")
     uip codedapp pack dist -n "${ROUTING_NAME}" -v "${NEXT_SEMVER}" --output json
     continue
   fi
 
-  # Transient Cloudflare errors (520/522/524) or HTML response — wait and retry
+  # Transient gateway error — wait and retry
   if echo "${PUBLISH_OUT}" | grep -qE "5[0-9]{2}|<!DOCTYPE|<html"; then
-    WAIT=$((ATTEMPT * 5))
-    sleep $WAIT
+    sleep $((ATTEMPT * 5))
     continue
   fi
 
-  # Non-retryable error
   echo "Publish failed: ${PUBLISH_OUT}" && exit 1
 done
 [ $PUBLISH_EXIT -ne 0 ] && echo "Publish failed after 4 attempts" && exit 1
 
-# Extract deployVersion — process.argv avoids /dev/stdin issues on Windows
 DEPLOY_VERSION=$(node -e "
-  try {
-    const d = JSON.parse(process.argv[1]);
-    process.stdout.write(String(d.DeploymentVersion || d.deploymentVersion || ''));
-  } catch { process.stdout.write(''); }
-" "$PUBLISH_OUT")
+try {
+  const d = JSON.parse(process.argv[1])
+  process.stdout.write(String(d.DeploymentVersion || d.deploymentVersion || ''))
+} catch { process.stdout.write('') }
+" "${PUBLISH_OUT}")
 rm -f "${TEMP_DIR}/uip-publish.json"
 ```
 
+---
+
 ## Step 8 — Deploy
 
-> **Flag name:** `--path-name` (NOT `--routing-name` — that flag does not exist).
-> `-n` here is the **sanitized display name** matching the published package slug.
+`--path-name` sets the URL routing slug. `--tags` controls Governance UI visibility.
+
+**If the user opted to pin to Governance UI** (`PIN_TO_GOVERNANCE=true`):
 
 ```bash
 uip codedapp deploy \
   -n "${APP_SAFE_NAME}" \
   --path-name "${ROUTING_NAME}" \
   --folder-key "${FOLDER_KEY}" \
+  --tags "governance,dashboard" \
   --output json > "${TEMP_DIR}/uip-deploy.json" 2>&1
+```
+
+**If the user did not opt to pin** (`PIN_TO_GOVERNANCE=false`):
+
+```bash
+uip codedapp deploy \
+  -n "${APP_SAFE_NAME}" \
+  --path-name "${ROUTING_NAME}" \
+  --folder-key "${FOLDER_KEY}" \
+  --tags "governance" \
+  --output json > "${TEMP_DIR}/uip-deploy.json" 2>&1
+```
+
+`APP_SAFE_NAME` is the display name sanitized to lowercase-and-hyphens:
+
+```bash
+APP_SAFE_NAME=$(node -e "
+const n = process.argv[1]
+process.stdout.write(n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''))
+" "${APP_NAME}")
+```
+
+Handle path-name collision — if the routing slug is already taken in that folder, regenerate the suffix and retry:
+
+```bash
 DEPLOY_EXIT=$?
 DEPLOY_OUT=$(cat "${TEMP_DIR}/uip-deploy.json")
 
-# Path-name collision — regenerate suffix and retry (up to 3 times)
 COLLISION_ATTEMPTS=0
 while echo "${DEPLOY_OUT}" | grep -qiE "conflict|already.*exist|path.*name" && [ $COLLISION_ATTEMPTS -lt 3 ]; do
-  COLLISION_ATTEMPTS=$((COLLISION_ATTEMPTS+1))
+  COLLISION_ATTEMPTS=$((COLLISION_ATTEMPTS + 1))
   NEW_SUFFIX=$(node -e "process.stdout.write(Math.random().toString(36).slice(2,6))")
   NEW_ROUTING=$(echo "${ROUTING_NAME}" | sed "s/-[a-z0-9]*$/-${NEW_SUFFIX}/")
-  # Update routing name and re-pack + re-publish + re-deploy with new slug
-  uip codedapp pack dist -n "${NEW_ROUTING}" -v "${NEXT_SEMVER}" --output json
-  uip codedapp publish -n "${NEW_ROUTING}" -v "${NEXT_SEMVER}" --output json
+  uip codedapp pack    dist -n "${NEW_ROUTING}" -v "${NEXT_SEMVER}" --output json
+  uip codedapp publish      -n "${NEW_ROUTING}" -v "${NEXT_SEMVER}" --output json
+  TAGS_ARG=$([ "${PIN_TO_GOVERNANCE}" = "true" ] && echo "governance,dashboard" || echo "governance")
   uip codedapp deploy \
     -n "${APP_SAFE_NAME}" \
     --path-name "${NEW_ROUTING}" \
     --folder-key "${FOLDER_KEY}" \
+    --tags "${TAGS_ARG}" \
     --output json > "${TEMP_DIR}/uip-deploy.json" 2>&1
   DEPLOY_EXIT=$?
   DEPLOY_OUT=$(cat "${TEMP_DIR}/uip-deploy.json")
@@ -208,72 +295,84 @@ done
 
 [ $DEPLOY_EXIT -ne 0 ] && echo "Deploy failed: ${DEPLOY_OUT}" && exit 1
 
-# Parse response — process.argv avoids /dev/stdin issues on Windows
 SYSTEM_NAME_NEW=$(node -e "
-  try {
-    const d = JSON.parse(process.argv[1]);
-    process.stdout.write(d.SystemName || d.systemName || '');
-  } catch { process.stdout.write(''); }
-" "$DEPLOY_OUT")
+try { const d=JSON.parse(process.argv[1]); process.stdout.write(d.SystemName||d.systemName||'') }
+catch { process.stdout.write('') }
+" "${DEPLOY_OUT}")
 APP_URL=$(node -e "
-  try {
-    const d = JSON.parse(process.argv[1]);
-    process.stdout.write(d.AppUrl || d.appUrl || '');
-  } catch { process.stdout.write(''); }
-" "$DEPLOY_OUT")
+try { const d=JSON.parse(process.argv[1]); process.stdout.write(d.AppUrl||d.appUrl||'') }
+catch { process.stdout.write('') }
+" "${DEPLOY_OUT}")
 rm -f "${TEMP_DIR}/uip-deploy.json"
 ```
+
+---
 
 ## Step 9 — Update state.json
 
 ```bash
 node -e "
-  const fs = require('fs'), path = require('path');
-  const fp = path.join('.dashboard', 'state.json');
-  const state = JSON.parse(fs.readFileSync(fp, 'utf8'));
-  state.app.semver = process.argv[1];
-  state.app.routingName = process.argv[2];
-  state.deployment.folderKey = process.argv[3];
-  state.deployment.systemName = process.argv[4] || state.deployment.systemName;
-  state.deployment.deployVersion = process.argv[5] || state.deployment.deployVersion;
-  state.deployment.appUrl = process.argv[6] || state.deployment.appUrl;
-  state.deployment.lastDeployedAt = new Date().toISOString();
-  const tmp = fp + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
-  fs.renameSync(tmp, fp);
-  process.stdout.write('✓ state updated\n');
-" "$NEXT_SEMVER" "$ROUTING_NAME" "$FOLDER_KEY" "$SYSTEM_NAME_NEW" "$DEPLOY_VERSION" "$APP_URL"
+const fs    = require('fs')
+const path  = require('path')
+const fp    = path.join('.dashboard', 'state.json')
+const state = JSON.parse(fs.readFileSync(fp, 'utf8'))
+state.app.semver              = process.argv[1]
+state.app.routingName         = process.argv[2]
+state.deployment.folderKey    = process.argv[3]
+state.deployment.folderName   = process.argv[4]
+state.deployment.systemName   = process.argv[5] || state.deployment.systemName
+state.deployment.deployVersion = process.argv[6] || state.deployment.deployVersion
+state.deployment.appUrl       = process.argv[7] || state.deployment.appUrl
+state.deployment.pinnedToGovernance = process.argv[8] === 'true'
+state.deployment.lastDeployedAt = new Date().toISOString()
+const tmp = fp + '.tmp'
+fs.writeFileSync(tmp, JSON.stringify(state, null, 2))
+fs.renameSync(tmp, fp)
+process.stdout.write('state updated\n')
+" "${NEXT_SEMVER}" "${ROUTING_NAME}" "${FOLDER_KEY}" "${FOLDER_NAME}" \
+  "${SYSTEM_NAME_NEW}" "${DEPLOY_VERSION}" "${APP_URL}" "${PIN_TO_GOVERNANCE}"
 ```
+
+---
 
 ## Step 10 — Report
 
 ```
-✅ Your **<APP_NAME>** is live.
+🎉 **[Dashboard Name]** is live.
 
-<APP_URL>
+[APP_URL]
 
-Version <NEXT_SEMVER> deployed to <folder name>.
-To update it later, say "deploy this dashboard" again.
+Version [NEXT_SEMVER] · Folder: [FOLDER_NAME]
 ```
+
+If pinned to Governance UI:
+> "Your dashboard is now visible in the Governance section. To unpin it later, say 'redeploy without governance pin'."
+
+If not pinned:
+> "To make it visible in the Governance UI later, say 'redeploy and pin to governance'."
+
+Add in both cases:
+> "To update the dashboard after making changes, say 'deploy this dashboard' again."
+
+---
 
 ## Error handling
 
 | Error | Action |
-|---|---|
-| `npm run build` fails | Fix build errors first (see `../../debug.md`); PAT is restored automatically |
-| `uip codedapp pack` fails | Verify `dist/` exists; run `npm run build` first |
-| Publish 409 (version conflict) | Auto-increments version and retries (handled in Step 7 loop) |
-| Publish 5xx / HTML response | Retry with exponential backoff (handled in Step 7 loop) |
-| Deploy `--path-name` conflict | Auto-regenerates suffix and retries (handled in Step 8 loop) |
-| Deploy folder error | Re-run `uip or folders list --all` and verify the key |
-| Deploy "not published yet" | Likely name mismatch — verify `APP_SAFE_NAME` matches the routing slug |
-| state.json corrupt | Show raw error; user must run build again to regenerate |
+|-------|--------|
+| `npm run build` fails | Fix build errors first. Dev credentials are always restored. |
+| `uip codedapp pack` fails | Verify `dist/` exists — run `npm run build` first. |
+| Publish 409 (version conflict) | Auto-bumps version and retries. |
+| Publish 5xx / HTML response | Waits and retries up to 4 times. |
+| Deploy `--path-name` conflict | Regenerates URL suffix and retries up to 3 times. |
+| Folder key not found | Re-run `uip or folders list --all --output json` and verify the folder name. |
+| state.json missing | Tell user to run the dashboard build first. |
 
-## Dashboard-specific rules
+## Rules
 
-- App type is always **Web** — never pass `-t Action`
-- Routing name is permanent after first successful deploy — never change it manually
-- PAT must NOT be in production bundle — `failBuildIfPatSet` Vite plugin enforces this
-- `deployVersion` in state.json is the Orchestrator integer version (separate from semver) — required for upgrade path
-- **`--path-name`** is the correct flag for deploy (not `--routing-name` which does not exist)
-- Always sanitize display names before passing to `-n` in deploy — the CLI strips special chars and may produce a slug that doesn't match your published package
+- Pack order is always: **build → pack → publish → deploy**
+- `--path-name` in the deploy command takes the routing slug (e.g. `agent-health-x7k2`)
+- Always include `--tags` — minimum is `governance`, add `dashboard` if user opted to pin
+- Routing name is permanent after first successful deploy — never change it
+- PAT must not be in the production bundle — the Vite plugin enforces this
+- Default folder is "Shared" if it exists; otherwise present options from the folder list

@@ -24,7 +24,10 @@ Per-project metadata. Read at every build start. Written by build script on succ
   "deployment": {
     "systemName": null,
     "folderKey": null,
+    "folderName": null,
     "appUrl": null,
+    "deployVersion": null,
+    "pinnedToGovernance": false,
     "lastDeployedAt": null
   }
 }
