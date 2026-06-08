@@ -14,15 +14,41 @@ By the time you read this you have already loaded all docs, run login, checked s
 
 ## Phase 1 — Preflight (already done in background)
 
-You have the `uip login status` response. Extract:
+You already have the `uip login status` response from the parallel blast. Extract:
 
 - `orgName` ← `Data.Organization`
 - `tenantName` ← `Data.Tenant`
 - `cloudUrl` ← `Data.BaseUrl`
 
-Derive `apiUrl` and read `tenantId` per `auth-context.md`.
+Verify `Data.Status === "Logged in"` — if not, stop and tell the user to run `uip login`.
 
-Pre-warm is already running at `~/dashboards/<ROUTING_NAME>`. Do not re-fire it.
+### Derive apiUrl from cloudUrl
+
+| cloudUrl | apiUrl |
+|----------|--------|
+| `https://alpha.uipath.com` | `https://alpha.api.uipath.com` |
+| `https://staging.uipath.com` | `https://staging.api.uipath.com` |
+| `https://cloud.uipath.com` | `https://api.uipath.com` |
+
+Rule: insert `api.` before `uipath.com`. Exception: `cloud.uipath.com` → `api.uipath.com`.
+
+### Read tenantId from auth file
+
+```bash
+node -e "
+const fs   = require('fs')
+const path = require('path')
+const home     = process.env.HOME || process.env.USERPROFILE
+const authPath = path.join(home, '.uipath', '.auth')
+const content  = fs.readFileSync(authPath, 'utf8')
+const envMatch = content.match(/^UIPATH_TENANT_ID=(.+)$/m)
+if (envMatch) { console.log(envMatch[1].trim()); process.exit(0) }
+const parsed = JSON.parse(content)
+console.log(parsed.UIPATH_TENANT_ID || parsed.tenantId || '')
+"
+```
+
+Pre-warm is already running at `<PROJECT_DIR>`. Do not re-fire it.
 
 ---
 
@@ -51,11 +77,17 @@ Here's your **[Dashboard Name]** — [N] widgets ready to build.
 📋 **[Widget Name]** ([time range]) — ...
 
 Confirm to build, or tell me what to change:
-→ "make the error chart 7 days"
-→ "add a KPI showing total runs today"
-→ "swap the table for a bar chart"
+→ "make it 7 days"
+→ "add a KPI for total errors"
 → "remove the latency widget"
+
+**One quick thing:** Do you have a UiPath OAuth app client ID for dashboards?
+Paste it here, or say **"create one"** and I'll set it up before building.
 ```
+
+The plan message always ends with the OAuth question unless `clientId` is already in intent.json from a prior session.
+
+If the user's confirmation includes a client ID or "create one", capture it and proceed. If they confirm without addressing it and `clientId` is already set in intent.json, skip silently.
 
 **Widget type icons:**
 - 🔢 KPI card or sparkline
@@ -79,7 +111,33 @@ Confirm to build, or tell me what to change:
 → "add invocation volume"
 → "remove the latency chart"
 → "show as a table instead"
+
+**One quick thing:** Do you have a UiPath OAuth app client ID for dashboards?
+Paste it here, or say **"create one"** and I'll set it up before building.
 ```
+
+### intent.json schema (write to disk in Phase 4 after confirmation)
+
+```json
+{
+  "dashboardName": "Operations Health",
+  "timeRange": "30d",
+  "projectDir": "/absolute/path",
+  "routingName": "operations-health-x7k2",
+  "orgName": "...", "tenantName": "...", "cloudUrl": "...", "apiUrl": "...",
+  "tenantId": "<UUID>", "clientId": "",
+  "metrics": [
+    { "name": "agent-errors", "tier": "T1" },
+    { "name": "queue-failure-threshold", "tier": "T2", "params": { "threshold": 20, "direction": "gt" } },
+    {
+      "name": "custom", "tier": "T3", "title": "...", "displayAs": "ranked-table",
+      "fnBody": "...", "valueField": "count", "valueLabel": "items"
+    }
+  ]
+}
+```
+
+Routing name: `<kebab-name>-<4-char-random>`. Set once at plan time. Never changes.
 
 ---
 
@@ -87,46 +145,19 @@ Confirm to build, or tell me what to change:
 
 **HALT.** Output only text. No tool calls.
 
-- User confirms → write intent.json, continue to Phase 4
-- User requests a change → update the plan in your response, HALT again
+- User confirms + provides client ID → write clientId into intent.json, continue to Phase 4
+- User confirms + says "create one" → create OAuth app (see below), write clientId, continue to Phase 4
+- User confirms (clientId already in intent.json) → continue to Phase 4
+- User requests a change → update plan, re-render with OAuth question, HALT again
 - User cancels → discard
 
----
-
-## Phase 4 — External OAuth client (0–1 tool call)
-
-Every dashboard needs a `clientId` for PKCE auth. Without it the browser shows an auth error.
-
-### Check intent.json for existing clientId
-
-If the user has given a client ID previously (stored in your context) → write it directly into intent.json. Skip the bash check.
-
-If unknown, run once:
-
-```bash
-node -e "
-const intent = JSON.parse(require('fs').readFileSync('<INTENT_JSON_PATH>', 'utf8'))
-process.exit(intent.clientId ? 0 : 1)
-" && echo HAS_CLIENT || echo NEEDS_CLIENT
-```
-
-**HAS_CLIENT** → skip to Phase 5.
-
-**NEEDS_CLIENT** → ask concisely:
-
-> "One quick thing — your dashboard needs a UiPath OAuth app for authentication. Do you have an existing client ID, or should I create one for you?"
-
-**If user provides their client ID:** write it into intent.json, go to Phase 5.
-
-**If user wants one created:**
-
-First, discover which scopes are valid in this environment:
+**If user says "create one":** Run scope discovery + app creation here:
 
 ```bash
 uip admin scopes list --output json
 ```
 
-From the JSON response, extract the scope names (look for a `Data` array with `Name` or `Scope` fields). Then intersect with the desired scopes:
+From the JSON response, extract scope names (look for a `Data` array with `Name` or `Scope` fields). Intersect with the desired scopes:
 
 **Desired scopes** (use whichever are available in the environment):
 ```
@@ -136,9 +167,7 @@ OR.Tasks OR.Tasks.Read OR.Queues OR.Queues.Read
 OR.Users OR.Users.Read Insights Insights.RealTimeData
 ```
 
-Build the `--user-scope` argument from the intersection of desired and available scopes (comma-separated, no spaces).
-
-Then create the app:
+Build the `--user-scope` argument from the intersection (comma-separated, no spaces). Then:
 
 ```bash
 uip admin external-apps create "UiPath Dashboard - <DASHBOARD_NAME>" \
@@ -148,9 +177,9 @@ uip admin external-apps create "UiPath Dashboard - <DASHBOARD_NAME>" \
   --output json
 ```
 
-Read `ClientId` from the JSON response and write it into intent.json.
+Read `ClientId` from response, write to intent.json.
 
-> **Note:** If `Insights` and `Insights.RealTimeData` are not available in this environment, T1 Insights widgets (invocation volume, error rate, latency) will return 401/403 in the browser. Warn the user: "Insights scopes are not available in this environment — Insights-based widgets will not show data. SDK-based widgets (T3-SDK) will still work."
+> **Note:** If `Insights` and `Insights.RealTimeData` are not available in this environment, T1 Insights widgets will return 401/403 in the browser. Warn the user: "Insights scopes are not available in this environment — Insights-based widgets will not show data. SDK-based widgets (T3-SDK) will still work."
 
 Tell the user: "OAuth app created — building now."
 
@@ -158,7 +187,7 @@ Tell the user: "OAuth app created — building now."
 
 ---
 
-## Phase 5 — Build (one tool call)
+## Phase 4 — Build (one tool call)
 
 `SKILL_BASE_DIR` is the directory shown in "Base directory for this skill:" from your activation message — the same directory that contains `SKILL.md`. It ends in `/skills/uipath-coded-apps` (or the equivalent Windows path).
 
@@ -205,7 +234,7 @@ Opening your dashboard at http://localhost:57173
 | `WIDGET_READY:{"name":"X",...}` | `  ✓ X` (one line per widget) |
 | `T3_RETRY:{...}` | `  ↻ [Name] — refining query…` then retry |
 | `TSC_PASS` | `  ✓ TypeScript clean` |
-| `AUTH_MISSING:{...}` | Pause, tell user to complete Phase 4 |
+| `AUTH_MISSING:{...}` | Pause, tell user to complete OAuth setup |
 | `PARTIAL_BUILD_DETECTED` | `  ↻ Resuming previous build…` |
 | `SERVER_READY:{...}` | `Opening your dashboard at [url]` |
 | `BUILD_RESULT:{...}` | Open previewUrl in browser |
