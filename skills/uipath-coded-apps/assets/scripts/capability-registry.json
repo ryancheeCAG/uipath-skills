@@ -15,8 +15,7 @@
         "deltaDir": "down-good",
         "deltaText": "errors today",
         "dataSelector": "(data as any)?.data ?? []",
-        "valueExpression": "String(((data as any)?.data ?? []).reduce((s: number, d: any) => s + (d.value ?? 0), 0))",
-        "viewColumns": "[{key:\"date\",label:\"Date\"},{key:\"value\",label:\"Error Count\",align:\"right\" as const}]"
+        "valueExpression": "String(((data as any)?.data ?? []).reduce((s: number, d: any) => s + (d.value ?? 0), 0))"
       }
     },
     "invocation-volume": {
@@ -34,8 +33,7 @@
         "deltaDir": "up-good",
         "deltaText": "AGU today",
         "dataSelector": "(data as any)?.data ?? []",
-        "valueExpression": "String(((data as any)?.data ?? []).reduce((s: number, d: any) => s + (d.aguConsumption ?? 0), 0).toFixed(1))",
-        "viewColumns": "[{key:\"timeSlice\",label:\"Time Period\"},{key:\"aguConsumption\",label:\"AGU\",align:\"right\" as const}]"
+        "valueExpression": "String(((data as any)?.data ?? []).reduce((s: number, d: any) => s + (d.aguConsumption ?? 0), 0).toFixed(1))"
       }
     },
     "top-failing-agents": {
@@ -51,8 +49,7 @@
         "dataSelector": "(data as any)?.data ?? []",
         "columns": "[{key:\"name\",label:\"Agent\"},{key:\"count\",label:\"Errors\",align:\"right\" as const}]",
         "deltaDir": "neutral",
-        "deltaText": "",
-        "viewColumns": "[{key:\"name\",label:\"Agent Name\"},{key:\"count\",label:\"Error Count\",align:\"right\" as const}]"
+        "deltaText": ""
       }
     },
     "active-agents-kpi": {
@@ -68,8 +65,7 @@
         "valueExpression": "String((data as any)?.data?.agents?.length ?? 0)",
         "dataSelector": "(data as any)?.data?.agents ?? []",
         "deltaDir": "up-good",
-        "deltaText": "active agents",
-        "viewColumns": "[{key:\"agentName\",label:\"Agent Name\"},{key:\"healthScore\",label:\"Health Score\",align:\"right\" as const},{key:\"lastRun\",label:\"Last Run\"},{key:\"folderPath\",label:\"Folder\"}]"
+        "deltaText": "active agents"
       }
     },
     "agent-latency": {
@@ -88,8 +84,7 @@
         "deltaText": "ms P95",
         "dataSelector": "(data as any)?.data ?? []",
         "series": "[{key:\"P50\",color:\"hsl(var(--chart-1))\",label:\"P50 ms\"},{key:\"P95\",color:\"hsl(var(--chart-2))\",label:\"P95 ms\"}]",
-        "pivotExpression": "rawData.reduce((acc: Record<string, unknown>[], row: any) => { const existing = acc.find((r: any) => r.date === row.date); if (existing) { existing[row.name] = row.value; } else { acc.push({ date: row.date, [row.name]: row.value }); } return acc; }, [])",
-        "viewColumns": "[{key:\"date\",label:\"Date\"},{key:\"name\",label:\"Percentile\"},{key:\"value\",label:\"ms\",align:\"right\" as const}]"
+        "pivotExpression": "rawData.reduce((acc: Record<string, unknown>[], row: any) => { const existing = acc.find((r: any) => r.date === row.date); if (existing) { existing[row.name] = row.value; } else { acc.push({ date: row.date, [row.name]: row.value }); } return acc; }, [])"
       }
     },
     "job-failures": {
@@ -105,8 +100,7 @@
         "dataSelector": "(data as any)?.data ?? []",
         "columns": "[{key:\"processName\",label:\"Process\"},{key:\"failureCount\",label:\"Failures\",align:\"right\" as const}]",
         "deltaDir": "down-good",
-        "deltaText": "failures today",
-        "viewColumns": "[{key:\"processName\",label:\"Process\"},{key:\"failureCount\",label:\"Failures\",align:\"right\" as const}]"
+        "deltaText": "failures today"
       }
     },
     "job-completion-trend": {
@@ -123,8 +117,7 @@
         "yKey": "count",
         "deltaDir": "up-good",
         "deltaText": "completions today",
-        "dataSelector": "(data as any)?.data ?? []",
-        "viewColumns": "[{key:\"date\",label:\"Date\"},{key:\"count\",label:\"Completions\",align:\"right\" as const},{key:\"state\",label:\"State\"}]"
+        "dataSelector": "(data as any)?.data ?? []"
       }
     }
   },

@@ -336,3 +336,17 @@ test('buildT3WidgetFile: injects valueField and valueLabel placeholders', () => 
   assert.ok(!content.includes('<<VALUE_FIELD>>'))
   assert.ok(!content.includes('<<VALUE_LABEL>>'))
 })
+
+// Note: applyTemplate is not exported (internal function). Test indirectly via
+// the behaviour that unresolved placeholders cause the build to fail.
+// We test the guard via the T3 shell template which is directly testable:
+test('buildT3WidgetFile: no unresolved << >> placeholders remain', () => {
+  const content = buildT3WidgetFile({
+    name: 'test', tier: 'T3', title: 'Test Widget',
+    displayAs: 'ranked-table',
+    fnBody: 'return []',
+    valueField: '', valueLabel: '',
+  })
+  const unresolved = content.match(/<<[A-Z_]+>>/g)
+  assert.equal(unresolved, null, `Unresolved placeholders: ${(unresolved ?? []).join(', ')}`)
+})

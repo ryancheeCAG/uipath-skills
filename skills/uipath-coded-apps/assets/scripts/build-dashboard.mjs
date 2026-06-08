@@ -341,28 +341,31 @@ function applyTemplate(templateName, subs) {
     content = lines.join('\n')
   }
 
+  // Detect unresolved placeholders — a remaining <UPPER_CASE> token means a
+  // placeholder was in the template but not supplied in the substitution map.
+  // Fail loudly now rather than generating broken TypeScript that confuses tsc.
+  const unresolved = [...new Set((content.match(/<[A-Z][A-Z_]+>/g) ?? []))]
+  if (unresolved.length > 0) {
+    fail(
+      `Template "${templateName}.tsx" has unresolved placeholders: ${unresolved.join(', ')}. ` +
+      `These must be added to the substitution map passed to applyTemplate().`
+    )
+  }
+
   return content
 }
 
 /**
  * Generate a detail view file for a T1 or T3-Insights widget.
- * Columns are auto-detected from the first data row at runtime unless viewColumns
- * is explicitly provided in the widget spec.
- * @param {{ componentName: string, title: string, description: string, dataHook: string, dataSelector: string, viewColumns?: string }} widget
+ * Columns are auto-detected from the first data row at runtime via autoColumns().
+ * @param {{ componentName: string, title: string, description: string, dataHook: string, dataSelector: string }} widget
  * @returns {string} Full TypeScript file content
  */
 function generateViewFile(widget) {
-  const { componentName, title, description, dataHook, dataSelector, viewColumns } = widget
+  const { componentName, title, description, dataHook, dataSelector } = widget
 
-  // If explicit columns are provided, use them as a static constant.
-  // Otherwise, columns are computed at runtime from the actual data.
-  const staticColumnsDecl = viewColumns
-    ? `\nconst STATIC_COLUMNS: ColumnDef<Row>[] = ${viewColumns}\n`
-    : ''
-
-  const columnsExpr = viewColumns
-    ? 'STATIC_COLUMNS'
-    : 'autoColumns(rows)'
+  const staticColumnsDecl = ''
+  const columnsExpr = 'autoColumns(rows)'
 
   return `import React from 'react'
 import { DetailViewShell } from '@/dashboard/chrome/DetailViewShell'
@@ -618,7 +621,6 @@ export function buildT1WidgetSpec(metric, entry, timeRange) {
     yKey: entry.defaults.yKey ?? 'value',
     valueExpression: entry.defaults.valueExpression ?? "'—'",
     columns: metric.columns ?? entry.defaults.columns ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]',
-    viewColumns: entry.defaults.viewColumns,
     deltaDir: entry.defaults.deltaDir ?? 'neutral',
     deltaText: entry.defaults.deltaText ?? '',
     series: entry.defaults.series ?? '[{key:"value",color:"hsl(var(--chart-1))"}]',
@@ -751,6 +753,8 @@ export function buildT3WidgetFile(metric, timeRange = '30d') {
       DATA_SELECTOR: spec.dataSelector,
       X_KEY: spec.xKey,
       Y_KEY: spec.yKey,
+      DATA_KEY: spec.yKey,
+      NAME_KEY: spec.xKey,
       VALUE_EXPRESSION: spec.valueExpression,
       COLUMNS: spec.columns,
       DELTA_DIR: spec.deltaDir,
@@ -805,6 +809,8 @@ function specToSubs(spec) {
     DATA_SELECTOR: spec.dataSelector,
     X_KEY: spec.xKey,
     Y_KEY: spec.yKey,
+    DATA_KEY: spec.yKey,
+    NAME_KEY: spec.xKey,
     VALUE_EXPRESSION: spec.valueExpression,
     COLUMNS: spec.columns,
     DELTA_DIR: spec.deltaDir,
@@ -984,7 +990,6 @@ async function runDashboardBuild(intent, intentPath) {
           dataHook: spec.dataHook,
           dataSelector: spec.dataSelector,
           columns: spec.columns,
-          viewColumns: spec.viewColumns,
         }
       } else {
         // T2 — use SDK directly; no detail view needed (widget already shows tabular data)
