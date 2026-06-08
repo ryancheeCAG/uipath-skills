@@ -31,12 +31,21 @@ Fire all of these simultaneously. This is the only turn before the plan.
 | `references/dashboards/plugins/build/impl.md` *(from skill root)* | Full build instructions |
 | `references/dashboards/primitives/tier-resolution.md` *(from skill root)* | Metric classification + hard-refuse list |
 | `references/dashboards/primitives/auth-context.md` *(from skill root)* | Login + credential extraction |
-| `references/dashboards/primitives/sdk-field-reference.md` *(from skill root)* | SDK response shapes + import paths |
+| `references/dashboards/primitives/sdk-patterns.md` *(from skill root)* | Skill-specific SDK patterns (casting, normalisation, dynamic import) |
 | `references/dashboards/primitives/build-plan.md` *(from skill root)* | intent.json schema |
 | `references/dashboards/aesthetic/layout-patterns.md` *(from skill root)* | Layout rules |
 | `assets/scripts/capability-registry.json` *(from skill root)* | Metric catalog |
 
 > All `references/dashboards/` paths are inside this file's own directory. The `assets/` paths are at the skill root — two levels up from this file.
+
+**Also fetch the live SDK documentation in the same message:**
+
+```
+WebFetch: https://uipath.github.io/uipath-typescript/llms-full-content.txt
+Prompt: Extract all service classes with their import subpaths, method signatures, and response type field names.
+```
+
+This is the authoritative SDK reference — always current, maintained by the SDK team. Use it to verify field names before writing `intent.json` or T3-SDK `fnBody`. The `sdk-patterns.md` above covers only what the SDK docs omit (skill-specific casting and normalisation patterns).
 
 **Commands (in the same message):**
 
