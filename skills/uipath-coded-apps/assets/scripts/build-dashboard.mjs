@@ -125,28 +125,6 @@ const REGISTRY = JSON.parse(readFileSync(resolve(__dirname, 'capability-registry
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-/**
- * The complete closed set of valid InsightsKey values — derived from InsightsClient
- * in src/lib/insights-client.ts. These are the only strings useInsights() accepts.
- * Any other namespace.method combination will cause a TypeScript compile error.
- */
-const VALID_INSIGHTS_KEYS = new Set([
-  // agents namespace
-  'agents.getSummaryV2', 'agents.getErrors', 'agents.getTopErroredAgents',
-  'agents.getIncidents', 'agents.getIncidentDistribution', 'agents.getConsumption',
-  'agents.getConsumptionTimeline', 'agents.getLatencyTimeline', 'agents.getAgents',
-  'agents.getUnitConsumption', 'agents.getNames',
-  // traceview namespace
-  'traceview.getLatencyTimeline', 'traceview.getErrorsTimeline', 'traceview.getMemoryTimeline',
-  'traceview.getMemoryCallsTimeline', 'traceview.getTopMemorySpaces', 'traceview.getUnitConsumption',
-  // governance namespace
-  'governance.getPolicySummary', 'governance.getPolicyTraces', 'governance.getOperationSummary',
-  // jobs namespace
-  'jobs.getSummary', 'jobs.getCompletedTimeline', 'jobs.getUncompletedTimeline',
-  'jobs.getTopFailures', 'jobs.getFailuresByReason', 'jobs.getProcessDetails',
-  'jobs.getFailureDetails',
-])
-
 const TIME_RANGE_CONSTANTS = {
   '1d':  'ONE_DAY_AGO',
   '7d':  'SEVEN_DAYS_AGO',
@@ -570,21 +548,10 @@ export function validateIntent(intent) {
     }
     if (m.tier === 'T3') {
       if (!m.title) errors.push(`T3 metric "${m.name}" missing title`)
-      const hasSdkPath = !!m.fnBody
-      const hasInsightsPath = !!(m.namespace && m.method && m.template)
-      if (!hasSdkPath && !hasInsightsPath) {
-        errors.push(`T3 metric "${m.name}" needs either fnBody (SDK path) or namespace+method+template (Insights path)`)
-      }
-      if (hasSdkPath) {
-        if (!m.displayAs) {
-          errors.push(`T3 metric "${m.name}" with fnBody needs displayAs — valid values: ${VALID_T3_SDK_DISPLAY_TYPES.join(', ')}`)
-        } else if (!VALID_T3_SDK_DISPLAY_TYPES.includes(m.displayAs)) {
-          errors.push(
-            `T3 metric "${m.name}" has unsupported displayAs "${m.displayAs}" for T3-SDK. ` +
-            `Valid values: ${VALID_T3_SDK_DISPLAY_TYPES.join(', ')}. ` +
-            `For chart types (area-chart, line-chart, donut-chart), use T3-Insights (namespace + method + template) instead.`
-          )
-        }
+      if (!m.fnBody) errors.push(`T3 metric "${m.name}" missing fnBody — write an async function body using SDK service classes`)
+      if (!m.displayAs) errors.push(`T3 metric "${m.name}" with fnBody needs displayAs — valid values: ${VALID_T3_SDK_DISPLAY_TYPES.join(', ')}`)
+      else if (!VALID_T3_SDK_DISPLAY_TYPES.includes(m.displayAs)) {
+        errors.push(`T3 metric "${m.name}" has unsupported displayAs "${m.displayAs}". Valid: ${VALID_T3_SDK_DISPLAY_TYPES.join(', ')}`)
       }
     }
   }
@@ -618,8 +585,16 @@ export function resolveMetric(metric) {
 export function buildT1WidgetSpec(metric, entry, timeRange) {
   const startConst = TIME_RANGE_CONSTANTS[timeRange] ?? 'THIRTY_DAYS_AGO'
   const componentName = metric.componentName ?? toPascalCase(metric.name)
-  const responseType = '{ data: Array<Record<string, unknown>> }'
-  const dataHook = `useInsights<${responseType}>('${entry.namespace}.${entry.method}', { startTime: ${startConst}, endTime: NOW })`
+  const { sdkService, sdkMethod, sdkImport, responseType } = entry
+
+  // Generate the typed SDK hook call — no more string keys, no more as any
+  const dataHook = `useInsightsSDK<${responseType}>(sdk => new ${sdkService}(sdk as never).${sdkMethod}({ startTime: ${startConst}, endTime: NOW }), [])`
+
+  // Static SDK service import — injected into the template before the component
+  const sdkImportLine = `import { ${sdkService} } from '${sdkImport}'`
+  // Response type import — from the stub types file (will be SDK imports when SDK ships)
+  const responseTypeImport = `import type { ${responseType} } from '@/types/insights'`
+
   return {
     componentName,
     template: entry.template,
@@ -628,6 +603,8 @@ export function buildT1WidgetSpec(metric, entry, timeRange) {
     title: metric.title ?? entry.defaults.title,
     description: metric.description ?? entry.defaults.description,
     dataHook,
+    sdkImportLine,
+    responseTypeImport,
     dataSelector: entry.defaults.dataSelector ?? '[]',
     xKey: entry.defaults.xKey ?? 'date',
     yKey: entry.defaults.yKey ?? 'value',
@@ -723,7 +700,6 @@ export function buildT2WidgetSpec(metric, entry) {
 
 /**
  * Generate the TypeScript source for a T3 widget file.
- * T3-Insights path: uses applyTemplate() with a custom useInsights hook.
  * T3-SDK path: injects fnBody into the t3-shell.tsx.template.
  * @param {IntentMetric} metric
  * @param {'1d'|'7d'|'30d'|'90d'} [timeRange='30d']
@@ -733,67 +709,6 @@ export function buildT3WidgetFile(metric, timeRange = '30d') {
   if (!metric.title) throw new Error(`T3 metric "${metric.name}" missing title`)
 
   const componentName = metric.componentName ?? toPascalCase(metric.name)
-
-  // T3-Insights path: uses useInsights hook + standard template
-  if (metric.namespace && metric.method && metric.template) {
-    // Validate against the closed InsightsKey union BEFORE generating any code.
-    // useInsights() only accepts keys that exist on InsightsClient — if the key
-    // isn't in the union TypeScript will reject it at compile time.
-    const insightsKey = `${metric.namespace}.${metric.method}`
-    if (!VALID_INSIGHTS_KEYS.has(insightsKey)) {
-      const available = [...VALID_INSIGHTS_KEYS]
-        .filter(k => k.startsWith(metric.namespace + '.'))
-        .map(k => `  ${k}`)
-        .join('\n')
-      throw new Error(
-        `T3-Insights: "${insightsKey}" is not a valid InsightsKey.\n` +
-        `Valid methods in the "${metric.namespace}" namespace:\n${available || '  (none — check the namespace name)'}\n` +
-        `For endpoints not in this list, use T3-SDK with getToken() + fetch() instead.`
-      )
-    }
-    const startConst = TIME_RANGE_CONSTANTS[timeRange] ?? 'THIRTY_DAYS_AGO'
-    const responseType = '{ data: Array<Record<string, unknown>> }'
-    const dataHook = metric.dataHook
-      ?? `useInsights<${responseType}>('${metric.namespace}.${metric.method}', { startTime: ${startConst}, endTime: NOW })`
-    const spec = {
-      componentName,
-      template: metric.template,
-      detailRoute: metric.detailRoute ?? `/${componentName.toLowerCase()}`,
-      icon: metric.icon ?? 'Activity',
-      title: metric.title,
-      description: metric.description ?? '',
-      dataHook,
-      dataSelector: metric.dataSelector ?? '(data as any)?.data ?? []',
-      xKey: metric.xKey ?? 'date',
-      yKey: metric.yKey ?? 'value',
-      valueExpression: metric.valueExpression ?? "'—'",
-      columns: metric.columns ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]',
-      deltaDir: metric.deltaDir ?? 'neutral',
-      deltaText: metric.deltaText ?? '',
-      series: metric.series ?? '[{key:"value",color:"hsl(var(--chart-1))"}]',
-      pivotExpression: metric.pivotExpression ?? 'rawData',
-    }
-    return applyTemplate(spec.template, {
-      COMPONENT_NAME: spec.componentName,
-      TITLE: spec.title,
-      DESCRIPTION: spec.description,
-      DETAIL_ROUTE: spec.detailRoute,
-      ICON: spec.icon,
-      DATA_HOOK: spec.dataHook,
-      DATA_SELECTOR: spec.dataSelector,
-      X_KEY: spec.xKey,
-      Y_KEY: spec.yKey,
-      DATA_KEY: spec.yKey,
-      NAME_KEY: spec.xKey,
-      VALUE_EXPRESSION: spec.valueExpression,
-      COLUMNS: spec.columns,
-      DELTA_DIR: spec.deltaDir,
-      DELTA_TEXT: spec.deltaText,
-      SERIES: spec.series,
-      PIVOT_EXPRESSION: spec.pivotExpression,
-      SDK_IMPORT: '', SDK_SERVICE: '', SDK_CALL: '', SDK_RESULT_TYPE: '',
-    })
-  }
 
   // T3-SDK path: injects fnBody into shell template
   if (!metric.fnBody) throw new Error(`T3 metric "${metric.name}" missing fnBody`)
@@ -851,6 +766,8 @@ function specToSubs(spec) {
     SDK_SERVICE: '',
     SDK_CALL: '',
     SDK_RESULT_TYPE: '',
+    SDK_IMPORT_LINE: spec.sdkImportLine ?? '',
+    RESPONSE_TYPE_IMPORT: spec.responseTypeImport ?? '',
   }
 }
 
@@ -1080,24 +997,10 @@ async function runDashboardBuild(intent, intentPath) {
         process.exit(2)
       }
 
-      const t3Template = metric.template ?? metric.displayAs ?? 'ranked-table'
+      const t3Template = metric.displayAs ?? 'ranked-table'
       widgetHashes[componentName] = { hash: hashContent(widgetContent), tier: 'T3', metric: metric.name, template: t3Template }
       widgetMeta.push({ componentName, template: t3Template })
-      // T3-Insights has namespace+method → can generate a detail view using useInsights
-      // T3-SDK has fnBody only → no Insights endpoint exists, skip detail view
-      if (metric.namespace && metric.method) {
-        const responseType = '{ data: Array<Record<string, unknown>> }'
-        const startConst = TIME_RANGE_CONSTANTS[timeRange] ?? 'THIRTY_DAYS_AGO'
-        widgetSpecs[componentName] = {
-          componentName,
-          title: metric.title ?? componentName,
-          description: metric.description ?? '',
-          dataHook: metric.dataHook ?? `useInsights<${responseType}>('${metric.namespace}.${metric.method}', { startTime: ${startConst}, endTime: NOW })`,
-          dataSelector: metric.dataSelector ?? '(data as any)?.data ?? []',
-          columns: metric.columns,
-        }
-      }
-      // T3-SDK: no detail view generated (no Insights endpoint backs it)
+      // T3 widgets never get detail views — no Insights endpoint backs them
       widgetIndex++
       emit('WIDGET_READY', { name: componentName, index: widgetIndex, total })
     }

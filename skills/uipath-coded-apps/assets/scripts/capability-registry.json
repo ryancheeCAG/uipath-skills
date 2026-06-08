@@ -2,10 +2,11 @@
   "t1": {
     "agent-errors": {
       "aliases": ["agent errors", "error count", "errors over time", "agent failures", "error rate trend", "error spikes", "which agents are failing"],
-      "source": "insights",
-      "namespace": "agents",
-      "method": "getErrors",
+      "sdkImport": "@uipath/uipath-typescript/insights",
+      "sdkService": "AgentsInsights",
+      "sdkMethod": "getErrors",
       "template": "line-chart",
+      "responseType": "AgentErrorsResponse",
       "defaults": {
         "title": "Agent Error Rate",
         "description": "Daily error counts — spot spikes early",
@@ -14,16 +15,17 @@
         "yKey": "value",
         "deltaDir": "down-good",
         "deltaText": "errors today",
-        "dataSelector": "(data as any)?.data ?? []",
-        "valueExpression": "String(((data as any)?.data ?? []).reduce((s: number, d: any) => s + (d.value ?? 0), 0))"
+        "dataSelector": "data?.data ?? []",
+        "valueExpression": "String((data?.data ?? []).reduce((s, d) => s + (d.value ?? 0), 0))"
       }
     },
     "invocation-volume": {
       "aliases": ["invocation volume", "total runs", "agent runs", "invocations", "run volume", "execution volume", "agu consumption", "consumption timeline"],
-      "source": "insights",
-      "namespace": "agents",
-      "method": "getConsumptionTimeline",
+      "sdkImport": "@uipath/uipath-typescript/insights",
+      "sdkService": "AgentsInsights",
+      "sdkMethod": "getConsumptionTimeline",
       "template": "area-chart",
+      "responseType": "ConsumptionTimelineResponse",
       "defaults": {
         "title": "Invocation Volume",
         "description": "Agent AGU consumption over time",
@@ -32,21 +34,22 @@
         "yKey": "aguConsumption",
         "deltaDir": "up-good",
         "deltaText": "AGU today",
-        "dataSelector": "(data as any)?.data ?? []",
-        "valueExpression": "String(((data as any)?.data ?? []).reduce((s: number, d: any) => s + (d.aguConsumption ?? 0), 0).toFixed(1))"
+        "dataSelector": "data?.data ?? []",
+        "valueExpression": "String(((data?.data ?? []).reduce((s, d) => s + (d.aguConsumption ?? 0), 0)).toFixed(1))"
       }
     },
     "top-failing-agents": {
       "aliases": ["top failing agents", "most errors by agent", "agent leaderboard errors", "which agents fail most"],
-      "source": "insights",
-      "namespace": "agents",
-      "method": "getTopErroredAgents",
+      "sdkImport": "@uipath/uipath-typescript/insights",
+      "sdkService": "AgentsInsights",
+      "sdkMethod": "getTopErroredAgents",
       "template": "ranked-table",
+      "responseType": "TopErroredAgentsResponse",
       "defaults": {
         "title": "Top Failing Agents",
         "description": "Agents with the most errors",
         "icon": "AlertOctagon",
-        "dataSelector": "(data as any)?.data ?? []",
+        "dataSelector": "data?.data ?? []",
         "columns": "[{key:\"name\",label:\"Agent\"},{key:\"count\",label:\"Errors\",align:\"right\" as const}]",
         "deltaDir": "neutral",
         "deltaText": ""
@@ -54,26 +57,28 @@
     },
     "active-agents-kpi": {
       "aliases": ["active agents", "active agent count", "how many agents", "agent count", "agents running"],
-      "source": "insights",
-      "namespace": "agents",
-      "method": "getAgents",
+      "sdkImport": "@uipath/uipath-typescript/insights",
+      "sdkService": "AgentsInsights",
+      "sdkMethod": "getAgents",
       "template": "kpi-card",
+      "responseType": "AgentsResponse",
       "defaults": {
         "title": "Active Agents",
         "description": "Agents with at least one run",
         "icon": "Bot",
-        "valueExpression": "String((data as any)?.data?.agents?.length ?? 0)",
-        "dataSelector": "(data as any)?.data?.agents ?? []",
+        "valueExpression": "String(data?.data?.agents?.length ?? 0)",
+        "dataSelector": "data?.data?.agents ?? []",
         "deltaDir": "up-good",
         "deltaText": "active agents"
       }
     },
     "agent-latency": {
       "aliases": ["agent latency", "p95 latency", "response time", "execution time", "latency trend"],
-      "source": "insights",
-      "namespace": "agents",
-      "method": "getLatencyTimeline",
+      "sdkImport": "@uipath/uipath-typescript/insights",
+      "sdkService": "AgentsInsights",
+      "sdkMethod": "getLatencyTimeline",
       "template": "multi-line-chart",
+      "responseType": "LatencyTimelineResponse",
       "defaults": {
         "title": "Agent Latency",
         "description": "P50 and P95 execution time",
@@ -82,22 +87,23 @@
         "yKey": "P95",
         "deltaDir": "down-good",
         "deltaText": "ms P95",
-        "dataSelector": "(data as any)?.data ?? []",
+        "dataSelector": "data?.data ?? []",
         "series": "[{key:\"P50\",color:\"hsl(var(--chart-1))\",label:\"P50 ms\"},{key:\"P95\",color:\"hsl(var(--chart-2))\",label:\"P95 ms\"}]",
         "pivotExpression": "rawData.reduce((acc: Record<string, unknown>[], row: any) => { const existing = acc.find((r: any) => r.date === row.date); if (existing) { existing[row.name] = row.value; } else { acc.push({ date: row.date, [row.name]: row.value }); } return acc; }, [])"
       }
     },
     "job-failures": {
       "aliases": ["job failures", "job failure rate", "rpa failures", "process failures", "failed jobs"],
-      "source": "insights",
-      "namespace": "jobs",
-      "method": "getTopFailures",
+      "sdkImport": "@uipath/uipath-typescript/insights",
+      "sdkService": "JobsInsights",
+      "sdkMethod": "getTopFailures",
       "template": "ranked-table",
+      "responseType": "TopFailuresResponse",
       "defaults": {
         "title": "Top Job Failures",
         "description": "Processes with the most failures",
         "icon": "XCircle",
-        "dataSelector": "(data as any)?.data ?? []",
+        "dataSelector": "data?.data ?? []",
         "columns": "[{key:\"processName\",label:\"Process\"},{key:\"failureCount\",label:\"Failures\",align:\"right\" as const}]",
         "deltaDir": "down-good",
         "deltaText": "failures today"
@@ -105,10 +111,11 @@
     },
     "job-completion-trend": {
       "aliases": ["job completions", "completed jobs", "jobs over time", "job volume", "rpa throughput"],
-      "source": "insights",
-      "namespace": "jobs",
-      "method": "getCompletedTimeline",
+      "sdkImport": "@uipath/uipath-typescript/insights",
+      "sdkService": "JobsInsights",
+      "sdkMethod": "getCompletedTimeline",
       "template": "area-chart",
+      "responseType": "CompletedTimelineResponse",
       "defaults": {
         "title": "Job Completions",
         "description": "Jobs completed per day",
@@ -117,7 +124,7 @@
         "yKey": "count",
         "deltaDir": "up-good",
         "deltaText": "completions today",
-        "dataSelector": "(data as any)?.data ?? []"
+        "dataSelector": "data?.data ?? []"
       }
     }
   },

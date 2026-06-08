@@ -61,8 +61,10 @@ test('alias lookup returns null for unknown text', () => {
 test('all T1 entries have required fields', () => {
   for (const [key, entry] of Object.entries(registry.t1)) {
     assert.ok(entry.template, `${key} missing template`)
-    assert.ok(entry.namespace, `${key} missing namespace`)
-    assert.ok(entry.method, `${key} missing method`)
+    assert.ok(entry.sdkImport, `${key} missing sdkImport`)
+    assert.ok(entry.sdkService, `${key} missing sdkService`)
+    assert.ok(entry.sdkMethod, `${key} missing sdkMethod`)
+    assert.ok(entry.responseType, `${key} missing responseType`)
     assert.ok(Array.isArray(entry.aliases) && entry.aliases.length > 0, `${key} missing aliases`)
     assert.ok(entry.defaults?.title, `${key} missing defaults.title`)
   }
@@ -131,9 +133,9 @@ test('validateIntent: rejects T2 metric without params', () => {
   assert.ok(errors.some(e => e.includes('T2') && e.includes('params')))
 })
 
-test('validateIntent: rejects T3 metric without fnBody or namespace+method+template', () => {
+test('validateIntent: rejects T3 metric without fnBody', () => {
   const errors = validateIntent({ dashboardName: 'x', timeRange: '7d', metrics: [{ name: 'custom', tier: 'T3', displayAs: 'ranked-table', title: 'Custom' }] })
-  assert.ok(errors.some(e => e.includes('T3') && (e.includes('fnBody') || e.includes('namespace'))))
+  assert.ok(errors.some(e => e.includes('T3') && e.includes('fnBody')))
 })
 
 // ── resolveMetric + buildT1WidgetSpec tests ───────────────────────────────────
@@ -170,13 +172,18 @@ test('buildT1WidgetSpec: merges registry defaults with intent overrides', () => 
   assert.equal(spec.template, 'line-chart')
   assert.equal(spec.title, 'My Error Chart')
   assert.equal(spec.icon, 'AlertTriangle')
-  assert.ok(spec.dataHook.includes('agents.getErrors'))
-  assert.ok(spec.dataHook.includes('THIRTY_DAYS_AGO'))
+  assert.ok(spec.dataHook.includes('AgentsInsights'), 'dataHook should reference AgentsInsights')
+  assert.ok(spec.dataHook.includes('getErrors'), 'dataHook should reference getErrors')
+  assert.ok(spec.dataHook.includes('THIRTY_DAYS_AGO'), 'dataHook should include time range constant')
+  assert.ok(spec.dataHook.includes('useInsightsSDK'), 'dataHook should use useInsightsSDK')
+  assert.ok(spec.sdkImportLine.includes('AgentsInsights'), 'sdkImportLine should reference AgentsInsights')
+  assert.ok(spec.responseTypeImport.includes('AgentErrorsResponse'), 'responseTypeImport should reference AgentErrorsResponse')
 })
 
 test('buildT1WidgetSpec: uses 7d time range constant', () => {
   const spec = buildT1WidgetSpec({ name: 'agent-errors', tier: 'T1' }, registry.t1['agent-errors'], '7d')
-  assert.ok(spec.dataHook.includes('SEVEN_DAYS_AGO'))
+  assert.ok(spec.dataHook.includes('SEVEN_DAYS_AGO'), 'dataHook should include SEVEN_DAYS_AGO')
+  assert.ok(spec.dataHook.includes('useInsightsSDK'), 'dataHook should use useInsightsSDK')
 })
 
 // ── buildT2WidgetSpec + compileT2ToTypeScript tests ───────────────────────────
@@ -239,17 +246,6 @@ test('buildT3WidgetFile: throws if fnBody is missing and no Insights path', () =
     () => buildT3WidgetFile({ name: 'x', tier: 'T3', title: 'X', displayAs: 'kpi-card' }, '30d'),
     /fnBody/
   )
-})
-
-test('buildT3WidgetFile: T3-Insights path uses applyTemplate', () => {
-  const content = buildT3WidgetFile({
-    name: 'incident-dist', tier: 'T3', title: 'Incidents',
-    namespace: 'agents', method: 'getIncidentDistribution',
-    template: 'donut-chart', dataSelector: '(data as any)?.data ?? []',
-  }, '30d')
-  assert.ok(content.includes('IncidentDist'), 'component name not injected')
-  assert.ok(content.includes('Incidents'), 'title not injected')
-  assert.ok(!content.includes('<<FN_BODY>>'), 'FN_BODY placeholder should not be present')
 })
 
 // ── emit + parseEvent tests ───────────────────────────────────────────────────
@@ -315,7 +311,7 @@ test('validateIntent: rejects T3-SDK with chart displayAs', () => {
     dashboardName: 'x', timeRange: '7d',
     metrics: [{ name: 'custom', tier: 'T3', title: 'X', fnBody: 'return []', displayAs: 'donut-chart' }]
   })
-  assert.ok(errors.some(e => e.includes('unsupported displayAs') && e.includes('T3-Insights')))
+  assert.ok(errors.some(e => e.includes('unsupported displayAs') && e.includes('donut-chart')))
 })
 
 test('validateIntent: accepts T3-SDK with ranked-table displayAs', () => {
