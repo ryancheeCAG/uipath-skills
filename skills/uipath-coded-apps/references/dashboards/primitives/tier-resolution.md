@@ -25,8 +25,6 @@ T3 — Custom
   → T3-SDK: agent writes fnBody
 ```
 
-## T0 — Impossible (Hard Refuse)
-
 ## Tier 1 — Known catalog metrics
 
 | Metric name | What it shows |
@@ -141,14 +139,11 @@ Checked before T1/T2/T3. If a metric matches any row below, it cannot be built i
 | Cross-tenant data | Single-tenant scope only | Multi-widget view within one tenant |
 | SLA breach % | No SLA metadata in platform | Success rate from `job-completion-trend` |
 | Error message text | No aggregation endpoint | `agent-errors` for counts |
-| Governance policy summary | Requires a policy UUID the build script cannot infer | Ask user for the UUID, then use T3-Insights: `{ namespace: "governance", method: "getPolicySummary", ... }` with the UUID in the request |
+| Governance policy summary | Requires a specific policy UUID the build script cannot infer | Ask user for the UUID, then use T3-SDK with `GovernanceInsights.getPolicySummary({ policy: "<UUID>", ... })` |
 
 ## SDK usage patterns
 
-The canonical SDK reference is fetched live in the parallel blast:
-`https://uipath.github.io/uipath-typescript/llms-full-content.txt`
-
-These patterns cover **only** what that document omits — patterns specific to how the dashboard skill uses the SDK inside generated widget code.
+Patterns specific to how the dashboard skill uses the SDK inside generated widget code.
 
 ### Constructor injection — use `as never`, not bare `sdk`
 
