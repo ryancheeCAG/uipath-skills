@@ -187,6 +187,61 @@ Tell the user: "OAuth app created — building now."
 
 ---
 
+## Phase 3.5 — Verify SDK types from scaffold (0–N parallel Reads)
+
+After the user confirms, before writing intent.json to disk, verify field names for any T2 or T3-SDK metrics against the actual TypeScript declaration files in the scaffold.
+
+These files are the exact same source the TypeScript compiler uses — field names are guaranteed correct.
+
+**Path:** `<SCAFFOLD_DIR>/node_modules/@uipath/uipath-typescript/dist/<service>/index.d.ts`
+
+Where `<SCAFFOLD_DIR>` is the project directory + `/../scaffold` relative to SKILL_BASE_DIR:
+```
+<SKILL_BASE_DIR>/assets/templates/dashboard/scaffold/node_modules/@uipath/uipath-typescript/dist/
+```
+
+**When to read:**
+- **T2 metrics**: Read the `.d.ts` for the service in the registry entry (e.g. `dist/jobs/index.d.ts` for `jobs-by-state`). Verify the `filterField` exists on the response type.
+- **T3-SDK metrics**: Read the `.d.ts` for any service the `fnBody` imports (e.g. if fnBody uses `Jobs`, read `dist/jobs/index.d.ts`). Verify field names used in `.map()` expressions match the response type.
+- **T1 and T3-Insights**: Skip — they use Insights RTM via `useInsights`, which has no SDK types yet.
+
+**Fire all relevant reads in ONE parallel message.** If the scaffold's node_modules doesn't exist yet (pre-warm still running), skip this phase and rely on the SDK docs from Turn 2.
+
+**Check: does the scaffold have node_modules?**
+```bash
+node -e "
+const path = require('path')
+const sdkDist = path.join('<SKILL_BASE_DIR>', 'assets', 'templates', 'dashboard', 'scaffold', 'node_modules', '@uipath', 'uipath-typescript', 'dist')
+process.exit(require('fs').existsSync(sdkDist) ? 0 : 1)
+" && echo SDK_TYPES_AVAILABLE || echo SDK_TYPES_NOT_READY
+```
+
+**If SDK_TYPES_AVAILABLE:** Read relevant `.d.ts` files in parallel, then adjust intent.json if any field names are wrong.
+
+**If SDK_TYPES_NOT_READY:** Skip — the build script's `tsc --noEmit` will catch type errors.
+
+**Example — verifying `jobs-by-state` T2 metric:**
+
+Read `<SKILL_BASE_DIR>/assets/templates/dashboard/scaffold/node_modules/@uipath/uipath-typescript/dist/jobs/index.d.ts`
+
+Check that `JobGetResponse` has a `state` field. From the `.d.ts`:
+```typescript
+export interface JobGetResponse {
+  key: string
+  state: JobState         ← ✓ confirmed
+  processName: string
+  ...
+}
+```
+
+**Example — verifying a T3-SDK fnBody:**
+
+If fnBody uses `j.processName` after calling `Jobs.getAll()`, reading `dist/jobs/index.d.ts` confirms `processName` exists on `JobGetResponse`. If the code used `j.name` instead, this phase catches the error before the build script's tsc.
+
+**After verification:** Update intent.json in memory with any corrected field names, then proceed to Phase 4.
+
+---
+
 ## Phase 4 — Build (one tool call)
 
 `SKILL_BASE_DIR` is the directory shown in "Base directory for this skill:" from your activation message — the same directory that contains `SKILL.md`. It ends in `/skills/uipath-coded-apps` (or the equivalent Windows path).
