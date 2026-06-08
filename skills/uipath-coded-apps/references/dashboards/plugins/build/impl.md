@@ -118,23 +118,59 @@ process.exit(intent.clientId ? 0 : 1)
 
 **If user provides their client ID:** write it into intent.json, go to Phase 5.
 
-**If user says create one:**
+**If user wants one created:**
+
+First, discover which scopes are valid in this environment:
+
+```bash
+uip admin scopes list --output json
+```
+
+From the JSON response, extract the scope names (look for a `Data` array with `Name` or `Scope` fields). Then intersect with the desired scopes:
+
+**Desired scopes** (use whichever are available in the environment):
+```
+OR.Assets OR.Assets.Read OR.Jobs OR.Jobs.Read OR.Folders OR.Folders.Read
+OR.Buckets OR.Buckets.Read OR.Execution OR.Execution.Read
+OR.Tasks OR.Tasks.Read OR.Queues OR.Queues.Read
+OR.Users OR.Users.Read Insights Insights.RealTimeData
+```
+
+Build the `--user-scope` argument from the intersection of desired and available scopes (comma-separated, no spaces).
+
+Then create the app:
 
 ```bash
 uip admin external-apps create "UiPath Dashboard - <DASHBOARD_NAME>" \
   --non-confidential \
   --redirect-uri "http://localhost:57173" \
-  --user-scope "OR.Assets.Read,OR.Jobs,OR.Folders.Read,OR.Buckets.Read,OR.Execution.Read,OR.Tasks,OR.Queues.Read,OR.Users.Read,Insights,Insights.RealTimeData" \
+  --user-scope "<INTERSECTION_OF_AVAILABLE_SCOPES>" \
   --output json
 ```
 
-Read `ClientId` from the JSON response. Write it into intent.json. Respond: "Done — building now."
+Read `ClientId` from the JSON response and write it into intent.json.
+
+> **Note:** If `Insights` and `Insights.RealTimeData` are not available in this environment, T1 Insights widgets (invocation volume, error rate, latency) will return 401/403 in the browser. Warn the user: "Insights scopes are not available in this environment — Insights-based widgets will not show data. SDK-based widgets (T3-SDK) will still work."
+
+Tell the user: "OAuth app created — building now."
 
 **If command fails:** direct user to `<CLOUD_URL>/<ORG>/portal_/adminui/#/externalApps`. Do not proceed without `clientId`.
 
 ---
 
 ## Phase 5 — Build (one tool call)
+
+`SKILL_BASE_DIR` is the directory shown in "Base directory for this skill:" from your activation message — the same directory that contains `SKILL.md`. It ends in `/skills/uipath-coded-apps` (or the equivalent Windows path).
+
+The build script is always at:
+```
+$SKILL_BASE_DIR/assets/scripts/build-dashboard.mjs
+```
+
+On Windows:
+```
+<SKILL_BASE_DIR>\assets\scripts\build-dashboard.mjs
+```
 
 Write intent.json to disk, then run:
 

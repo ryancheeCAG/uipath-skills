@@ -31,6 +31,18 @@ const r   = await svc.getAll({})
 // Never: sdk.jobs.getAll()                // ✗ does not exist
 ```
 
+**Dynamic import is required inside fnBody** — the generated file has no static SDK imports. Always use `await import(...)` to load the service class:
+
+```typescript
+// Correct — dynamic import inside async function
+const { Jobs } = await import('@uipath/uipath-typescript/jobs')
+const svc = new Jobs(sdk as never)
+
+// Wrong — static imports are not available in fnBody context
+import { Jobs } from '@uipath/uipath-typescript/jobs'  // ✗ not available
+sdk.jobs.getAll()  // ✗ does not exist
+```
+
 ---
 
 ## Jobs — `@uipath/uipath-typescript/jobs`

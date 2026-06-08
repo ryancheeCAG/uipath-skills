@@ -1143,6 +1143,23 @@ async function runIncrementalEdit(editIntent, intentPath) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
 
+  // --prewarm <projectDir> mode: copy scaffold + run npm ci, then exit
+  // Used to pre-warm dependencies in the background while the agent shows the plan
+  if (process.argv[2] === '--prewarm' && process.argv[3]) {
+    const prewarmDir = resolve(process.argv[3])
+    if (!existsSync(join(prewarmDir, 'package.json'))) {
+      if (!existsSync(SCAFFOLD_DIR)) {
+        process.stderr.write(`ERROR: Scaffold not found at ${SCAFFOLD_DIR}\n`)
+        process.exit(1)
+      }
+      mkdirSync(prewarmDir, { recursive: true })
+      copyDir(SCAFFOLD_DIR, prewarmDir)
+      try { rmSync(join(prewarmDir, 'node_modules'), { recursive: true, force: true }) } catch { /* ignore */ }
+    }
+    await runPrewarm(prewarmDir)
+    process.exit(0)
+  }
+
   const planArg = process.argv[2]
   if (!planArg) fail('Usage: node build-dashboard.mjs <intent.json|edit-intent.json>')
 

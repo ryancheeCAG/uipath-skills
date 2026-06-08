@@ -81,10 +81,15 @@ For data not available via Insights RTM. Provide an async function body using `s
 T3-SDK rules for fnBody:
 - Must return `Promise<Array<Record<string, unknown>>>`
 - Use constructor injection: `new ServiceClass(sdk as never)` — never `sdk.serviceName.method()`
-- ServiceClass names: Queues, Jobs, Assets, Tasks, Processes, Entities (import from @uipath/uipath-typescript/* as needed — shell provides the sdk object, not imports)
+- **SDK service classes must use dynamic import inside fnBody** — static imports are not available in the generated file. The shell provides React, UI components, and `useAuth` only.
+  ```typescript
+  // Inside fnBody — dynamic import is valid in async functions
+  const { Jobs } = await import('@uipath/uipath-typescript/jobs')
+  const svc = new Jobs(sdk as never)
+  const result = await svc.getAll({})
+  ```
 - Use `await` for all async operations
-- No `import` statements (shell provides all imports)
-- No JSX
+- No JSX, no static `import` statements at the top level of fnBody
 
 ### SDK service class reference
 

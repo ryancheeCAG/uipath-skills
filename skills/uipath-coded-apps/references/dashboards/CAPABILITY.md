@@ -22,15 +22,21 @@ Fire all of these simultaneously. This is the only turn before the plan.
 
 **Reads (all parallel):**
 
+> **Path note:** All file paths in the table below are relative to `SKILL_BASE_DIR` — the directory where `SKILL.md` lives (shown as "Base directory for this skill:" in your activation message). They are **not** relative to this file's location (`references/dashboards/`). When reading these files, prefix each path with your `SKILL_BASE_DIR`.
+>
+> Verify: this file's own path is `$SKILL_BASE_DIR/references/dashboards/CAPABILITY.md`
+
 | File | Purpose |
 |------|---------|
-| `plugins/build/impl.md` | Full build instructions |
-| `primitives/tier-resolution.md` | Metric classification + hard-refuse list |
-| `primitives/auth-context.md` | Login + credential extraction |
-| `primitives/sdk-field-reference.md` | SDK response shapes + import paths |
-| `primitives/build-plan.md` | intent.json schema |
-| `aesthetic/layout-patterns.md` | Layout rules |
-| `assets/scripts/capability-registry.json` | Metric catalog |
+| `references/dashboards/plugins/build/impl.md` *(from skill root)* | Full build instructions |
+| `references/dashboards/primitives/tier-resolution.md` *(from skill root)* | Metric classification + hard-refuse list |
+| `references/dashboards/primitives/auth-context.md` *(from skill root)* | Login + credential extraction |
+| `references/dashboards/primitives/sdk-field-reference.md` *(from skill root)* | SDK response shapes + import paths |
+| `references/dashboards/primitives/build-plan.md` *(from skill root)* | intent.json schema |
+| `references/dashboards/aesthetic/layout-patterns.md` *(from skill root)* | Layout rules |
+| `assets/scripts/capability-registry.json` *(from skill root)* | Metric catalog |
+
+> All `references/dashboards/` paths are inside this file's own directory. The `assets/` paths are at the skill root — two levels up from this file.
 
 **Commands (in the same message):**
 
@@ -47,14 +53,14 @@ fs.existsSync('.dashboard/state.json') ? process.exit(0) : process.exit(1)
 
 **Pre-warm — fire in background, do NOT wait:**
 
-Derive the routing name from the user's request (e.g. `agent-health-x7k2`), then fire npm ci immediately:
+Derive `<PROJECT_DIR>` from the user's request (e.g. `~/dashboards/agent-health-x7k2` or an absolute path the user specifies), then fire the build script's prewarm mode immediately:
 
 ```bash
-# run_in_background: true — do not wait for this
-mkdir -p ~/dashboards/<ROUTING_NAME> && npm --prefix ~/dashboards/<ROUTING_NAME> ci --prefer-offline 2>&1
+# run_in_background: true — fire this and continue immediately, do NOT wait
+node "<SKILL_BASE_DIR>/assets/scripts/build-dashboard.mjs" --prewarm "<PROJECT_DIR>"
 ```
 
-Set `run_in_background: true` on this Bash call. Continue to the plan output immediately — do not wait for npm ci.
+This uses the build script to copy the scaffold and run `npm ci` — works correctly on Windows and Unix. Set `run_in_background: true` on this Bash call. The build script emits `PREWARM_DONE` when complete. Continue to the plan output immediately — do not wait.
 
 ---
 
