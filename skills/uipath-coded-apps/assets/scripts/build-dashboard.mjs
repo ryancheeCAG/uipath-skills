@@ -32,6 +32,9 @@ const SCAFFOLD_DIR = resolve(__dirname, '../templates/dashboard/scaffold')
 const WIDGETS_DIR = resolve(__dirname, '../templates/dashboard/widgets')
 const T3_SHELL_TEMPLATE_PATH = resolve(__dirname, '../templates/dashboard/widgets/t3-shell.tsx.template')
 
+/** Fixed dev server port — high enough to avoid common app collisions */
+const DASHBOARD_PORT = 57173
+
 // ── Capability registry ────────────────────────────────────────────────────────
 
 const REGISTRY = JSON.parse(readFileSync(resolve(__dirname, 'capability-registry.json'), 'utf8'))
@@ -780,6 +783,7 @@ async function runDashboardBuild(intent, intentPath) {
       `VITE_INSIGHTS_TENANT_ID=${tenantId}`,
       `VITE_UIPATH_CLIENT_ID=${clientId}`,
       `VITE_UIPATH_SCOPE=OR.Assets.Read OR.Jobs OR.Folders.Read OR.Buckets.Read OR.Execution.Read OR.Tasks OR.Queues.Read OR.Users.Read Insights Insights.RealTimeData`,
+      `VITE_DEV_PORT=${DASHBOARD_PORT}`,
     ].join('\n'))
     const uipathJsonPath = join(P, 'uipath.json')
     if (existsSync(uipathJsonPath) && clientId) {
@@ -959,13 +963,15 @@ async function runDashboardBuild(intent, intentPath) {
 
     // Step 8 — Start dev server
     const isWindows = process.platform === 'win32'
-    const server = spawn('npm', ['run', 'dev'], {
-      cwd: P, detached: true, stdio: 'pipe', shell: isWindows,
-    })
+    const server = spawn(
+      'npm',
+      ['run', 'dev', '--', '--port', String(DASHBOARD_PORT)],
+      { cwd: P, detached: true, stdio: 'pipe', shell: isWindows }
+    )
     server.on('error', () => {})
     server.unref()
 
-    const port = await detectDevServerPort(5173, 8000)
+    const port = await detectDevServerPort(DASHBOARD_PORT, 8000)
 
     emit('SERVER_READY', { port, url: `http://localhost:${port}` })
     emit('BUILD_RESULT', {

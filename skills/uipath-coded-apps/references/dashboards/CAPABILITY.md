@@ -13,6 +13,7 @@ Fire all of these simultaneously before any other work:
 | `plugins/build/impl.md` | Full build instructions |
 | `primitives/tier-resolution.md` | Metric classification + hard-refuse list |
 | `primitives/auth-context.md` | Login + credential extraction |
+| `primitives/sdk-field-reference.md` | SDK service classes, import subpaths, response field names |
 | `primitives/build-plan.md` | intent.json schema |
 | `aesthetic/layout-patterns.md` | Layout rules |
 | `assets/scripts/capability-registry.json` | Metric catalog (machine-readable T1/T2 entries) |

@@ -90,9 +90,7 @@ process.exit(intent.clientId ? 0 : 1)
 ```bash
 uip admin external-apps create "UiPath Dashboard - <DASHBOARD_NAME>" \
   --non-confidential \
-  --redirect-uri "http://localhost:5173" \
-  --redirect-uri "http://localhost:5174" \
-  --redirect-uri "http://localhost:5175" \
+  --redirect-uri "http://localhost:57173" \
   --user-scope "OR.Assets.Read,OR.Jobs,OR.Folders.Read,OR.Buckets.Read,OR.Execution.Read,OR.Tasks,OR.Queues.Read,OR.Users.Read,Insights,Insights.RealTimeData" \
   --output json
 ```

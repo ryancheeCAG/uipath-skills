@@ -25,7 +25,7 @@ function resolveConfig(): UiPathSDKConfig {
     tenantName:  import.meta.env.VITE_UIPATH_TENANT_NAME as string,
     clientId:    import.meta.env.VITE_UIPATH_CLIENT_ID as string,
     scope:       SCOPES,
-    redirectUri: `${window.location.origin}${window.location.pathname}`,
+    redirectUri: `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, ''),
   }
 }
 

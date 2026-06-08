@@ -32,6 +32,7 @@ export default defineConfig({
     include: ['@uipath/uipath-typescript'],
   },
   server: {
-    port: 5173,
+    port: Number(process.env.VITE_DEV_PORT ?? 57173),
+    strictPort: false,
   },
 })
