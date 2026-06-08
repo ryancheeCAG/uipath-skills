@@ -377,22 +377,22 @@ function generateDashboardFiles(projectPath, widgetMeta, dashboardName) {
   const indexTs = widgetNames.map(n => `export { ${n} } from './${n}'`).join('\n') + '\n'
 
   const kpiSection = kpis.length ? `
-        {/* KPI row */}
-        <div className="grid ${kpiGrid} gap-4">
-          ${kpis.map(w => `<${w.componentName} />`).join('\n          ')}
-        </div>` : ''
+          {/* KPI row */}
+          <div className="grid ${kpiGrid} gap-6">
+            ${kpis.map(w => `<${w.componentName} />`).join('\n            ')}
+          </div>` : ''
 
   const chartSection = charts.length ? `
-        {/* Charts */}
-        <div className="grid grid-cols-1 ${charts.length > 1 ? 'lg:grid-cols-2' : ''} gap-4 mt-6">
-          ${charts.map(w => `<${w.componentName} />`).join('\n          ')}
-        </div>` : ''
+          {/* Charts */}
+          <div className="grid grid-cols-1 ${charts.length > 1 ? 'lg:grid-cols-2' : ''} gap-6 mt-10">
+            ${charts.map(w => `<${w.componentName} />`).join('\n            ')}
+          </div>` : ''
 
   const tableSection = tables.length ? `
-        {/* Tables */}
-        <div className="space-y-4 mt-6">
-          ${tables.map(w => `<${w.componentName} />`).join('\n          ')}
-        </div>` : ''
+          {/* Tables */}
+          <div className="space-y-6 mt-10">
+            ${tables.map(w => `<${w.componentName} />`).join('\n            ')}
+          </div>` : ''
 
   const dashboardJsx = `import React from 'react'
 import { Header } from '@/dashboard/chrome/Header'
@@ -402,7 +402,7 @@ export function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       <Header title="${dashboardName}" description="Operational metrics dashboard" />
-      <div className="p-4 md:p-8">${kpiSection}${chartSection}${tableSection}
+      <div className="mx-auto max-w-screen-2xl px-4 py-8 md:px-8 md:py-10">${kpiSection}${chartSection}${tableSection}
       </div>
     </div>
   )
