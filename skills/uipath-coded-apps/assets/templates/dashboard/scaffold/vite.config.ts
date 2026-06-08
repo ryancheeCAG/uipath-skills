@@ -33,6 +33,6 @@ export default defineConfig({
   },
   server: {
     port: Number(process.env.VITE_DEV_PORT ?? 57173),
-    strictPort: false,
+    strictPort: true,   // fail fast if port is busy — caller must kill the old server first
   },
 })

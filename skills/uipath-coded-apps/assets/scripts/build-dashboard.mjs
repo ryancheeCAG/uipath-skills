@@ -716,6 +716,48 @@ function specToSubs(spec) {
 // ── Build pipelines ────────────────────────────────────────────────────────────
 
 /**
+ * Kill a previously-started dev server using the PID stored in a file.
+ * Cross-platform: taskkill /T on Windows (kills process tree), SIGTERM on Unix.
+ * Waits up to 1500ms for the port to become free after killing.
+ * @param {string} pidFile - Absolute path to the .pid file
+ * @returns {Promise<void>}
+ */
+async function killPreviousDevServer(pidFile) {
+  if (!existsSync(pidFile)) return
+
+  let pid
+  try {
+    pid = parseInt(readFileSync(pidFile, 'utf8').trim(), 10)
+  } catch { return }
+
+  if (!pid || isNaN(pid)) return
+
+  try {
+    if (process.platform === 'win32') {
+      // /T kills the entire process tree (npm → node → Vite); /F forces termination
+      execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'pipe' })
+    } else {
+      process.kill(pid, 'SIGTERM')
+    }
+  } catch { /* process already dead — ignore */ }
+
+  // Wait for port to become free (up to 1500ms)
+  const deadline = Date.now() + 1500
+  while (Date.now() < deadline) {
+    const stillOpen = await new Promise(resolve => {
+      const socket = createConnection({ port: DASHBOARD_PORT, host: 'localhost' })
+      socket.once('connect', () => { socket.destroy(); resolve(true) })
+      socket.once('error', () => resolve(false))
+      socket.setTimeout(300, () => { socket.destroy(); resolve(false) })
+    })
+    if (!stillOpen) break
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200)
+  }
+
+  try { unlinkSync(pidFile) } catch { /* ignore */ }
+}
+
+/**
  * Poll until a TCP port accepts connections or the deadline passes.
  * Returns the port that responded, or the starting port if none responded.
  * @param {number} startPort
@@ -963,7 +1005,10 @@ async function runDashboardBuild(intent, intentPath) {
     }
     writeAtomic(statePath, JSON.stringify(newState, null, 2))
 
-    // Step 8 — Start dev server
+    // Step 8 — Start dev server (kill previous one first to guarantee port 57173)
+    const serverPidFile = join(P, '.dashboard', 'server.pid')
+    await killPreviousDevServer(serverPidFile)
+
     const isWindows = process.platform === 'win32'
     const server = spawn(
       'npm',
@@ -972,6 +1017,11 @@ async function runDashboardBuild(intent, intentPath) {
     )
     server.on('error', () => {})
     server.unref()
+
+    // Persist PID so future builds can kill this server before starting their own
+    if (server.pid) {
+      writeAtomic(serverPidFile, String(server.pid))
+    }
 
     const port = await detectDevServerPort(DASHBOARD_PORT, 8000)
 
