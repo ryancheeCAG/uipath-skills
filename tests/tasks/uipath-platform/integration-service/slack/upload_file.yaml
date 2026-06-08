@@ -3,7 +3,7 @@ description: >
   Multipart upload test on the Slack connector — wires the "Send File to
   Channel" activity with a small text file and a Decision + Terminate
   failure-routing pair.
-tags: [uipath-platform, uipath-maestro-flow, integration, lifecycle:generate, shape:multi-node, connector, uipath-salesforce-slack, ipe]
+tags: [uipath-platform, integration, lifecycle:generate, shape:multi-node, connector, uipath-salesforce-slack, ipe]
 
 agent:
   type: claude-code

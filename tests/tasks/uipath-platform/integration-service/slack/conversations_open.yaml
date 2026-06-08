@@ -2,7 +2,7 @@ task_id: skill-ipe-slack-conversations-open
 description: >
   Basic CRUD body-parameter test on the Slack connector — exercises the "Create Group Direct Message"
   activity with structural and CLI-pattern validation.
-tags: [uipath-platform, uipath-maestro-flow, integration, lifecycle:generate, shape:multi-node, connector, uipath-salesforce-slack, ipe]
+tags: [uipath-platform, integration, lifecycle:generate, shape:multi-node, connector, uipath-salesforce-slack, ipe]
 
 agent:
   type: claude-code

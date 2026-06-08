@@ -3,7 +3,7 @@ description: >
   Basic CRUD body-parameter test on the Slack connector — wires the "Send
   Message to Channel" activity with required body fields and a Decision +
   Terminate failure-routing pair.
-tags: [uipath-platform, uipath-maestro-flow, integration, lifecycle:generate, shape:multi-node, connector, uipath-salesforce-slack, ipe]
+tags: [uipath-platform, integration, lifecycle:generate, shape:multi-node, connector, uipath-salesforce-slack, ipe]
 
 agent:
   type: claude-code
