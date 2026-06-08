@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { validateIntent, resolveMetric, buildT1WidgetSpec, buildT2WidgetSpec, compileT2ToTypeScript, buildT3WidgetFile, emit, parseEvent, classifyEditIntent } from '../build-dashboard.mjs'
+import { validateIntent, resolveMetric, buildT1WidgetSpec, buildT2WidgetSpec, compileT2ToTypeScript, buildT3WidgetFile, emit, parseEvent, classifyEditIntent, VALID_T3_SDK_DISPLAY_TYPES } from '../build-dashboard.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REGISTRY_PATH = resolve(__dirname, '../capability-registry.json')
@@ -306,4 +306,33 @@ test('parseEvent: recognizes AUTH_MISSING event', () => {
   const result = parseEvent('AUTH_MISSING:{"var":"clientId","message":"No client ID"}')
   assert.equal(result.type, 'AUTH_MISSING')
   assert.equal(result.payload.var, 'clientId')
+})
+
+// ── VALID_T3_SDK_DISPLAY_TYPES + T3-SDK displayAs validation tests ────────────
+
+test('validateIntent: rejects T3-SDK with chart displayAs', () => {
+  const errors = validateIntent({
+    dashboardName: 'x', timeRange: '7d',
+    metrics: [{ name: 'custom', tier: 'T3', title: 'X', fnBody: 'return []', displayAs: 'donut-chart' }]
+  })
+  assert.ok(errors.some(e => e.includes('unsupported displayAs') && e.includes('T3-Insights')))
+})
+
+test('validateIntent: accepts T3-SDK with ranked-table displayAs', () => {
+  const errors = validateIntent({
+    dashboardName: 'x', timeRange: '7d',
+    metrics: [{ name: 'custom', tier: 'T3', title: 'X', fnBody: 'return []', displayAs: 'ranked-table' }]
+  })
+  assert.deepEqual(errors, [])
+})
+
+test('buildT3WidgetFile: injects valueField and valueLabel placeholders', () => {
+  const content = buildT3WidgetFile({
+    name: 'running-jobs', tier: 'T3', title: 'Running Jobs', displayAs: 'kpi-card',
+    fnBody: 'return []', valueField: 'count', valueLabel: 'running jobs'
+  })
+  assert.ok(content.includes("const VALUE_FIELD = 'count'"))
+  assert.ok(content.includes("const VALUE_LABEL = 'running jobs'"))
+  assert.ok(!content.includes('<<VALUE_FIELD>>'))
+  assert.ok(!content.includes('<<VALUE_LABEL>>'))
 })

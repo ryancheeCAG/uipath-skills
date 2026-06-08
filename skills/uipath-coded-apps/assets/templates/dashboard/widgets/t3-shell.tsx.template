@@ -16,7 +16,8 @@ const customDataFn = async (sdk: any, getToken: () => Promise<string>): Promise<
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DISPLAY_AS: string = '<<DISPLAY_AS>>'
-
+const VALUE_FIELD = '<<VALUE_FIELD>>'
+const VALUE_LABEL = '<<VALUE_LABEL>>'
 const COLUMNS: ColumnDef<Row>[] = <<COLUMNS>>
 
 function use<<COMPONENT_NAME>>Data() {
@@ -54,12 +55,16 @@ export function <<COMPONENT_NAME>>() {
       )
     }
 
-    // KPI / fallback: show count or first numeric value
-    const firstNumeric = Object.values(data[0] ?? {}).find(v => typeof v === 'number')
-    const display = firstNumeric !== undefined ? String(firstNumeric) : String(data.length)
+    // kpi-card: show a specific field value or item count
+    const headline = VALUE_FIELD
+      ? String((data[0] as Record<string, unknown>)?.[VALUE_FIELD] ?? '—')
+      : String(data.length)
+    const label = VALUE_LABEL || (VALUE_FIELD ? VALUE_FIELD : `${data.length === 1 ? 'item' : 'items'}`)
+
     return (
-      <div className="flex items-baseline gap-1">
-        <span className="text-3xl font-bold tabular-nums">{display}</span>
+      <div className="flex flex-col gap-1 py-2">
+        <span className="text-3xl font-bold tabular-nums text-foreground">{headline}</span>
+        {label && <span className="text-sm text-muted-foreground">{label}</span>}
       </div>
     )
   }

@@ -63,6 +63,8 @@ const REGISTRY = JSON.parse(readFileSync(resolve(__dirname, 'capability-registry
  * @property {string}      [method]      - T3-Insights: endpoint method name
  * @property {string}      [template]    - T3-Insights: widget template name
  * @property {string}      [displayAs]   - T3-SDK: widget template name
+ * @property {string}      [valueField]  - T3-SDK kpi-card: which field to display as the headline number
+ * @property {string}      [valueLabel]  - T3-SDK kpi-card: label shown below the headline (e.g. "running jobs")
  * @property {string}      [dataSelector]
  * @property {string}      [dataHook]
  * @property {string}      [columns]     - ColumnDef array literal string
@@ -170,6 +172,9 @@ const VALID_T2_OPS = ['gt', 'lt', 'eq', 'gte', 'lte', 'neq']
 const T2_OP_TO_JS = { gt: '>', lt: '<', eq: '===', gte: '>=', lte: '<=', neq: '!==' }
 
 const VALID_EDIT_OPS = ['ADD', 'REMOVE', 'CHANGE', 'REBUILD']
+
+/** Display types supported by the T3-SDK shell template */
+export const VALID_T3_SDK_DISPLAY_TYPES = ['kpi-card', 'ranked-table', 'data-table']
 
 // ── Low-level utilities ────────────────────────────────────────────────────────
 
@@ -555,7 +560,17 @@ export function validateIntent(intent) {
       if (!hasSdkPath && !hasInsightsPath) {
         errors.push(`T3 metric "${m.name}" needs either fnBody (SDK path) or namespace+method+template (Insights path)`)
       }
-      if (hasSdkPath && !m.displayAs) errors.push(`T3 metric "${m.name}" with fnBody needs displayAs`)
+      if (hasSdkPath) {
+        if (!m.displayAs) {
+          errors.push(`T3 metric "${m.name}" with fnBody needs displayAs — valid values: ${VALID_T3_SDK_DISPLAY_TYPES.join(', ')}`)
+        } else if (!VALID_T3_SDK_DISPLAY_TYPES.includes(m.displayAs)) {
+          errors.push(
+            `T3 metric "${m.name}" has unsupported displayAs "${m.displayAs}" for T3-SDK. ` +
+            `Valid values: ${VALID_T3_SDK_DISPLAY_TYPES.join(', ')}. ` +
+            `For chart types (area-chart, line-chart, donut-chart), use T3-Insights (namespace + method + template) instead.`
+          )
+        }
+      }
     }
   }
   return errors
@@ -758,6 +773,8 @@ export function buildT3WidgetFile(metric, timeRange = '30d') {
   const indentedFnBody = metric.fnBody.split('\n').map(l => '  ' + l).join('\n')
   const columns = metric.columns
     ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]'
+  const valueField = metric.valueField ?? ''
+  const valueLabel = metric.valueLabel ?? ''
   let content = readFileSync(T3_SHELL_TEMPLATE_PATH, 'utf8')
   content = content
     .split('<<FN_BODY>>').join(indentedFnBody)
@@ -767,6 +784,8 @@ export function buildT3WidgetFile(metric, timeRange = '30d') {
     .split('<<ICON_NAME>>').join(iconName)
     .split('<<DISPLAY_AS>>').join(metric.displayAs ?? 'ranked-table')
     .split('<<COLUMNS>>').join(columns)
+    .split('<<VALUE_FIELD>>').join(valueField)
+    .split('<<VALUE_LABEL>>').join(valueLabel)
   return content
 }
 
