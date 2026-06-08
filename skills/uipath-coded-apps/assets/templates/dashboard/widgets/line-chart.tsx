@@ -2,7 +2,9 @@ import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { <ICON> } from 'lucide-react'
-import { useInsights } from '@/hooks/useInsights'
+import { useInsightsSDK } from '@/hooks/useInsightsSDK'
+<RESPONSE_TYPE_IMPORT>
+<SDK_IMPORT_LINE>
 import { DeltaBadge, ViewAllLink, LoadingState, EmptyState } from '@/dashboard/chrome'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { fmtNumber } from '@/lib/format'

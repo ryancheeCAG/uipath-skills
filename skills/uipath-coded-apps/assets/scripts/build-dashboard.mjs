@@ -348,7 +348,7 @@ function generateViewFile(widget) {
   return `import React from 'react'
 import { DetailViewShell } from '@/dashboard/chrome/DetailViewShell'
 import { RecordsTable, type ColumnDef } from '@/dashboard/chrome/RecordsTable'
-import { useInsights } from '@/hooks/useInsights'
+import { useInsightsSDK } from '@/hooks/useInsightsSDK'
 import { LoadingState, EmptyState } from '@/dashboard/chrome'
 
 ${TIME_CONSTANTS.trimEnd()}

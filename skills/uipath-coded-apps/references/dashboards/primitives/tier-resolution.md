@@ -22,8 +22,7 @@ T2 — Parametric check
   ↓
 T3 — Custom
   → tier = "T3"
-  → Has Insights SDK service + method? → T3-Insights (namespace + method + template)
-  → Else → T3-SDK (agent writes fnBody)
+  → T3-SDK: agent writes fnBody
 ```
 
 ## T0 — Impossible (Hard Refuse)
@@ -61,89 +60,46 @@ T2 params format:
 
 ## Tier 3 — Custom metrics
 
-Use when the metric doesn't match T1 or T2. Two sub-paths:
+Use when the metric doesn't match T1 or T2. There is now one path: T3-SDK.
 
-### T3-Insights: custom Insights RTM endpoint
+All Insights metrics that aren't in the T1 catalog should use T3-SDK with the Insights SDK service classes — the same pattern as all other SDK services.
 
-For Insights RTM endpoints **not in the T1 catalog but present in `InsightsClient`**. `InsightsKey` is a **closed type union** — only the exact methods listed below are valid. Guessing a method name will cause `Argument of type '"agents.getTopInvokedAgents"' is not assignable to parameter of type 'InsightsKey'`.
+### T3-SDK: agent writes an async function body
 
-**Complete valid InsightsKey list (28 keys):**
-
-| Namespace | Valid methods |
-|-----------|--------------|
-| `agents` | `getSummaryV2` `getErrors` `getTopErroredAgents` `getIncidents` `getIncidentDistribution` `getConsumption` `getConsumptionTimeline` `getLatencyTimeline` `getAgents` `getUnitConsumption` `getNames` |
-| `traceview` | `getLatencyTimeline` `getErrorsTimeline` `getMemoryTimeline` `getMemoryCallsTimeline` `getTopMemorySpaces` `getUnitConsumption` |
-| `governance` | `getPolicySummary` `getPolicyTraces` `getOperationSummary` |
-| `jobs` | `getSummary` `getCompletedTimeline` `getUncompletedTimeline` `getTopFailures` `getFailuresByReason` `getProcessDetails` `getFailureDetails` |
-
-The build script validates your `namespace.method` against this list at code-generation time and fails early with the valid options rather than at `tsc`.
-
-Example:
 ```json
 {
   "name": "incident-distribution",
   "tier": "T3",
   "title": "Incident Distribution",
-  "namespace": "agents",
-  "method": "getIncidentDistribution",
-  "template": "donut-chart",
-  "dataSelector": "(data as any)?.data ?? []",
-  "xKey": "name",
-  "yKey": "value",
-  "description": "Incident types as a breakdown"
+  "description": "Types of agent incidents",
+  "displayAs": "ranked-table",
+  "columns": "[{key:\"name\",label:\"Type\"},{key:\"count\",label:\"Count\",align:\"right\" as const}]",
+  "fnBody": "const { AgentsInsights } = await import('@uipath/uipath-typescript/insights')\nconst svc = new AgentsInsights(sdk as never)\nconst result = await svc.getIncidentDistribution({ startTime: THIRTY_DAYS_AGO, endTime: NOW })\nreturn result?.data ?? []"
 }
 ```
 
-### T3-SDK: custom SDK query or custom HTTP call
+`displayAs` must be one of: `kpi-card`, `ranked-table`, `data-table`.
 
-Two use cases:
-
-**1. TypeScript SDK service** — use constructor injection:
+For `kpi-card`, also provide `valueField` (which field to display) and optionally `valueLabel`:
 ```json
 {
-  "name": "faulted-queues",
+  "name": "total-active-agents",
   "tier": "T3",
-  "title": "Faulted Queue Items",
-  "displayAs": "ranked-table",
-  "columns": "[{key:\"name\",label:\"Queue\"},{key:\"count\",label:\"Faulted\",align:\"right\" as const}]",
-  "fnBody": "const { Queues } = await import('@uipath/uipath-typescript/queues')\nconst svc = new Queues(sdk as never)\nconst r = await svc.getAll({ state: 'Faulted' })\nreturn (r?.items ?? []).map((q: any) => ({ name: q.name ?? '', count: q.transactionsCount ?? 0 }))"
+  "title": "Total Active Agents",
+  "displayAs": "kpi-card",
+  "valueField": "count",
+  "valueLabel": "active agents",
+  "fnBody": "const { AgentsInsights } = await import('@uipath/uipath-typescript/insights')\nconst svc = new AgentsInsights(sdk as never)\nconst result = await svc.getAgents({ startTime: THIRTY_DAYS_AGO, endTime: NOW })\nreturn [{ count: result?.data?.agents?.length ?? 0 }]"
 }
 ```
 
-**2. Insights endpoint NOT in InsightsKey** — use `getToken() + fetch()` directly. This is the same pattern `InsightsClient` uses internally:
-```typescript
-// fnBody for a custom Insights HTTP call
-const token = await getToken()
-const cloudUrl = import.meta.env.VITE_UIPATH_CLOUD_URL
-const org      = import.meta.env.VITE_UIPATH_ORG_NAME
-const tenant   = import.meta.env.VITE_UIPATH_TENANT_NAME
-const tenantId = import.meta.env.VITE_INSIGHTS_TENANT_ID
-const res = await fetch(
-  `${cloudUrl}/${org}/${tenant}/insightsrtm_/Agents/topInvokedAgents`,
-  {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tenantId, startTime: THIRTY_DAYS_AGO, endTime: NOW }),
-  }
-)
-if (!res.ok) throw new Error(`Insights ${res.status}`)
-return (await res.json())?.data ?? []
-```
-
-Never use `(sdk as any)._config` or other internal SDK properties — `getToken()` is the documented way to get a bearer token.
-
-T3-SDK rules for fnBody:
-- Must return `Promise<Array<Record<string, unknown>>>`
-- Use constructor injection: `new ServiceClass(sdk as never)` — never `sdk.serviceName.method()`
-- **SDK service classes must use dynamic import inside fnBody** — static imports are not available in the generated file. The shell provides React, UI components, and `useAuth` only.
-  ```typescript
-  // Inside fnBody — dynamic import is valid in async functions
-  const { Jobs } = await import('@uipath/uipath-typescript/jobs')
-  const svc = new Jobs(sdk as never)
-  const result = await svc.getAll({})
-  ```
-- Use `await` for all async operations
-- No JSX, no static `import` statements at the top level of fnBody
+### fnBody rules
+- Returns `Promise<Array<Record<string, unknown>>>`
+- Use dynamic import: `const { ServiceClass } = await import('@uipath/uipath-typescript/...')`
+- Use constructor injection: `new ServiceClass(sdk as never)`
+- `sdk` and `getToken` are available as parameters — do not import `useAuth`
+- No JSX, no static top-level imports
+- Time constants available: `NOW`, `ONE_DAY_AGO`, `SEVEN_DAYS_AGO`, `THIRTY_DAYS_AGO`, `NINETY_DAYS_AGO`
 
 ### SDK service class reference
 
