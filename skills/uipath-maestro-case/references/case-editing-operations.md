@@ -100,7 +100,7 @@ All IDs follow the CLI's `prefixedId(prefix, count)` scheme: a fixed prefix + `c
 
 ### Algorithm — inline, no subprocess
 
-Prefixed IDs are picked **inline by the agent** while writing the JSON. No `node -e`, no Bash subprocess. The schema requires only: prefix + `count` chars from `[A-Za-z0-9]` + within-case uniqueness. Cryptographic randomness is NOT required (the CLI uses `Math.random()`-grade entropy too).
+Prefixed IDs are picked **inline by the agent** while writing the JSON. No interpreter one-liner, no Bash subprocess. The schema requires only: prefix + `count` chars from `[A-Za-z0-9]` + within-case uniqueness. Cryptographic randomness is NOT required (the CLI uses `Math.random()`-grade entropy too).
 
 Steps:
 
@@ -114,7 +114,7 @@ Steps:
 
 The 62-char alphabet at length 6 = 56B combinations; at length 8 = 218T. Collision risk inside a single caseplan (~30 IDs) is negligible — the per-write existing-ID scan in step 2 is the safety net.
 
-> **UUID v4 fields are different.** `operate.json.projectId` and `entry-points.json` `uniqueId` follow `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx` with version + variant bits. Agent-picking those is too error-prone — keep the `node -e "console.log(crypto.randomUUID())"` stdout-only Bash one-liner for those two fields. Prefixed-IDs (`Stage_`, `t`, `Rule_`, etc.) are inline.
+> **UUID v4 fields are different.** `operate.json.projectId` and `entry-points.json` `uniqueId` follow `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx` with version + variant bits. Agent-picking those is too error-prone — generate them with a stdout-only Bash one-liner that prints the runtime's standard v4 UUID (`crypto.randomUUID()`); that subprocess does no file I/O. Prefixed-IDs (`Stage_`, `t`, `Rule_`, etc.) are inline.
 
 Every skill run generates fresh IDs — no determinism.
 
@@ -152,21 +152,21 @@ All mutations to `caseplan.json` (and sibling files like `entry-points.json`, `i
 - **Edit** for narrowly-scoped, unambiguous in-place replacements — default for all mutations after T01, and required for sections with <10 T-entries.
 - **Write** for the T01 scaffold (initial empty-file creation by the `case` plugin) and for whole-section batched writes when a section has ≥10 T-entries — see § Per-section batch write contract for the bounded conditions under which whole-section Write replaces N sibling Edits.
 
-**Do NOT** shell out to `python`, `node`, `jq`, `sed`, `awk`, or any other process to read, parse, transform, or write the JSON. No helper scripts, no inline one-liners that modify files, no `python3 -c '... json.load ... json.dump ...'`, no `node -e "...fs.writeFileSync...".` The agent holds the parsed object in its own reasoning; the file system is touched only via Read/Write/Edit.
+**Do NOT** shell out to `python`, `node`, `jq`, `sed`, `awk`, or any other process to read, parse, transform, or write the JSON. No helper scripts, and no inline interpreter one-liners that modify files — including ones that load and re-dump the JSON through a Python/Node snippet, or write it back out from a Node `fs` call. The agent holds the parsed object in its own reasoning; the file system is touched only via Read/Write/Edit.
 
 This is a hard constraint — it keeps every mutation reviewable in the tool-call transcript and prevents silent state changes the user cannot audit.
 
 **Anti-patterns that count as file mutation (forbidden — write the file via the Write/Edit tool instead):**
 
-- `node -e "const fs=require('fs'); ... fs.writeFileSync(...)"` — the `node -e` permission is for stdout-only helpers, not file I/O.
-- `node -e "..."` / `python -c "..."` / `jq '...' caseplan.json` followed by `> caseplan.json`, `>> caseplan.json`, or `| tee caseplan.json` — shell redirection onto a skill artifact is mutation, regardless of which interpreter ran.
-- `cat caseplan.json | jq '...'` even if you only "intend to print" — `jq` is forbidden; use Read.
-- `sed -i` / `awk -i inplace` / `python -c "open('caseplan.json','w')..."` — same family, all forbidden.
-- `bash -c "...>caseplan.json..."` — wrapping the redirection in another shell does not exempt it.
+- A Node one-liner that loads the filesystem module and writes a file — the stdout-only Node permission is for printing helpers, not file I/O.
+- Any interpreter one-liner (Node, Python, jq, …) whose output is redirected or piped onto a skill artifact — appending, overwriting, or tee-ing to the file is mutation, regardless of which interpreter ran.
+- Piping a skill artifact through `jq` even if you only "intend to print" — `jq` is forbidden; use Read.
+- In-place stream editors (`sed`/`awk` with their edit-in-place flags) or a Python snippet that opens the artifact for writing — same family, all forbidden.
+- Wrapping any of those redirections inside another shell invocation does not exempt it.
 
 Pseudocode blocks in this document and in per-plugin `impl-json.md` files (`issues.append(...)`, `existingTriggers = schema.nodes.filter(...)`, etc.) are **specifications of intent**, not commands to execute. Read them, apply the logic in-head, then use Read/Write/Edit to realize the mutation.
 
-**Bash is still used for**: UUID v4 generation only (`node -e "console.log(crypto.randomUUID())"` for `operate.json.projectId` and `entry-points.json` `uniqueId`; subprocess MUST NOT `require('fs')`, `require('child_process')`, or use any redirection operator), `uip solution init` / `uip solution project add` / `uip solution upload`, `uip maestro case validate`, `uip maestro case debug`, `uip maestro case registry` discovery, and read-only metadata fetches (`uip maestro case tasks describe`, `is resources describe`, `is triggers describe`). Never for file mutation.
+**Bash is still used for**: UUID v4 generation only (a stdout-only one-liner that prints the runtime's standard v4 UUID — `crypto.randomUUID()` — for `operate.json.projectId` and `entry-points.json` `uniqueId`; that subprocess MUST NOT access the filesystem, spawn child processes, or use any redirection operator), `uip solution init` / `uip solution project add` / `uip solution upload`, `uip maestro case validate`, `uip maestro case debug`, `uip maestro case registry` discovery, and read-only metadata fetches (`uip maestro case tasks describe`, `is resources describe`, `is triggers describe`). Never for file mutation.
 
 **Prefixed IDs (`Stage_`, `t`, `Rule_`, `Condition_`, `trigger_`, `edge_`, `c`, `r`, `b`, `esc_`, `StickyNote_`) are picked inline by the agent — no subprocess.** See § ID Generation algorithm above.
 
@@ -205,7 +205,7 @@ Procedure per section:
 
 **Cap single Write output at ~15K tokens / ~40KB.** When a section's combined output would exceed this, do NOT collapse into one Write — split by phase: Phase 2 emits the skeleton (root + nodes + edges + variables, empty `data` on tasks); Phase 3 then fills `data.context` / `data.inputs` / `data.outputs` / conditions / SLA via per-section Edits onto the already-populated nodes. A single Write turn beyond ~15K out tok pays ~150s inference latency and concentrates field-drop risk; the Phase 2 → Phase 3 split spreads the same work across smaller turns with intermediate validate gates. Concretely, for a case with ≥40 tasks or ≥8 stages: never emit the full populated caseplan.json in one Write — always Phase 2 skeleton (small Write) → Phase 3 fill (per-section Edits on populated nodes).
 
-**Forbidden: build-assembler helper scripts.** Writing `/tmp/build-caseplan.js`, `/tmp/gen-tasks.py`, or any script that assembles a skill artifact and pipes/writes it to disk is a Rule 13 violation — regardless of `/tmp` placement, "mechanical copy" framing, or "avoid Read+Write churn" rationale. The script-write + script-run + script-output-to-file pattern bypasses the tool-call audit trail Rule 13 protects. If the artifact is too large for a single Write turn, apply the ~15K-token Write cap and Phase 2 → Phase 3 split above. There is no helper-script escape hatch.
+**Forbidden: build-assembler helper scripts.** Writing a temporary build-assembler script — under `/tmp` or anywhere else — that assembles a skill artifact and pipes/writes it to disk is a Rule 13 violation, regardless of placement, "mechanical copy" framing, or "avoid Read+Write churn" rationale. The script-write + script-run + script-output-to-file pattern bypasses the tool-call audit trail Rule 13 protects. If the artifact is too large for a single Write turn, apply the ~15K-token Write cap and Phase 2 → Phase 3 split above. There is no helper-script escape hatch.
 
 ### Generate a fresh ID
 
@@ -220,7 +220,7 @@ Rule_   + "jdBFrJ"  → "Rule_jdBFrJ"
 edge_   + "Qz7hVr"  → "edge_Qz7hVr"
 ```
 
-> **UUID v4 only** (`operate.json.projectId`, `entry-points.json` `uniqueId`) uses `node -e "console.log(crypto.randomUUID())"` — see § Tool usage. Prefixed-IDs above never call Bash.
+> **UUID v4 only** (`operate.json.projectId`, `entry-points.json` `uniqueId`) uses a stdout-only Bash one-liner that prints a v4 UUID (`crypto.randomUUID()`) — see § Tool usage. Prefixed-IDs above never call Bash.
 
 ### Add a node (Trigger / Stage / ExceptionStage)
 

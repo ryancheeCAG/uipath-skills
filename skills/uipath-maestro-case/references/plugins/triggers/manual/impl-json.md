@@ -35,11 +35,7 @@ Position is not a user input. It is computed statefully (see below).
 ## ID generation
 
 - **Trigger node ID** — `trigger_` + 6 random chars from `[A-Za-z0-9]`. Algorithm per [`case-editing-operations.md § ID Generation`](../../../case-editing-operations.md#id-generation).
-- **Entry-point `uniqueId`** — `crypto.randomUUID()`. Generate inline:
-
-  ```bash
-  node -e "console.log(crypto.randomUUID())"
-  ```
+- **Entry-point `uniqueId`** — a v4 UUID from the runtime's standard `crypto.randomUUID()` API. Generate it inline with a stdout-only Bash one-liner (no file I/O in the subprocess).
 
 Record `T<n> → trigger_xxxxxx` in `id-map.json` for downstream cross-reference (edges that target this trigger's id).
 

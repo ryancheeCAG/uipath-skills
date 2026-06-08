@@ -46,11 +46,7 @@ Runs before § Write caseplan.json. Writes 5 static JSON files directly. All sub
 
 ### Generate one UUID for `operate.json.projectId`
 
-Bash + `node -e` (stdout only — no file I/O inside the subprocess):
-
-```bash
-node -e "console.log(crypto.randomUUID())"
-```
+Generate a v4 UUID with a stdout-only Bash one-liner that prints the runtime's standard `crypto.randomUUID()` value — no file I/O inside the subprocess.
 
 Capture the printed UUID; inject it at `<PROJECT_ID>` below.
 
