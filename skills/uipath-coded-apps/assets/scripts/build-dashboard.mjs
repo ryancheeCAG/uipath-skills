@@ -310,6 +310,7 @@ function applyTemplate(templateName, subs) {
 function generateViewFile(widget) {
   const { componentName, title, description, dataHook, dataSelector, columns } = widget
   const cols = columns ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]'
+
   return `import React from 'react'
 import { DetailViewShell } from '@/dashboard/chrome/DetailViewShell'
 import { RecordsTable, type ColumnDef } from '@/dashboard/chrome/RecordsTable'
@@ -318,11 +319,27 @@ import { LoadingState, EmptyState } from '@/dashboard/chrome'
 
 ${TIME_CONSTANTS.trimEnd()}
 
+/** Safely extract a row array from any Insights API response shape */
+function toRows(raw: unknown): Record<string, unknown>[] {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw as Record<string, unknown>[]
+  if (typeof raw === 'object') {
+    // Nested: { data: { agents: [...] } } or { data: [...] }
+    const obj = raw as Record<string, unknown>
+    if (Array.isArray(obj.agents)) return obj.agents as Record<string, unknown>[]
+    if (Array.isArray(obj.data)) return obj.data as Record<string, unknown>[]
+    if (obj.data && typeof obj.data === 'object') return toRows(obj.data)
+  }
+  return []
+}
+
 const COLUMNS: ColumnDef<Record<string, unknown>>[] = ${cols}
 
 export function ${componentName}View() {
   const { data, loading, error } = ${dataHook}
-  const rows: Record<string, unknown>[] = ${dataSelector ?? '[]'}
+  const raw: unknown = ${dataSelector ?? '(data as any)?.data ?? []'}
+  const rows = toRows(raw)
+
   if (loading) return <DetailViewShell title="${title ?? componentName}" description="${description ?? ''}"><LoadingState height="h-96" /></DetailViewShell>
   if (error)   return <DetailViewShell title="${title ?? componentName}" description="${description ?? ''}"><EmptyState message={error.message} /></DetailViewShell>
   return (

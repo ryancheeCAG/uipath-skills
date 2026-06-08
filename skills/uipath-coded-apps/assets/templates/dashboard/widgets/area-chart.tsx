@@ -41,7 +41,14 @@ export function <COMPONENT_NAME>() {
       <CardContent className="pt-0">
         <ResponsiveContainer width="100%" height={180}>
           <AreaChart data={chartData}>
-            <XAxis dataKey="<X_KEY>" tick={{ fontSize: 11 }} />
+            <XAxis
+              dataKey="<X_KEY>"
+              tick={{ fontSize: 11 }}
+              tickFormatter={(v: string | number) => {
+                const d = new Date(String(v))
+                return isNaN(d.getTime()) ? String(v) : d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+              }}
+            />
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip />
             <Area
