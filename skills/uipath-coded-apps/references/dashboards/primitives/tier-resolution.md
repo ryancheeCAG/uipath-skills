@@ -46,8 +46,20 @@ Use when the metric doesn't match T1 or T2. Two sub-paths:
 
 ### T3-Insights: custom Insights RTM endpoint
 
-Any `useInsights` endpoint not in the T1 catalog. Provide the namespace, method, and template:
+For Insights RTM endpoints **not in the T1 catalog but present in `InsightsClient`**. `InsightsKey` is a **closed type union** — only the exact methods listed below are valid. Guessing a method name will cause `Argument of type '"agents.getTopInvokedAgents"' is not assignable to parameter of type 'InsightsKey'`.
 
+**Complete valid InsightsKey list (28 keys):**
+
+| Namespace | Valid methods |
+|-----------|--------------|
+| `agents` | `getSummaryV2` `getErrors` `getTopErroredAgents` `getIncidents` `getIncidentDistribution` `getConsumption` `getConsumptionTimeline` `getLatencyTimeline` `getAgents` `getUnitConsumption` `getNames` |
+| `traceview` | `getLatencyTimeline` `getErrorsTimeline` `getMemoryTimeline` `getMemoryCallsTimeline` `getTopMemorySpaces` `getUnitConsumption` |
+| `governance` | `getPolicySummary` `getPolicyTraces` `getOperationSummary` |
+| `jobs` | `getSummary` `getCompletedTimeline` `getUncompletedTimeline` `getTopFailures` `getFailuresByReason` `getProcessDetails` `getFailureDetails` |
+
+The build script validates your `namespace.method` against this list at code-generation time and fails early with the valid options rather than at `tsc`.
+
+Example:
 ```json
 {
   "name": "incident-distribution",
@@ -63,10 +75,11 @@ Any `useInsights` endpoint not in the T1 catalog. Provide the namespace, method,
 }
 ```
 
-### T3-SDK: custom SDK query
+### T3-SDK: custom SDK query or custom HTTP call
 
-For data not available via Insights RTM. Provide an async function body using `sdk.*`:
+Two use cases:
 
+**1. TypeScript SDK service** — use constructor injection:
 ```json
 {
   "name": "faulted-queues",
@@ -74,9 +87,31 @@ For data not available via Insights RTM. Provide an async function body using `s
   "title": "Faulted Queue Items",
   "displayAs": "ranked-table",
   "columns": "[{key:\"name\",label:\"Queue\"},{key:\"count\",label:\"Faulted\",align:\"right\" as const}]",
-  "fnBody": "const svc = new Queues(sdk as never)\nconst r = await svc.getAll({ state: 'Faulted' })\nreturn (r?.items ?? []).map((q: any) => ({ name: q.name ?? '', count: q.transactionsCount ?? 0 }))"
+  "fnBody": "const { Queues } = await import('@uipath/uipath-typescript/queues')\nconst svc = new Queues(sdk as never)\nconst r = await svc.getAll({ state: 'Faulted' })\nreturn (r?.items ?? []).map((q: any) => ({ name: q.name ?? '', count: q.transactionsCount ?? 0 }))"
 }
 ```
+
+**2. Insights endpoint NOT in InsightsKey** — use `getToken() + fetch()` directly. This is the same pattern `InsightsClient` uses internally:
+```typescript
+// fnBody for a custom Insights HTTP call
+const token = await getToken()
+const cloudUrl = import.meta.env.VITE_UIPATH_CLOUD_URL
+const org      = import.meta.env.VITE_UIPATH_ORG_NAME
+const tenant   = import.meta.env.VITE_UIPATH_TENANT_NAME
+const tenantId = import.meta.env.VITE_INSIGHTS_TENANT_ID
+const res = await fetch(
+  `${cloudUrl}/${org}/${tenant}/insightsrtm_/Agents/topInvokedAgents`,
+  {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tenantId, startTime: THIRTY_DAYS_AGO, endTime: NOW }),
+  }
+)
+if (!res.ok) throw new Error(`Insights ${res.status}`)
+return (await res.json())?.data ?? []
+```
+
+Never use `(sdk as any)._config` or other internal SDK properties — `getToken()` is the documented way to get a bearer token.
 
 T3-SDK rules for fnBody:
 - Must return `Promise<Array<Record<string, unknown>>>`

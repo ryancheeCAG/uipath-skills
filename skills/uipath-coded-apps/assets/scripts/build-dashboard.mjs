@@ -123,6 +123,28 @@ const REGISTRY = JSON.parse(readFileSync(resolve(__dirname, 'capability-registry
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
+/**
+ * The complete closed set of valid InsightsKey values — derived from InsightsClient
+ * in src/lib/insights-client.ts. These are the only strings useInsights() accepts.
+ * Any other namespace.method combination will cause a TypeScript compile error.
+ */
+const VALID_INSIGHTS_KEYS = new Set([
+  // agents namespace
+  'agents.getSummaryV2', 'agents.getErrors', 'agents.getTopErroredAgents',
+  'agents.getIncidents', 'agents.getIncidentDistribution', 'agents.getConsumption',
+  'agents.getConsumptionTimeline', 'agents.getLatencyTimeline', 'agents.getAgents',
+  'agents.getUnitConsumption', 'agents.getNames',
+  // traceview namespace
+  'traceview.getLatencyTimeline', 'traceview.getErrorsTimeline', 'traceview.getMemoryTimeline',
+  'traceview.getMemoryCallsTimeline', 'traceview.getTopMemorySpaces', 'traceview.getUnitConsumption',
+  // governance namespace
+  'governance.getPolicySummary', 'governance.getPolicyTraces', 'governance.getOperationSummary',
+  // jobs namespace
+  'jobs.getSummary', 'jobs.getCompletedTimeline', 'jobs.getUncompletedTimeline',
+  'jobs.getTopFailures', 'jobs.getFailuresByReason', 'jobs.getProcessDetails',
+  'jobs.getFailureDetails',
+])
+
 const TIME_RANGE_CONSTANTS = {
   '1d':  'ONE_DAY_AGO',
   '7d':  'SEVEN_DAYS_AGO',
@@ -667,6 +689,21 @@ export function buildT3WidgetFile(metric, timeRange = '30d') {
 
   // T3-Insights path: uses useInsights hook + standard template
   if (metric.namespace && metric.method && metric.template) {
+    // Validate against the closed InsightsKey union BEFORE generating any code.
+    // useInsights() only accepts keys that exist on InsightsClient — if the key
+    // isn't in the union TypeScript will reject it at compile time.
+    const insightsKey = `${metric.namespace}.${metric.method}`
+    if (!VALID_INSIGHTS_KEYS.has(insightsKey)) {
+      const available = [...VALID_INSIGHTS_KEYS]
+        .filter(k => k.startsWith(metric.namespace + '.'))
+        .map(k => `  ${k}`)
+        .join('\n')
+      throw new Error(
+        `T3-Insights: "${insightsKey}" is not a valid InsightsKey.\n` +
+        `Valid methods in the "${metric.namespace}" namespace:\n${available || '  (none — check the namespace name)'}\n` +
+        `For endpoints not in this list, use T3-SDK with getToken() + fetch() instead.`
+      )
+    }
     const startConst = TIME_RANGE_CONSTANTS[timeRange] ?? 'THIRTY_DAYS_AGO'
     const responseType = '{ data: Array<Record<string, unknown>> }'
     const dataHook = metric.dataHook
