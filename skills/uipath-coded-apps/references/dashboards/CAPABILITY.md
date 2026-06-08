@@ -1,41 +1,41 @@
 # Dashboard Capability
 
-Build or edit a React dashboard powered by Insights RTM and the UiPath TypeScript SDK.
+Build, edit, or deploy UiPath dashboards powered by Insights RTM and the TypeScript SDK.
 
 ---
 
-## The 3-turn contract
+## Step 0 — Detect intent BEFORE loading anything
 
-From the user's perspective, building a dashboard looks like this:
+Read the user's message and classify it as one of three intents. **Do not load any files yet.**
 
-1. **They send their request**
-2. **They see a polished plan** — no tool calls visible between request and plan
-3. **They confirm** — a single bash call runs, progress ticks appear, browser opens
+| User says | Intent | What to do next |
+|-----------|--------|-----------------|
+| "build me a dashboard", "show me X metrics", "create a dashboard for…" | **BUILD** | Follow the Build path below |
+| "add/remove/change a widget", "update the chart", "make it 7 days" | **EDIT** | Follow the Edit path below |
+| "deploy this", "publish it", "make it live", "ship it to the team", "deploy the dashboard" | **DEPLOY** | Follow the Deploy path below |
 
-Every internal mechanic (reads, pre-warm, login, intent.json) happens invisibly. The user sees only: plan → confirm → live dashboard.
+If the intent is unclear, ask one question: "Do you want to build a new dashboard, edit an existing one, or deploy it to Automation Cloud?"
 
 ---
 
-## Turn 2 — Everything in ONE parallel message (this turn)
+## Path A — BUILD (new dashboard)
 
-Fire all of these simultaneously in **a single response**. Use multiple tool calls in the same message — do not wait for one to complete before starting another.
+### Turn 2 — Everything in ONE parallel message
 
-> **Path note:** All file paths below are relative to `SKILL_BASE_DIR` — the directory where `SKILL.md` lives (shown as "Base directory for this skill:" in your activation message). They are **not** relative to this file's location (`references/dashboards/`).
->
-> Verify: this file's own path is `$SKILL_BASE_DIR/references/dashboards/CAPABILITY.md`
+Fire all of these simultaneously. Use multiple tool calls in one response — do not wait for one before starting another.
 
-**4 file reads (all in one message — parallel):**
+> **Path note:** All file paths are relative to `SKILL_BASE_DIR` — the directory where `SKILL.md` lives. Not relative to this file's location.
+
+**4 file reads (parallel):**
 
 | File | Purpose |
 |------|---------|
-| `references/dashboards/plugins/build/impl.md` *(from skill root)* | Build instructions, preflight, plan format, intent.json schema |
-| `references/dashboards/primitives/tier-resolution.md` *(from skill root)* | Metric classification, hard-refuse list, SDK service reference, SDK usage patterns |
+| `references/dashboards/plugins/build/impl.md` *(from skill root)* | Build instructions, plan format, intent.json schema |
+| `references/dashboards/primitives/tier-resolution.md` *(from skill root)* | Metric classification, SDK service reference |
 | `references/dashboards/aesthetic/layout-patterns.md` *(from skill root)* | Layout rules |
 | `assets/scripts/capability-registry.json` *(from skill root)* | Metric catalog |
 
-> `tier-resolution.md` contains the SDK service class reference table (import subpaths + response field names). **Do not** fetch the live SDK docs URL — it takes 60–90 seconds and the information is already in `tier-resolution.md`. For T2/T3-SDK field verification, Phase 3.5 reads local `.d.ts` files instead.
-
-**2 commands (same message, parallel with reads):**
+**2 commands (same message):**
 
 ```bash
 uip login status --output json
@@ -48,57 +48,87 @@ fs.existsSync('.dashboard/state.json') ? process.exit(0) : process.exit(1)
 " && echo INCREMENTAL || echo FRESH
 ```
 
-**Pre-warm (same message — MUST use `run_in_background: true` on the Bash tool call):**
-
-Derive `<PROJECT_DIR>` from the user's request first, then include this Bash call in the same message as the reads and commands above:
+**Pre-warm (same message — `run_in_background: true` on the Bash tool call):**
 
 ```bash
 node "<SKILL_BASE_DIR>/assets/scripts/build-dashboard.mjs" --prewarm "<PROJECT_DIR>"
 ```
 
-⚠️ **Set `run_in_background: true` on this specific Bash tool call.** This is a parameter on the tool call itself, not a shell flag. Without it the call blocks and the plan is delayed by 60–90 seconds of npm ci. The build script emits `PREWARM_DONE` when complete — do not wait for it.
+⚠️ `run_in_background: true` is a tool call parameter, not a shell flag. Without it, the call blocks for 60–90s before the plan appears.
 
----
+**After all reads:** output the plan as pure text. No tool calls until user confirms. See `plugins/build/impl.md`.
 
-## Turn 2 output — Show the plan (pure text, zero tool calls)
-
-After all reads complete and pre-warm is fired, output the plan directly as text. No more tool calls until the user confirms.
-
-See `plugins/build/impl.md` for the plan format and subsequent phases.
-
----
-
-## Routing
-
+**Routing:**
 - `INCREMENTAL` → read `primitives/incremental-editor.md`, then follow it
 - `FRESH` → follow `plugins/build/impl.md`
 
 ---
 
-## Scope — this skill does one thing
+## Path B — EDIT (change existing dashboard)
 
-This skill builds and edits UiPath dashboards. That is its entire scope.
+Read `primitives/incremental-editor.md` in the same message as `uip login status --output json`. Follow it.
 
-**If the user's request is NOT about building, editing, or deploying a dashboard**, respond immediately with:
+---
 
-> "This skill is for UiPath dashboard generation only — I can build dashboards that visualise agent health, job performance, queue metrics, and other UiPath platform data.
->
-> For [restate what they asked], please use the appropriate skill or ask in a general Claude Code session."
+## Path C — DEPLOY
 
-Do not attempt to answer, help, or redirect to another approach. Decline and state what this skill does. This applies to: workflow authoring, RPA help, general coding questions, SDK documentation queries, platform configuration, debugging unrelated errors, or anything else outside of dashboard work.
+### Step 1 — Read the deploy plugin FIRST (before any CLI commands)
+
+```
+Read: references/dashboards/plugins/deploy/impl.md  *(from skill root)*
+```
+
+Read this file in parallel with:
+
+```bash
+uip login status --output json
+```
+
+**Do not run any other commands until you have read the deploy plugin and presented the plan to the user.**
+
+### Step 2 — Present the deploy plan (pure text, zero CLI calls)
+
+Read `.dashboard/state.json` in memory to get the app name, version, and routing name. Then output the plan:
+
+```
+Your **[Dashboard Name]** is ready to be deployed.
+
+📦  Version:    [current] → [bumped]
+🔗  URL path:   [routing-name]
+📁  Folder:     AdminDashboards
+🔄  Type:       Fresh deploy  OR  Updating existing deployment
+
+📌  Do you want to pin this dashboard to the Governance UI?
+   → "deploy and pin" — visible in the Governance section
+   → "deploy" — deploy without pinning
+```
+
+**HALT. Do not run any CLI command until the user confirms.**
+
+### Step 3 — Follow plugins/deploy/impl.md
+
+After user confirms, follow every step in `plugins/deploy/impl.md` exactly as written. Do not invent steps, do not run `uip tools list`, do not run `npm run build` before the plan is confirmed.
+
+---
+
+## Scope
+
+This skill only handles dashboard building, editing, and deploying. For anything else, respond:
+
+> "This skill is for UiPath dashboard generation only. For [what they asked], please use the appropriate skill."
 
 ---
 
 ## Hard stops
 
-- **Never** help with requests outside of dashboard building/editing/deploying
-- **Never** fetch `https://uipath.github.io/uipath-typescript/llms-full-content.txt` — it takes 60–90s; SDK service reference is already in `tier-resolution.md`
-- **Never** use the Agent tool for SDK documentation — use Read on local files only
-- **Never** read `build-dashboard.mjs` — fully documented in impl.md
+- **Never** run ANY CLI command before presenting the plan and getting user confirmation
+- **Never** improvise deploy steps — always read `plugins/deploy/impl.md` first
+- **Never** run `uip tools list`, `npm run build`, or any command not in the relevant impl.md
+- **Never** use `"agent-health-dashboard"` (routing slug) as the `-n` flag — always use the human-readable display name from state.json
+- **Never** run `uip codedapp publish` without `-n` and `--version` flags
+- **Never** fetch the live SDK docs URL — it takes 60–90s
+- **Never** read `build-dashboard.mjs` — documented in impl.md
 - **Never** run `ls`, `find`, or directory exploration
-- **Never** read `sdk-capabilities.md` — tier-resolution.md + capability-registry.json are sufficient
 - **Never** read files one at a time
-- **Never** show tool call output to the user between their request and the plan
-- **Never** wait for pre-warm before showing the plan — it must use run_in_background: true
-- **Never** auto-deploy
 - **Never** commit generated dashboard files
+- **Never** auto-deploy without explicit user confirmation
