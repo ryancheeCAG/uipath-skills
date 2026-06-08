@@ -8,6 +8,8 @@ For each widget with component name `Foo`, the build script generates `src/dashb
 
 Detail views are generated automatically for T1 and T3-Insights widgets. T2 widgets are already tabular — they do not get a separate detail view.
 
+> **T3-SDK widgets do not get a detail view.** T3-SDK widgets fetch data via the TypeScript SDK (not Insights RTM), so no `useInsights` hook can back a detail view. The widget itself shows the full data. If a drilldown is needed, implement it by hand in the generated project.
+
 ## Column mapping rules
 
 The columns for a detail view come from the same registry entry as its parent widget. The key rules:

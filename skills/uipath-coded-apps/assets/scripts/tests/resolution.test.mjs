@@ -46,11 +46,11 @@ test('alias lookup finds agent-errors by natural language', () => {
   assert.equal(result.key, 'agent-errors')
 })
 
-test('alias lookup finds T2 queue-failure-threshold', () => {
-  const result = resolveAlias('queues where failure rate is high')
+test('alias lookup finds T2 jobs-duration-threshold', () => {
+  const result = resolveAlias('long running jobs over threshold')
   assert.ok(result)
   assert.equal(result.tier, 'T2')
-  assert.equal(result.key, 'queue-failure-threshold')
+  assert.equal(result.key, 'jobs-duration-threshold')
 })
 
 test('alias lookup returns null for unknown text', () => {
@@ -145,7 +145,7 @@ test('resolveMetric: T1 known name returns entry with template', () => {
 })
 
 test('resolveMetric: T2 known name returns entry with service', () => {
-  const result = resolveMetric({ name: 'queue-failure-threshold', tier: 'T2', params: { threshold: 20, direction: 'gt' } })
+  const result = resolveMetric({ name: 'jobs-duration-threshold', tier: 'T2', params: { threshold: 300, direction: 'gt' } })
   assert.equal(result.tier, 'T2')
   assert.ok(result.entry.service)
 })
@@ -181,11 +181,11 @@ test('buildT1WidgetSpec: uses 7d time range constant', () => {
 
 // ── buildT2WidgetSpec + compileT2ToTypeScript tests ───────────────────────────
 
-test('buildT2WidgetSpec: returns correct spec for queue-failure-threshold', () => {
-  const metric = { name: 'queue-failure-threshold', tier: 'T2', params: { threshold: 20, direction: 'gt' } }
-  const spec = buildT2WidgetSpec(metric, registry.t2['queue-failure-threshold'])
-  assert.equal(spec.componentName, 'QueueFailureThreshold')
-  assert.equal(spec.template, 'ranked-table')
+test('buildT2WidgetSpec: returns correct spec for jobs-duration-threshold', () => {
+  const metric = { name: 'jobs-duration-threshold', tier: 'T2', params: { threshold: 300, direction: 'gt' } }
+  const spec = buildT2WidgetSpec(metric, registry.t2['jobs-duration-threshold'])
+  assert.equal(spec.componentName, 'JobsDurationThreshold')
+  assert.equal(spec.template, 'data-table')
   assert.ok(spec.sdkHookCode)
   assert.ok(spec.sdkImport)
 })

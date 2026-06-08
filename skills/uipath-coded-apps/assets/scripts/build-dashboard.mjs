@@ -308,8 +308,8 @@ function applyTemplate(templateName, subs) {
  * @returns {string}
  */
 function generateViewFile(widget) {
-  const { componentName, title, description, dataHook, dataSelector, columns } = widget
-  const cols = columns ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]'
+  const { componentName, title, description, dataHook, dataSelector, columns, viewColumns } = widget
+  const cols = viewColumns ?? columns ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]'
 
   return `import React from 'react'
 import { DetailViewShell } from '@/dashboard/chrome/DetailViewShell'
@@ -531,6 +531,7 @@ export function buildT1WidgetSpec(metric, entry, timeRange) {
     yKey: entry.defaults.yKey ?? 'value',
     valueExpression: entry.defaults.valueExpression ?? "'—'",
     columns: metric.columns ?? entry.defaults.columns ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]',
+    viewColumns: entry.defaults.viewColumns,
     deltaDir: entry.defaults.deltaDir ?? 'neutral',
     deltaText: entry.defaults.deltaText ?? '',
     series: entry.defaults.series ?? '[{key:"value",color:"hsl(var(--chart-1))"}]',
@@ -834,6 +835,7 @@ async function runDashboardBuild(intent, intentPath) {
           dataHook: spec.dataHook,
           dataSelector: spec.dataSelector,
           columns: spec.columns,
+          viewColumns: spec.viewColumns,
         }
       } else {
         // T2 — use SDK directly; no detail view needed (widget already shows tabular data)
@@ -897,14 +899,21 @@ async function runDashboardBuild(intent, intentPath) {
       const t3Template = metric.template ?? metric.displayAs ?? 'ranked-table'
       widgetHashes[componentName] = { hash: hashContent(widgetContent), tier: 'T3', metric: metric.name, template: t3Template }
       widgetMeta.push({ componentName, template: t3Template })
-      widgetSpecs[componentName] = {
-        componentName,
-        title: metric.title ?? componentName,
-        description: metric.description ?? '',
-        dataHook: `useInsights('custom.${metric.name}', {})`,
-        dataSelector: '[]',
-        columns: undefined,
+      // T3-Insights has namespace+method → can generate a detail view using useInsights
+      // T3-SDK has fnBody only → no Insights endpoint exists, skip detail view
+      if (metric.namespace && metric.method) {
+        const responseType = '{ data: Array<Record<string, unknown>> }'
+        const startConst = TIME_RANGE_CONSTANTS[timeRange] ?? 'THIRTY_DAYS_AGO'
+        widgetSpecs[componentName] = {
+          componentName,
+          title: metric.title ?? componentName,
+          description: metric.description ?? '',
+          dataHook: metric.dataHook ?? `useInsights<${responseType}>('${metric.namespace}.${metric.method}', { startTime: ${startConst}, endTime: NOW })`,
+          dataSelector: metric.dataSelector ?? '(data as any)?.data ?? []',
+          columns: metric.columns,
+        }
       }
+      // T3-SDK: no detail view generated (no Insights endpoint backs it)
       widgetIndex++
       emit('WIDGET_READY', { name: componentName, index: widgetIndex, total })
     }

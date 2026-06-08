@@ -15,7 +15,8 @@
         "deltaDir": "down-good",
         "deltaText": "errors today",
         "dataSelector": "(data as any)?.data ?? []",
-        "valueExpression": "String(((data as any)?.data ?? []).reduce((s: number, d: any) => s + (d.value ?? 0), 0))"
+        "valueExpression": "String(((data as any)?.data ?? []).reduce((s: number, d: any) => s + (d.value ?? 0), 0))",
+        "viewColumns": "[{key:\"date\",label:\"Date\"},{key:\"value\",label:\"Error Count\",align:\"right\" as const}]"
       }
     },
     "invocation-volume": {
@@ -33,7 +34,8 @@
         "deltaDir": "up-good",
         "deltaText": "AGU today",
         "dataSelector": "(data as any)?.data ?? []",
-        "valueExpression": "String(((data as any)?.data ?? []).reduce((s: number, d: any) => s + (d.aguConsumption ?? 0), 0).toFixed(1))"
+        "valueExpression": "String(((data as any)?.data ?? []).reduce((s: number, d: any) => s + (d.aguConsumption ?? 0), 0).toFixed(1))",
+        "viewColumns": "[{key:\"timeSlice\",label:\"Time Period\"},{key:\"aguConsumption\",label:\"AGU\",align:\"right\" as const}]"
       }
     },
     "top-failing-agents": {
@@ -49,7 +51,8 @@
         "dataSelector": "(data as any)?.data ?? []",
         "columns": "[{key:\"name\",label:\"Agent\"},{key:\"count\",label:\"Errors\",align:\"right\" as const}]",
         "deltaDir": "neutral",
-        "deltaText": ""
+        "deltaText": "",
+        "viewColumns": "[{key:\"name\",label:\"Agent\"},{key:\"count\",label:\"Errors\",align:\"right\" as const}]"
       }
     },
     "active-agents-kpi": {
@@ -63,9 +66,10 @@
         "description": "Agents with at least one run",
         "icon": "Bot",
         "valueExpression": "String((data as any)?.data?.agents?.length ?? (data as any)?.data?.length ?? 0)",
-        "dataSelector": "(data as any)?.data ?? []",
+        "dataSelector": "(data as any)?.data?.agents ?? (data as any)?.data ?? []",
         "deltaDir": "up-good",
-        "deltaText": "active agents"
+        "deltaText": "active agents",
+        "viewColumns": "[{key:\"name\",label:\"Agent Name\"},{key:\"state\",label:\"State\"}]"
       }
     },
     "agent-latency": {
@@ -84,7 +88,8 @@
         "deltaText": "ms P95",
         "dataSelector": "(data as any)?.data ?? []",
         "series": "[{key:\"P50\",color:\"hsl(var(--chart-1))\",label:\"P50 ms\"},{key:\"P95\",color:\"hsl(var(--chart-2))\",label:\"P95 ms\"}]",
-        "pivotExpression": "rawData.reduce((acc: Record<string, unknown>[], row: any) => { const existing = acc.find((r: any) => r.date === row.date); if (existing) { existing[row.name] = row.value; } else { acc.push({ date: row.date, [row.name]: row.value }); } return acc; }, [])"
+        "pivotExpression": "rawData.reduce((acc: Record<string, unknown>[], row: any) => { const existing = acc.find((r: any) => r.date === row.date); if (existing) { existing[row.name] = row.value; } else { acc.push({ date: row.date, [row.name]: row.value }); } return acc; }, [])",
+        "viewColumns": "[{key:\"date\",label:\"Date\"},{key:\"name\",label:\"Percentile\"},{key:\"value\",label:\"ms\",align:\"right\" as const}]"
       }
     },
     "job-failures": {
@@ -100,7 +105,8 @@
         "dataSelector": "(data as any)?.data ?? []",
         "columns": "[{key:\"name\",label:\"Process\"},{key:\"count\",label:\"Failures\",align:\"right\" as const}]",
         "deltaDir": "down-good",
-        "deltaText": "failures today"
+        "deltaText": "failures today",
+        "viewColumns": "[{key:\"name\",label:\"Process\"},{key:\"count\",label:\"Failures\",align:\"right\" as const}]"
       }
     },
     "job-completion-trend": {
@@ -117,30 +123,12 @@
         "yKey": "value",
         "deltaDir": "up-good",
         "deltaText": "completions today",
-        "dataSelector": "(data as any)?.data ?? []"
+        "dataSelector": "(data as any)?.data ?? []",
+        "viewColumns": "[{key:\"date\",label:\"Date\"},{key:\"value\",label:\"Completions\",align:\"right\" as const}]"
       }
     }
   },
   "t2": {
-    "queue-failure-threshold": {
-      "aliases": ["queues where failure", "high failure queues", "failing queues above", "queues exceeding failure"],
-      "service": "queues",
-      "sdkImport": "@uipath/uipath-typescript/queues",
-      "sdkService": "Queues",
-      "method": "getAll",
-      "filterField": "failureCount",
-      "sortField": "failureCount",
-      "defaultDisplayAs": "ranked-table",
-      "defaults": {
-        "title": "High-Failure Queues",
-        "description": "Queues exceeding the failure threshold",
-        "icon": "AlertOctagon",
-        "columns": "[{key:\"name\",label:\"Queue\"},{key:\"failureCount\",label:\"Failures\",align:\"right\" as const}]",
-        "dataSelector": "(data as any)?.items ?? []",
-        "deltaDir": "neutral",
-        "deltaText": ""
-      }
-    },
     "jobs-duration-threshold": {
       "aliases": ["long running jobs", "jobs over duration", "slow jobs", "jobs running longer than"],
       "service": "jobs",
@@ -168,6 +156,7 @@
     { "pattern": "cross.tenant|multi.tenant|compare.*tenant", "reason": "Dashboards are scoped to one tenant.", "alternative": "Multi-widget single-tenant view" },
     { "pattern": "sla.*breach|breach.*sla", "reason": "Raw counts only — no SLA metadata in any API.", "alternative": "Success rate % (computable from job-completion-trend)" },
     { "pattern": "error.*message|stack.*trace|exception.*text", "reason": "No aggregation endpoint for error text or stack traces.", "alternative": "Error count by type (metric: agent-errors)" },
-    { "pattern": "governance.*policy.*summary|policy.*summary.*governance|getPolicySummary", "reason": "governance.getPolicySummary requires a specific policy UUID that must be supplied by the user.", "alternative": "Ask the user which policy UUID to report on, then classify as T3-Insights with method: getPolicySummary and the UUID injected into the request body." }
+    { "pattern": "governance.*policy.*summary|policy.*summary.*governance|getPolicySummary", "reason": "governance.getPolicySummary requires a specific policy UUID that must be supplied by the user.", "alternative": "Ask the user which policy UUID to report on, then classify as T3-Insights with method: getPolicySummary and the UUID injected into the request body." },
+    { "pattern": "queue.*failure.*threshold|queues.*failing|high.failure.*queue", "reason": "QueueGetResponse does not include a failure count field. SDK fields are: id, name, maxRetries, acceptsRejectedItems only.", "alternative": "T3-Insights: use namespace: 'jobs', method: 'getTopFailures' to see processes with most failures, or request queue metrics via T3-SDK if your tenant has queue analytics enabled." }
   ]
 }

@@ -31,12 +31,13 @@ User asks for metric
 
 | Metric name | What it does | Required params |
 |-------------|-------------|----------------|
-| `queue-failure-threshold` | Queues filtered by failureCount | `{ threshold: number, direction: "gt" }` |
 | `jobs-duration-threshold` | Jobs filtered by duration | `{ threshold: number, direction: "gt" }` |
+
+> Note: `queue-failure-threshold` was removed — the SDK `QueueGetResponse` does not expose failure counts (`id`, `name`, `maxRetries`, `acceptsRejectedItems` only). Use T3-Insights or T3-SDK for queue failure analysis.
 
 T2 params format:
 ```json
-{ "name": "queue-failure-threshold", "tier": "T2", "params": { "threshold": 20, "direction": "gt" } }
+{ "name": "jobs-duration-threshold", "tier": "T2", "params": { "threshold": 20, "direction": "gt" } }
 ```
 
 ## Tier 3 — Custom metrics
@@ -84,6 +85,32 @@ T3-SDK rules for fnBody:
 - Use `await` for all async operations
 - No `import` statements (shell provides all imports)
 - No JSX
+
+### SDK service class reference
+
+Use constructor injection in every fnBody. Never use dot-chain syntax.
+
+```typescript
+// Correct
+const svc = new Jobs(sdk as never)
+const results = await svc.getAll({})
+
+// Wrong — sdk.jobs does not exist
+const results = await sdk.jobs.getAll({})
+```
+
+| Service class | Import subpath | Key response fields |
+|--------------|----------------|---------------------|
+| `Jobs` | `@uipath/uipath-typescript/jobs` | `key`, `state`, `processName`, `startTime`, `endTime`, `createdTime` |
+| `Queues` | `@uipath/uipath-typescript/queues` | `id`, `name`, `maxRetries`, `acceptsRejectedItems` |
+| `Assets` | `@uipath/uipath-typescript/assets` | `id`, `name`, `hasValue`, `value` |
+| `Tasks` | `@uipath/uipath-typescript/tasks` | `id`, `title`, `priority`, `status`, `assignedTo`, `createdTime` |
+| `Processes` | `@uipath/uipath-typescript/processes` | `id`, `name`, `key`, `processType` |
+| `Entities` | `@uipath/uipath-typescript/entities` | `id`, `name`, `displayName`, `entityType` |
+| `Cases` | `@uipath/uipath-typescript/cases` | `processKey`, `runningCount`, `completedCount` |
+| `MaestroProcesses` | `@uipath/uipath-typescript/maestro-processes` | varies |
+
+Note: `getAll()` returns paginated or non-paginated response. Access items via `result?.items ?? result?.value ?? []`.
 
 ## Hard Refuse List
 
