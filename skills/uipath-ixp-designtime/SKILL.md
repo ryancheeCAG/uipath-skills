@@ -1,6 +1,6 @@
 ---
 name: uipath-ixp-designtime
-description: "UiPath IXP designtime (Document Understanding) — create projects, review/confirm predictions, improve prompts, and publish extraction models. For consuming published models at runtime→uipath-ixp-runtime."
+description: "UiPath IXP designtime (Document Understanding) — create projects, review/confirm predictions, improve prompts, and publish extraction models."
 ---
 
 # UiPath IXP Document Extraction Assistant
