@@ -2,11 +2,8 @@
   "t1": {
     "agent-errors": {
       "aliases": ["agent errors", "error count", "errors over time", "agent failures", "error rate trend", "error spikes", "which agents are failing"],
-      "sdkImport": "@uipath/uipath-typescript/agents",
-      "sdkService": "Agents",
-      "sdkMethod": "getErrorsTimeline",
       "template": "line-chart",
-      "responseType": "AgentErrorsTimelineResponse",
+      "description": "Daily agent execution error counts. SDK: `new Agents(sdk as never).getErrorsTimeline(startTime, endTime)` → `{ data: [{date, value, name}] }`. dataSelector: `result?.data ?? []`, xKey: date, yKey: value",
       "defaults": {
         "title": "Agent Error Rate",
         "description": "Daily error counts — spot spikes early",
@@ -21,11 +18,8 @@
     },
     "invocation-volume": {
       "aliases": ["invocation volume", "total runs", "agent runs", "invocations", "run volume", "execution volume", "agu consumption", "consumption timeline"],
-      "sdkImport": "@uipath/uipath-typescript/agents",
-      "sdkService": "Agents",
-      "sdkMethod": "getConsumptionTimeline",
       "template": "area-chart",
-      "responseType": "AgentConsumptionTimelineResponse",
+      "description": "Agent AGU consumption over time. SDK: `new Agents(sdk as never).getConsumptionTimeline(startTime, endTime)` → `{ data: [{timeSlice, aguConsumption}] }`. xKey: timeSlice, yKey: aguConsumption",
       "defaults": {
         "title": "Invocation Volume",
         "description": "Agent AGU consumption over time",
@@ -40,11 +34,8 @@
     },
     "top-failing-agents": {
       "aliases": ["top failing agents", "most errors by agent", "agent leaderboard errors", "which agents fail most"],
-      "sdkImport": "@uipath/uipath-typescript/agents",
-      "sdkService": "Agents",
-      "sdkMethod": "getTopErroredAgents",
       "template": "ranked-table",
-      "responseType": "AgentTopErroredAgentsResponse",
+      "description": "Agents ranked by error count. SDK: `new Agents(sdk as never).getTopErroredAgents(startTime, endTime)` → `{ data: [{name, count}] }`. template: ranked-table",
       "defaults": {
         "title": "Top Failing Agents",
         "description": "Agents with the most errors",
@@ -57,11 +48,8 @@
     },
     "active-agents-kpi": {
       "aliases": ["active agents", "active agent count", "how many agents", "agent count", "agents running"],
-      "sdkImport": "@uipath/uipath-typescript/agents",
-      "sdkService": "Agents",
-      "sdkMethod": "getAll",
       "template": "kpi-card",
-      "responseType": "AgentListResponse",
+      "description": "Count of agents with at least one run. SDK: `new Agents(sdk as never).getAll(startTime, endTime)` → `{ items: AgentListItem[] }`. For kpi-card: return `[{ count: result?.items?.length ?? 0 }]`, valueField: count",
       "defaults": {
         "title": "Active Agents",
         "description": "Agents with at least one run",
@@ -74,11 +62,8 @@
     },
     "agent-latency": {
       "aliases": ["agent latency", "p95 latency", "response time", "execution time", "latency trend"],
-      "sdkImport": "@uipath/uipath-typescript/agents",
-      "sdkService": "Agents",
-      "sdkMethod": "getLatencyTimeline",
       "template": "multi-line-chart",
-      "responseType": "AgentLatencyTimelineResponse",
+      "description": "P50/P95 execution time. SDK: `new Agents(sdk as never).getLatencyTimeline(startTime, endTime)` → `{ data: [{name: 'P50'|'P95', value, date}] }`. Pivot by date for multi-line-chart",
       "defaults": {
         "title": "Agent Latency",
         "description": "P50 and P95 execution time",
@@ -94,12 +79,8 @@
     },
     "job-failures": {
       "aliases": ["faulted jobs", "failed jobs", "job failures", "rpa failures", "process failures", "jobs that failed"],
-      "sdkImport": "@uipath/uipath-typescript/jobs",
-      "sdkService": "Jobs",
-      "sdkMethod": "getAll",
-      "sdkCallOverride": "getAll({ filter: \"State eq 'Faulted'\" })",
       "template": "data-table",
-      "responseType": "PaginatedJobsResponse",
+      "description": "Faulted jobs filtered with Jobs.getAll({ filter: \"State eq 'Faulted'\" }) → { items: [{processName, state, createdTime}] }. template: data-table",
       "defaults": {
         "title": "Faulted Jobs",
         "description": "Jobs currently in a faulted state",
@@ -112,12 +93,8 @@
     },
     "job-completion-trend": {
       "aliases": ["completed jobs", "job completions", "jobs completed", "rpa throughput", "successful jobs", "jobs over time"],
-      "sdkImport": "@uipath/uipath-typescript/jobs",
-      "sdkService": "Jobs",
-      "sdkMethod": "getAll",
-      "sdkCallOverride": "getAll({ filter: \"State eq 'Successful'\" })",
       "template": "data-table",
-      "responseType": "PaginatedJobsResponse",
+      "description": "Successful jobs with Jobs.getAll({ filter: \"State eq 'Successful'\" }) → { items: [{processName, state, endTime}] }. template: data-table",
       "defaults": {
         "title": "Completed Jobs",
         "description": "Recently completed jobs",
@@ -132,14 +109,7 @@
   "t2": {
     "jobs-duration-threshold": {
       "aliases": ["long running jobs", "jobs over duration", "slow jobs", "jobs running longer than"],
-      "service": "jobs",
-      "sdkImport": "@uipath/uipath-typescript/jobs",
-      "sdkService": "Jobs",
-      "method": "getAll",
-      "filterField": "duration",
-      "filterType": "number",
-      "sortField": "duration",
-      "defaultDisplayAs": "data-table",
+      "description": "Jobs running longer than threshold minutes. SDK: `new Jobs(sdk as never).getAll({ filter: \"State eq 'Running'\" })` then filter by computed duration `(endTime-startTime)/60000 > threshold`",
       "defaults": {
         "title": "Long-Running Jobs",
         "description": "Jobs exceeding duration threshold",
@@ -152,15 +122,7 @@
     },
     "jobs-by-state": {
       "aliases": ["faulted jobs", "running jobs", "stopped jobs", "successful jobs", "jobs in state", "jobs by state", "failed jobs", "active jobs"],
-      "service": "jobs",
-      "sdkImport": "@uipath/uipath-typescript/jobs",
-      "sdkService": "Jobs",
-      "method": "getAll",
-      "filterField": "state",
-      "filterType": "string",
-      "sortField": "createdTime",
-      "sortDir": "desc",
-      "defaultDisplayAs": "data-table",
+      "description": "Jobs filtered by execution state. SDK: `new Jobs(sdk as never).getAll({ filter: \"State eq '${params.value}'\" })` → `{ items: [{processName, state, createdTime}] }`",
       "defaults": {
         "title": "Jobs by State",
         "description": "Jobs filtered by execution state",
@@ -173,15 +135,7 @@
     },
     "tasks-by-status": {
       "aliases": ["pending tasks", "completed tasks", "open tasks", "tasks by status", "action center tasks", "human tasks", "unassigned tasks"],
-      "service": "tasks",
-      "sdkImport": "@uipath/uipath-typescript/tasks",
-      "sdkService": "Tasks",
-      "method": "getAll",
-      "filterField": "status",
-      "filterType": "string",
-      "sortField": "createdTime",
-      "sortDir": "desc",
-      "defaultDisplayAs": "data-table",
+      "description": "Action Center tasks filtered by status. SDK: `new Tasks(sdk as never).getAll({ filter: \"Status eq '${params.value}'\" })` → `{ items: [{title, status, priority, createdTime}] }`",
       "defaults": {
         "title": "Tasks by Status",
         "description": "Action Center tasks filtered by status",
@@ -194,15 +148,7 @@
     },
     "cases-running-above": {
       "aliases": ["cases with many running", "high volume processes", "running case count above", "active cases above", "maestro cases", "process instances above"],
-      "service": "cases",
-      "sdkImport": "@uipath/uipath-typescript/cases",
-      "sdkService": "Cases",
-      "method": "getAll",
-      "filterField": "runningCount",
-      "filterType": "number",
-      "sortField": "runningCount",
-      "sortDir": "desc",
-      "defaultDisplayAs": "ranked-table",
+      "description": "Maestro cases where runningCount > threshold. SDK: `new Cases(sdk as never).getAll()` then filter `runningCount > threshold`",
       "defaults": {
         "title": "High-Volume Cases",
         "description": "Processes with running case count above threshold",

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { validateIntent, resolveMetric, buildT1WidgetSpec, buildT2WidgetSpec, compileT2ToTypeScript, buildT3WidgetFile, emit, parseEvent, classifyEditIntent, VALID_T3_SDK_DISPLAY_TYPES } from '../build-dashboard.mjs'
+import { validateIntent, resolveMetric, buildWidgetFile, emit, parseEvent, classifyEditIntent, VALID_DISPLAY_TYPES } from '../build-dashboard.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REGISTRY_PATH = resolve(__dirname, '../capability-registry.json')
@@ -61,22 +61,30 @@ test('alias lookup returns null for unknown text', () => {
 test('all T1 entries have required fields', () => {
   for (const [key, entry] of Object.entries(registry.t1)) {
     assert.ok(entry.template, `${key} missing template`)
-    assert.ok(entry.sdkImport, `${key} missing sdkImport`)
-    assert.ok(entry.sdkService, `${key} missing sdkService`)
-    assert.ok(entry.sdkMethod, `${key} missing sdkMethod`)
-    assert.ok(entry.responseType, `${key} missing responseType`)
+    assert.ok(entry.description, `${key} missing description`)
     assert.ok(Array.isArray(entry.aliases) && entry.aliases.length > 0, `${key} missing aliases`)
     assert.ok(entry.defaults?.title, `${key} missing defaults.title`)
+    // SDK fields must NOT be present — registry is hints-only
+    assert.equal(entry.sdkImport, undefined, `${key} should not have sdkImport (removed)`)
+    assert.equal(entry.sdkService, undefined, `${key} should not have sdkService (removed)`)
+    assert.equal(entry.sdkMethod, undefined, `${key} should not have sdkMethod (removed)`)
+    assert.equal(entry.responseType, undefined, `${key} should not have responseType (removed)`)
   }
 })
 
 test('all T2 entries have required fields', () => {
   for (const [key, entry] of Object.entries(registry.t2)) {
-    assert.ok(entry.service, `${key} missing service`)
-    assert.ok(entry.sdkImport, `${key} missing sdkImport`)
-    assert.ok(entry.sdkService, `${key} missing sdkService`)
-    assert.ok(entry.method, `${key} missing method`)
+    assert.ok(entry.description, `${key} missing description`)
     assert.ok(Array.isArray(entry.aliases) && entry.aliases.length > 0, `${key} missing aliases`)
+    // SDK fields must NOT be present — registry is hints-only
+    assert.equal(entry.sdkImport, undefined, `${key} should not have sdkImport (removed)`)
+    assert.equal(entry.sdkService, undefined, `${key} should not have sdkService (removed)`)
+    assert.equal(entry.method, undefined, `${key} should not have method (removed)`)
+    assert.equal(entry.filterField, undefined, `${key} should not have filterField (removed)`)
+    assert.equal(entry.filterType, undefined, `${key} should not have filterType (removed)`)
+    assert.equal(entry.sortField, undefined, `${key} should not have sortField (removed)`)
+    assert.equal(entry.sortDir, undefined, `${key} should not have sortDir (removed)`)
+    assert.equal(entry.defaultDisplayAs, undefined, `${key} should not have defaultDisplayAs (removed)`)
   }
 })
 
@@ -113,9 +121,33 @@ test('validateIntent: valid T1 intent passes', () => {
   const errors = validateIntent({
     dashboardName: 'My Dashboard',
     timeRange: '30d',
-    metrics: [{ name: 'agent-errors', tier: 'T1' }]
+    metrics: [{ name: 'agent-errors', tier: 'T1', title: 'Agent Errors', fnBody: 'return []' }]
   })
   assert.deepEqual(errors, [])
+})
+
+test('validateIntent: rejects T1 metric without fnBody', () => {
+  const errors = validateIntent({
+    dashboardName: 'x', timeRange: '30d',
+    metrics: [{ name: 'agent-errors', tier: 'T1', title: 'Agent Errors' }]
+  })
+  assert.ok(errors.some(e => e.includes('T1') && e.includes('fnBody')))
+})
+
+test('validateIntent: rejects T1 metric without title', () => {
+  const errors = validateIntent({
+    dashboardName: 'x', timeRange: '30d',
+    metrics: [{ name: 'agent-errors', tier: 'T1', fnBody: 'return []' }]
+  })
+  assert.ok(errors.some(e => e.includes('T1') && e.includes('title')))
+})
+
+test('validateIntent: rejects T2 metric without fnBody', () => {
+  const errors = validateIntent({
+    dashboardName: 'x', timeRange: '7d',
+    metrics: [{ name: 'jobs-by-state', tier: 'T2', title: 'Jobs', params: { value: 'Faulted' } }]
+  })
+  assert.ok(errors.some(e => e.includes('T2') && e.includes('fnBody')))
 })
 
 test('validateIntent: rejects missing dashboardName', () => {
@@ -138,7 +170,7 @@ test('validateIntent: rejects T3 metric without fnBody', () => {
   assert.ok(errors.some(e => e.includes('T3') && e.includes('fnBody')))
 })
 
-// ── resolveMetric + buildT1WidgetSpec tests ───────────────────────────────────
+// ── resolveMetric tests ───────────────────────────────────────────────────────
 
 test('resolveMetric: T1 known name returns entry with template', () => {
   const result = resolveMetric({ name: 'agent-errors', tier: 'T1' })
@@ -146,10 +178,10 @@ test('resolveMetric: T1 known name returns entry with template', () => {
   assert.equal(result.entry.template, 'line-chart')
 })
 
-test('resolveMetric: T2 known name returns entry with service', () => {
+test('resolveMetric: T2 known name returns entry with description', () => {
   const result = resolveMetric({ name: 'jobs-duration-threshold', tier: 'T2', params: { threshold: 300, direction: 'gt' } })
   assert.equal(result.tier, 'T2')
-  assert.ok(result.entry.service)
+  assert.ok(result.entry.description)
 })
 
 test('resolveMetric: T3 always resolves with null entry', () => {
@@ -162,69 +194,107 @@ test('resolveMetric: unknown T1 name throws with "not found in registry"', () =>
   assert.throws(() => resolveMetric({ name: 'nonexistent-metric', tier: 'T1' }), /not found in registry/)
 })
 
-test('buildT1WidgetSpec: merges registry defaults with intent overrides', () => {
-  const spec = buildT1WidgetSpec(
-    { name: 'agent-errors', tier: 'T1', title: 'My Error Chart' },
-    registry.t1['agent-errors'],
+// ── buildWidgetFile tests (unified path for all tiers) ────────────────────────
+
+test('buildWidgetFile: T1 metric uses fnBody from agent (not hardcoded SDK)', () => {
+  const entry = registry.t1['agent-errors']
+  const content = buildWidgetFile(
+    {
+      name: 'agent-errors',
+      tier: 'T1',
+      title: 'Agent Error Rate',
+      displayAs: 'line-chart',
+      xKey: 'date',
+      yKey: 'value',
+      fnBody: "const { Agents } = await import('@uipath/uipath-typescript/agents')\nconst svc = new Agents(sdk as never)\nreturn (await svc.getErrorsTimeline(THIRTY_DAYS_AGO, NOW))?.data ?? []"
+    },
+    entry,
     '30d'
   )
-  assert.equal(spec.componentName, 'AgentErrors')
-  assert.equal(spec.template, 'line-chart')
-  assert.equal(spec.title, 'My Error Chart')
-  assert.equal(spec.icon, 'AlertTriangle')
-  assert.ok(spec.dataHook.includes('Agents'), 'dataHook should reference Agents service')
-  assert.ok(spec.dataHook.includes('getErrorsTimeline'), 'dataHook should reference getErrorsTimeline')
-  assert.ok(spec.dataHook.includes('THIRTY_DAYS_AGO'), 'dataHook should include time range constant')
-  assert.ok(spec.dataHook.includes('useInsightsSDK'), 'dataHook should use useInsightsSDK')
-  assert.ok(!spec.dataHook.includes('startTime:'), 'dataHook should use positional params not options object')
-  assert.ok(spec.sdkImportLine.includes('Agents'), 'sdkImportLine should reference Agents service')
-  assert.ok(spec.responseTypeImport.includes('AgentErrorsTimelineResponse'), 'responseTypeImport should reference AgentErrorsTimelineResponse')
+  assert.ok(content.includes('customDataFn'))
+  assert.ok(content.includes('getErrorsTimeline'))
+  // No hardcoded type params from registry
+  assert.ok(!content.includes('useInsightsSDK<'))
 })
 
-test('buildT1WidgetSpec: uses 7d time range constant', () => {
-  const spec = buildT1WidgetSpec({ name: 'agent-errors', tier: 'T1' }, registry.t1['agent-errors'], '7d')
-  assert.ok(spec.dataHook.includes('SEVEN_DAYS_AGO'), 'dataHook should include SEVEN_DAYS_AGO')
-  assert.ok(spec.dataHook.includes('useInsightsSDK'), 'dataHook should use useInsightsSDK')
+test('buildWidgetFile: uses registry defaults for xKey/yKey when not in metric', () => {
+  const entry = registry.t1['agent-errors']
+  const content = buildWidgetFile(
+    { name: 'agent-errors', tier: 'T1', title: 'Agent Errors', displayAs: 'line-chart', fnBody: 'return []' },
+    entry,
+    '30d'
+  )
+  // xKey from registry defaults
+  assert.ok(content.includes('date'))
 })
 
-// ── buildT2WidgetSpec + compileT2ToTypeScript tests ───────────────────────────
-
-test('buildT2WidgetSpec: returns correct spec for jobs-duration-threshold', () => {
-  const metric = { name: 'jobs-duration-threshold', tier: 'T2', params: { threshold: 300, direction: 'gt' } }
-  const spec = buildT2WidgetSpec(metric, registry.t2['jobs-duration-threshold'])
-  assert.equal(spec.componentName, 'JobsDurationThreshold')
-  assert.equal(spec.template, 'data-table')
-  assert.ok(spec.sdkHookCode)
-  assert.ok(spec.sdkImport)
+test('buildWidgetFile: T2 metric with fnBody uses chart path', () => {
+  const entry = registry.t2['jobs-duration-threshold']
+  const content = buildWidgetFile(
+    {
+      name: 'jobs-duration-threshold',
+      tier: 'T2',
+      title: 'Long Running Jobs',
+      displayAs: 'bar-chart',
+      xKey: 'name',
+      yKey: 'duration',
+      fnBody: "const { Jobs } = await import('@uipath/uipath-typescript/jobs')\nconst svc = new Jobs(sdk as never)\nconst result = await svc.getAll({ filter: \"State eq 'Running'\" })\nreturn result?.items ?? []"
+    },
+    entry,
+    '30d'
+  )
+  assert.ok(content.includes('customDataFn'))
+  assert.ok(content.includes('Jobs'))
+  assert.ok(!content.includes('useInsightsSDK<'))
 })
 
-test('compileT2ToTypeScript: generates valid async function for gt filter', () => {
-  const code = compileT2ToTypeScript({
-    service: 'queues', sdkImport: '@uipath/uipath-typescript/queues', sdkService: 'Queues',
-    method: 'getAll', filterField: 'failureCount', filterOp: 'gt', filterValue: 20,
-    sortField: 'failureCount', sortDir: 'desc'
-  })
-  assert.ok(code.includes('Queues'))
-  assert.ok(code.includes('getAll'))
-  assert.ok(code.includes('failureCount'))
-  assert.ok(code.startsWith('async (sdk'))
+test('buildWidgetFile: T3 metric (null registry entry) uses shell path for kpi-card', () => {
+  const content = buildWidgetFile(
+    {
+      name: 'running-jobs-kpi',
+      tier: 'T3',
+      title: 'Running Jobs',
+      displayAs: 'kpi-card',
+      fnBody: 'return [{ count: 42 }]',
+      valueField: 'count',
+      valueLabel: 'running jobs'
+    },
+    null,
+    '30d'
+  )
+  assert.ok(content.includes('RunningJobsKpi'))
+  assert.ok(content.includes('Running Jobs'))
+  assert.ok(content.includes("const VALUE_FIELD = 'count'"))
+  assert.ok(content.includes("const VALUE_LABEL = 'running jobs'"))
+  assert.ok(!content.includes('<<FN_BODY>>'))
 })
 
-test('compileT2ToTypeScript: throws for invalid op', () => {
-  assert.throws(() => compileT2ToTypeScript({
-    service: 'queues', sdkImport: 'x', sdkService: 'Queues',
-    method: 'getAll', filterField: 'x', filterOp: 'INVALID', filterValue: 1,
-    sortField: 'x', sortDir: 'desc'
-  }), /invalid op/)
+test('buildWidgetFile: throws if title is missing', () => {
+  assert.throws(
+    () => buildWidgetFile({ name: 'x', tier: 'T3', displayAs: 'kpi-card', fnBody: 'return []' }, null),
+    /missing title/
+  )
 })
 
-// ── buildT3WidgetFile tests ───────────────────────────────────────────────────
+test('buildWidgetFile: throws if fnBody is missing', () => {
+  assert.throws(
+    () => buildWidgetFile({ name: 'x', tier: 'T3', title: 'X', displayAs: 'kpi-card' }, null),
+    /missing fnBody/
+  )
+})
 
-test('buildT3WidgetFile: injects fnBody into shell template', () => {
-  const content = buildT3WidgetFile({
+test('buildWidgetFile: throws if displayAs cannot be determined', () => {
+  assert.throws(
+    () => buildWidgetFile({ name: 'x', tier: 'T3', title: 'X', fnBody: 'return []' }, null),
+    /needs displayAs/
+  )
+})
+
+test('buildWidgetFile: injects fnBody into shell template for ranked-table', () => {
+  const content = buildWidgetFile({
     name: 'faulted-queues', tier: 'T3', title: 'Faulted Queues', description: 'Queues with faults',
     displayAs: 'ranked-table', fnBody: "const r = await sdk.queues.getAll({})\nreturn r.items ?? []"
-  }, '30d')
+  }, null, '30d')
   assert.ok(content.includes('FaultedQueues'), 'component name not injected')
   assert.ok(content.includes('Faulted Queues'), 'title not injected')
   assert.ok(content.includes('sdk.queues.getAll'), 'fnBody not injected')
@@ -232,21 +302,25 @@ test('buildT3WidgetFile: injects fnBody into shell template', () => {
   assert.ok(!content.includes('<<COMPONENT_NAME>>'), 'COMPONENT_NAME placeholder not replaced')
 })
 
-test('buildT3WidgetFile: injects DISPLAY_AS and COLUMNS into shell template', () => {
-  const content = buildT3WidgetFile({
-    name: 'faulted-queues', tier: 'T3', title: 'Faulted Queues',
-    displayAs: 'ranked-table', fnBody: "return []"
-  }, '30d')
-  assert.ok(content.includes("'ranked-table'"), 'DISPLAY_AS not injected')
-  assert.ok(!content.includes('<<DISPLAY_AS>>'), 'DISPLAY_AS placeholder not replaced')
-  assert.ok(!content.includes('<<COLUMNS>>'), 'COLUMNS placeholder not replaced')
+test('buildWidgetFile: no unresolved << >> placeholders remain', () => {
+  const content = buildWidgetFile({
+    name: 'test', tier: 'T3', title: 'Test Widget',
+    displayAs: 'ranked-table',
+    fnBody: 'return []',
+    valueField: '', valueLabel: '',
+  }, null, '30d')
+  const unresolved = content.match(/<<[A-Z_]+>>/g)
+  assert.equal(unresolved, null, `Unresolved placeholders: ${(unresolved ?? []).join(', ')}`)
 })
 
-test('buildT3WidgetFile: throws if fnBody is missing and no Insights path', () => {
-  assert.throws(
-    () => buildT3WidgetFile({ name: 'x', tier: 'T3', title: 'X', displayAs: 'kpi-card' }, '30d'),
-    /fnBody/
+test('buildWidgetFile: uses registry defaults for icon when metric has none', () => {
+  const entry = registry.t1['agent-errors']
+  const content = buildWidgetFile(
+    { name: 'agent-errors', tier: 'T1', title: 'Errors', displayAs: 'line-chart', fnBody: 'return []' },
+    entry,
+    '30d'
   )
+  assert.ok(content.includes('AlertTriangle'))
 })
 
 // ── emit + parseEvent tests ───────────────────────────────────────────────────
@@ -305,7 +379,18 @@ test('parseEvent: recognizes AUTH_MISSING event', () => {
   assert.equal(result.payload.var, 'clientId')
 })
 
-// ── VALID_T3_SDK_DISPLAY_TYPES + T3-SDK displayAs validation tests ────────────
+// ── VALID_DISPLAY_TYPES + displayAs validation tests ─────────────────────────
+
+test('VALID_DISPLAY_TYPES includes all chart and table types', () => {
+  assert.ok(VALID_DISPLAY_TYPES.includes('kpi-card'))
+  assert.ok(VALID_DISPLAY_TYPES.includes('ranked-table'))
+  assert.ok(VALID_DISPLAY_TYPES.includes('data-table'))
+  assert.ok(VALID_DISPLAY_TYPES.includes('area-chart'))
+  assert.ok(VALID_DISPLAY_TYPES.includes('line-chart'))
+  assert.ok(VALID_DISPLAY_TYPES.includes('bar-chart'))
+  assert.ok(VALID_DISPLAY_TYPES.includes('donut-chart'))
+  assert.ok(VALID_DISPLAY_TYPES.includes('multi-line-chart'))
+})
 
 test('validateIntent: accepts T3-SDK with chart displayAs (area-chart, line-chart, bar-chart, donut-chart)', () => {
   for (const chartType of ['area-chart', 'line-chart', 'bar-chart', 'donut-chart']) {
@@ -333,66 +418,13 @@ test('validateIntent: accepts T3-SDK with ranked-table displayAs', () => {
   assert.deepEqual(errors, [])
 })
 
-test('buildT3WidgetFile: injects valueField and valueLabel placeholders', () => {
-  const content = buildT3WidgetFile({
+test('buildWidgetFile: injects valueField and valueLabel placeholders', () => {
+  const content = buildWidgetFile({
     name: 'running-jobs', tier: 'T3', title: 'Running Jobs', displayAs: 'kpi-card',
     fnBody: 'return []', valueField: 'count', valueLabel: 'running jobs'
-  })
+  }, null)
   assert.ok(content.includes("const VALUE_FIELD = 'count'"))
   assert.ok(content.includes("const VALUE_LABEL = 'running jobs'"))
   assert.ok(!content.includes('<<VALUE_FIELD>>'))
   assert.ok(!content.includes('<<VALUE_LABEL>>'))
-})
-
-// Note: applyTemplate is not exported (internal function). Test indirectly via
-// the behaviour that unresolved placeholders cause the build to fail.
-// We test the guard via the T3 shell template which is directly testable:
-test('buildT3WidgetFile: no unresolved << >> placeholders remain', () => {
-  const content = buildT3WidgetFile({
-    name: 'test', tier: 'T3', title: 'Test Widget',
-    displayAs: 'ranked-table',
-    fnBody: 'return []',
-    valueField: '', valueLabel: '',
-  })
-  const unresolved = content.match(/<<[A-Z_]+>>/g)
-  assert.equal(unresolved, null, `Unresolved placeholders: ${(unresolved ?? []).join(', ')}`)
-})
-
-// ── sdkCallOverride tests ─────────────────────────────────────────────────────
-
-test('buildT1WidgetSpec: uses sdkCallOverride when present (Jobs.getAll with filter)', () => {
-  const spec = buildT1WidgetSpec(
-    { name: 'job-failures', tier: 'T1' },
-    registry.t1['job-failures'],
-    '30d'
-  )
-  assert.ok(spec.dataHook.includes("getAll({ filter:"))
-  assert.ok(!spec.dataHook.includes('THIRTY_DAYS_AGO'), 'should not use positional date params')
-  assert.ok(spec.sdkImportLine.includes('Jobs'), 'sdkImportLine should reference Jobs service')
-})
-
-// ── T2 string equality filter tests ──────────────────────────────────────────
-
-test('compileT2ToTypeScript: generates string equality filter for filterType:string', () => {
-  const code = compileT2ToTypeScript({
-    sdkService: 'Jobs', method: 'getAll',
-    filterField: 'state', filterType: 'string', filterValue: 'Faulted',
-    sortField: 'createdTime', sortDir: 'desc'
-  })
-  assert.ok(code.includes("item.state === 'Faulted'"))
-  assert.ok(code.startsWith('async (sdk'))
-})
-
-test('resolveMetric: T2 jobs-by-state resolves correctly', () => {
-  const result = resolveMetric({ name: 'jobs-by-state', tier: 'T2', params: { value: 'Faulted' } })
-  assert.equal(result.tier, 'T2')
-  assert.equal(result.entry.filterType, 'string')
-})
-
-test('validateIntent: rejects T2 string metric without params.value', () => {
-  const errors = validateIntent({
-    dashboardName: 'x', timeRange: '7d',
-    metrics: [{ name: 'jobs-by-state', tier: 'T2', params: { threshold: 5 } }]
-  })
-  assert.ok(errors.some(e => e.includes('params.value')))
 })

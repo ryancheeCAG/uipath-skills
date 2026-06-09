@@ -15,7 +15,7 @@
  * Exit codes:
  *   0 — success
  *   1 — fatal error (message on stderr)
- *   2 — T3 widget needs retry (update fnBody in intent.json and re-run)
+ *   2 — widget needs retry (update fnBody in intent.json and re-run)
  */
 
 import { readFileSync, writeFileSync, copyFileSync, mkdirSync, readdirSync, existsSync, renameSync, unlinkSync, rmSync } from 'fs'
@@ -50,21 +50,27 @@ const REGISTRY = JSON.parse(readFileSync(resolve(__dirname, 'capability-registry
  * @typedef {Object} IntentMetric
  * @property {string}      name          - Kebab-case metric identifier
  * @property {MetricTier}  tier          - Resolution tier
- * @property {string}      [title]       - Display title (required for T3)
+ * @property {string}      [title]       - Display title (required for T1/T2/T3)
  * @property {string}      [description] - One-line description
  * @property {string}      [componentName] - Override PascalCase component name
  * @property {string}      [icon]        - lucide-react icon name
  * @property {string}      [detailRoute] - HashRouter path for drilldown
- * @property {Object}      [params]      - T2 filter params
+ * @property {Object}      [params]      - T2 filter params (used for validation only — agent writes fnBody)
  * @property {number}      [params.threshold]
  * @property {string}      [params.direction] - 'gt'|'lt'|'eq'|'gte'|'lte'|'neq'
- * @property {string}      [fnBody]      - T3-SDK: async function body using sdk.*
- * @property {string}      [displayAs]   - T3-SDK: widget template name (kpi-card | ranked-table | data-table)
- * @property {string}      [valueField]  - T3-SDK kpi-card: which field to display as the headline number
- * @property {string}      [valueLabel]  - T3-SDK kpi-card: label shown below the headline (e.g. "running jobs")
+ * @property {string}      fnBody        - Required for all tiers: async function body using SDK service classes
+ * @property {string}      [displayAs]   - Widget template name (kpi-card | ranked-table | data-table | *-chart)
+ * @property {string}      [valueField]  - kpi-card: which field to display as the headline number
+ * @property {string}      [valueLabel]  - kpi-card: label shown below the headline (e.g. "running jobs")
  * @property {string}      [dataSelector]
  * @property {string}      [dataHook]
  * @property {string}      [columns]     - ColumnDef array literal string
+ * @property {string}      [xKey]
+ * @property {string}      [yKey]
+ * @property {string}      [deltaDir]
+ * @property {string}      [deltaText]
+ * @property {string}      [series]
+ * @property {string}      [pivotExpression]
  */
 
 /**
@@ -143,23 +149,17 @@ const KNOWN_EVENTS = new Set([
   'HAND_EDIT_DETECTED', 'T2_SCHEMA_ERROR', 'INCREMENTAL_READY',
 ])
 
-const VALID_T2_OPS = ['gt', 'lt', 'eq', 'gte', 'lte', 'neq']
-const T2_OP_TO_JS = { gt: '>', lt: '<', eq: '===', gte: '>=', lte: '<=', neq: '!==' }
-
 const VALID_EDIT_OPS = ['ADD', 'REMOVE', 'CHANGE', 'REBUILD']
 
 /**
- * Display types supported for T3-SDK widgets.
+ * Display types supported for all widget tiers.
  * Table/KPI types use t3-shell.tsx.template.
  * Chart types use the standard chart templates with customDataFn injected.
  */
-export const VALID_T3_SDK_DISPLAY_TYPES = [
-  'kpi-card', 'ranked-table', 'data-table',        // shell template path
-  'area-chart', 'line-chart', 'bar-chart',          // chart template path
-  'donut-chart', 'multi-line-chart',                // chart template path
+export const VALID_DISPLAY_TYPES = [
+  'kpi-card', 'ranked-table', 'data-table',
+  'area-chart', 'line-chart', 'bar-chart', 'donut-chart', 'multi-line-chart',
 ]
-
-const T3_CHART_TYPES = new Set(['area-chart', 'line-chart', 'bar-chart', 'donut-chart', 'multi-line-chart'])
 
 // ── Low-level utilities ────────────────────────────────────────────────────────
 
@@ -341,7 +341,7 @@ function applyTemplate(templateName, subs) {
 }
 
 /**
- * Generate a detail view file for a T1 widget.
+ * Generate a detail view file for a widget.
  * Columns are auto-detected from the first data row at runtime via autoColumns().
  * @param {{ componentName: string, title: string, description: string, dataHook: string, dataSelector: string }} widget
  * @returns {string} Full TypeScript file content
@@ -540,25 +540,21 @@ export function validateIntent(intent) {
   for (const m of (intent.metrics ?? [])) {
     if (!m.name) errors.push('metric missing name')
     if (!['T1', 'T2', 'T3'].includes(m.tier)) errors.push(`metric "${m.name}" has invalid tier: ${m.tier}`)
+    if (m.tier === 'T1' || m.tier === 'T2') {
+      if (!m.fnBody) errors.push(`${m.tier} metric "${m.name}" missing fnBody — agent must write the SDK call from documentation`)
+      if (!m.title)  errors.push(`${m.tier} metric "${m.name}" missing title`)
+    }
     if (m.tier === 'T2') {
       if (!m.params) {
         errors.push(`T2 metric "${m.name}" missing params`)
-      } else {
-        const entry = REGISTRY.t2[m.name]
-        if (entry?.filterType === 'string' && m.params.value === undefined) {
-          errors.push(`T2 metric "${m.name}" needs params.value (string) — e.g. { "value": "Faulted" }`)
-        }
-        if (entry?.filterType !== 'string' && m.params.threshold === undefined) {
-          errors.push(`T2 metric "${m.name}" needs params.threshold (number) — e.g. { "threshold": 30, "direction": "gt" }`)
-        }
       }
     }
     if (m.tier === 'T3') {
       if (!m.title) errors.push(`T3 metric "${m.name}" missing title`)
       if (!m.fnBody) errors.push(`T3 metric "${m.name}" missing fnBody — write an async function body using SDK service classes`)
-      if (!m.displayAs) errors.push(`T3 metric "${m.name}" with fnBody needs displayAs — valid values: ${VALID_T3_SDK_DISPLAY_TYPES.join(', ')}`)
-      else if (!VALID_T3_SDK_DISPLAY_TYPES.includes(m.displayAs)) {
-        errors.push(`T3 metric "${m.name}" has unsupported displayAs "${m.displayAs}". Valid: ${VALID_T3_SDK_DISPLAY_TYPES.join(', ')}`)
+      if (!m.displayAs) errors.push(`T3 metric "${m.name}" with fnBody needs displayAs — valid values: ${VALID_DISPLAY_TYPES.join(', ')}`)
+      else if (!VALID_DISPLAY_TYPES.includes(m.displayAs)) {
+        errors.push(`T3 metric "${m.name}" has unsupported displayAs "${m.displayAs}". Valid: ${VALID_DISPLAY_TYPES.join(', ')}`)
       }
     }
   }
@@ -568,7 +564,7 @@ export function validateIntent(intent) {
 /**
  * Look up a metric in the capability registry.
  * T3 metrics always resolve (they carry their own generation logic).
- * Throws if a T1/T2 metric name is not found in the registry.
+ * Returns null entry for unknown T1/T2 metrics (agent provides fnBody, registry lookup is for display hints only).
  * @param {IntentMetric} metric
  * @returns {{ tier: MetricTier, key: string, entry: object|null }}
  */
@@ -583,154 +579,33 @@ export function resolveMetric(metric) {
 }
 
 /**
- * Build a complete WidgetSpec from a T1 registry entry, merging any intent overrides.
- * @param {IntentMetric} metric
- * @param {object} entry  - Registry entry. Optional sdkCallOverride replaces the auto-generated method(startTime, NOW) call.
- * @param {'1d'|'7d'|'30d'|'90d'} timeRange
- * @returns {WidgetSpec}
- */
-export function buildT1WidgetSpec(metric, entry, timeRange) {
-  const startConst = TIME_RANGE_CONSTANTS[timeRange] ?? 'THIRTY_DAYS_AGO'
-  const componentName = metric.componentName ?? toPascalCase(metric.name)
-  const { sdkService, sdkMethod, sdkImport, responseType } = entry
-
-  // sdkCallOverride: use verbatim for services that don't take positional Date params
-  const sdkCall = entry.sdkCallOverride
-    ? entry.sdkCallOverride
-    : `${sdkMethod}(${startConst}, NOW)`
-  const dataHook = `useInsightsSDK<${responseType}>(sdk => new ${sdkService}(sdk as never).${sdkCall}, [])`
-
-  // Static SDK service import — injected into the template before the component
-  const sdkImportLine = `import { ${sdkService} } from '${sdkImport}'`
-  // Response type import — from the stub types file (will be SDK imports when SDK ships)
-  const responseTypeImport = `import type { ${responseType} } from '@/types/insights'`
-
-  return {
-    componentName,
-    template: entry.template,
-    detailRoute: metric.detailRoute ?? `/${componentName.toLowerCase()}`,
-    icon: metric.icon ?? entry.defaults.icon,
-    title: metric.title ?? entry.defaults.title,
-    description: metric.description ?? entry.defaults.description,
-    dataHook,
-    sdkImportLine,
-    responseTypeImport,
-    dataSelector: entry.defaults.dataSelector ?? '[]',
-    xKey: entry.defaults.xKey ?? 'date',
-    yKey: entry.defaults.yKey ?? 'value',
-    valueExpression: entry.defaults.valueExpression ?? "'—'",
-    columns: metric.columns ?? entry.defaults.columns ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]',
-    deltaDir: entry.defaults.deltaDir ?? 'neutral',
-    deltaText: entry.defaults.deltaText ?? '',
-    series: entry.defaults.series ?? '[{key:"value",color:"hsl(var(--chart-1))"}]',
-    pivotExpression: entry.defaults.pivotExpression ?? 'rawData',
-  }
-}
-
-/**
- * Compile a T2 filter descriptor into a TypeScript async arrow function string.
- * Used to generate the SDK data-fetching hook for parametric metrics.
- * @param {{ sdkService: string, method: string, filterField: string, filterOp?: string, filterValue: number|string, filterType?: string, sortField: string, sortDir: string }} descriptor
- * @returns {string} TypeScript function expression starting with "async (sdk, _getToken) =>"
- */
-export function compileT2ToTypeScript(descriptor) {
-  const { sdkService, method, filterField, filterOp, filterValue, filterType, sortField, sortDir } = descriptor
-
-  // String equality filter (e.g. state === 'Faulted')
-  if (filterType === 'string') {
-    const sortFn = sortDir === 'asc'
-      ? `items.sort((a, b) => String(a.${sortField} ?? '').localeCompare(String(b.${sortField} ?? '')))`
-      : `items.sort((a, b) => String(b.${sortField} ?? '').localeCompare(String(a.${sortField} ?? '')))`
-    return `async (sdk, _getToken) => {
-  const svc = new ${sdkService}(sdk as never)
-  const result = await svc.${method}({})
-  const items = (result?.items ?? result?.value ?? []) as Array<Record<string, unknown>>
-  const filtered = items.filter(item => item.${filterField} === '${filterValue}')
-  ${sortFn}
-  return filtered
-}`
-  }
-
-  // Numeric comparison filter (existing behavior)
-  if (!VALID_T2_OPS.includes(filterOp)) {
-    throw new Error(`T2 descriptor has invalid op: ${filterOp}. Must be one of: ${VALID_T2_OPS.join(', ')}`)
-  }
-  const jsOp = T2_OP_TO_JS[filterOp]
-  const sortFn = sortDir === 'asc'
-    ? `items.sort((a, b) => (a.${sortField} ?? 0) - (b.${sortField} ?? 0))`
-    : `items.sort((a, b) => (b.${sortField} ?? 0) - (a.${sortField} ?? 0))`
-  return `async (sdk, _getToken) => {
-  const svc = new ${sdkService}(sdk as never)
-  const result = await svc.${method}({})
-  const items = (result?.items ?? result?.value ?? []) as Array<Record<string, number>>
-  const filtered = items.filter(item => (item.${filterField} ?? 0) ${jsOp} ${filterValue})
-  ${sortFn}
-  return filtered
-}`
-}
-
-/**
- * Build a widget spec for a T2 parametric metric.
- * @param {IntentMetric} metric
- * @param {object} entry - T2 registry entry
- * @returns {object}
- */
-export function buildT2WidgetSpec(metric, entry) {
-  const componentName = metric.componentName ?? toPascalCase(metric.name)
-  const { params } = metric
-  const descriptor = {
-    service: entry.service,
-    sdkImport: entry.sdkImport,
-    sdkService: entry.sdkService,
-    method: entry.method,
-    filterField: params.field ?? entry.filterField,
-    filterType: entry.filterType ?? 'number',
-    filterOp: params.direction ?? 'gt',
-    filterValue: params.value !== undefined ? params.value : (params.threshold ?? 0),
-    sortField: params.sortField ?? entry.sortField,
-    sortDir: params.sortDir ?? 'desc',
-  }
-  const sdkHookCode = compileT2ToTypeScript(descriptor)
-  return {
-    componentName,
-    template: metric.displayAs ?? entry.defaultDisplayAs,
-    sdkImport: entry.sdkImport,
-    sdkService: entry.sdkService,
-    sdkHookCode,
-    title: metric.title ?? entry.defaults.title,
-    description: metric.description ?? entry.defaults.description,
-    icon: metric.icon ?? entry.defaults.icon,
-    columns: metric.columns ?? entry.defaults.columns,
-    detailRoute: metric.detailRoute ?? `/${componentName.toLowerCase()}`,
-    deltaDir: entry.defaults.deltaDir ?? 'neutral',
-    deltaText: entry.defaults.deltaText ?? '',
-    dataSelector: entry.defaults.dataSelector ?? '(data as any)?.items ?? []',
-  }
-}
-
-/**
- * Generate the TypeScript source for a T3 widget file.
- * T3-SDK path: injects fnBody into the t3-shell.tsx.template.
- * @param {IntentMetric} metric
+ * Generate the TypeScript source for any widget file.
+ * All tiers (T1, T2, T3) use fnBody — the agent writes the SDK call.
+ * Registry provides display hints; agent provides the data fetching logic.
+ * @param {IntentMetric} metric - Must have fnBody, displayAs (or registry template), title
+ * @param {object|null} registryEntry - Registry entry for display hints (null for T3)
  * @param {'1d'|'7d'|'30d'|'90d'} [timeRange='30d']
  * @returns {string} Full TypeScript file content
  */
-export function buildT3WidgetFile(metric, timeRange = '30d') {
-  if (!metric.title)   throw new Error(`T3 metric "${metric.name}" missing title`)
-  if (!metric.fnBody)  throw new Error(`T3 metric "${metric.name}" missing fnBody`)
-  if (!metric.displayAs) throw new Error(`T3 metric "${metric.name}" needs displayAs`)
+export function buildWidgetFile(metric, registryEntry = null, timeRange = '30d') {
+  if (!metric.title)   throw new Error(`metric "${metric.name}" missing title`)
+  if (!metric.fnBody)  throw new Error(`metric "${metric.name}" missing fnBody — agent must provide the SDK call`)
 
+  const defaults    = registryEntry?.defaults ?? {}
   const componentName = metric.componentName ?? toPascalCase(metric.name)
-  const iconName      = metric.icon ?? 'Activity'
+  const displayAs   = metric.displayAs ?? registryEntry?.template
+  const iconName    = metric.icon ?? defaults.icon ?? 'Activity'
 
-  // ── Chart path: use existing chart templates with customDataFn injected ──────
-  // fnBody returns Row[] directly, so DATA_SELECTOR is just `data ?? []`.
-  // customDataFn is injected before the exported component function.
-  if (T3_CHART_TYPES.has(metric.displayAs)) {
+  if (!displayAs) throw new Error(`metric "${metric.name}" needs displayAs`)
+
+  const CHART_TYPES = new Set(['area-chart', 'line-chart', 'bar-chart', 'donut-chart', 'multi-line-chart'])
+
+  // ── Chart path ─────────────────────────────────────────────────────────────
+  if (CHART_TYPES.has(displayAs)) {
     const indented = metric.fnBody.split('\n').map(l => '  ' + l).join('\n')
     const customFnBlock = [
       '',
-      '// ── Custom data function (T3-SDK, injected at build time) ──────────────────',
+      '// ── Custom data function ──────────────────────────────────────────────────────',
       'const customDataFn = async (sdk: any, getToken: () => Promise<string>): Promise<Record<string, unknown>[]> => {',
       indented,
       '}',
@@ -740,41 +615,37 @@ export function buildT3WidgetFile(metric, timeRange = '30d') {
 
     const spec = {
       componentName,
-      template:         metric.displayAs,
-      detailRoute:      metric.detailRoute ?? `/${componentName.toLowerCase()}`,
-      icon:             iconName,
-      title:            metric.title,
-      description:      metric.description ?? '',
-      dataHook:         'useInsightsSDK(customDataFn, [])',
-      sdkImportLine:    '',            // SDK imports are inside fnBody (dynamic)
+      template:          displayAs,
+      detailRoute:       metric.detailRoute ?? `/${componentName.toLowerCase()}`,
+      icon:              iconName,
+      title:             metric.title,
+      description:       metric.description ?? defaults.description ?? '',
+      dataHook:          'useInsightsSDK(customDataFn, [])',
+      hookImport:        "import { useInsightsSDK } from '@/hooks/useInsightsSDK'",
+      sdkImportLine:     '',
       responseTypeImport: '',
-      hookImport:       "import { useInsightsSDK } from '@/hooks/useInsightsSDK'",
-      dataSelector:     'data ?? []', // fnBody returns the array directly
-      xKey:             metric.xKey  ?? 'date',
-      yKey:             metric.yKey  ?? 'value',
-      valueExpression:  "'—'",
-      columns:          metric.columns ?? '[{key:"name",label:"Name"}]',
-      deltaDir:         metric.deltaDir ?? 'neutral',
-      deltaText:        metric.deltaText ?? '',
-      series:           metric.series ?? '[{key:"value",color:"hsl(var(--chart-1))"}]',
-      pivotExpression:  metric.pivotExpression ?? 'rawData',
+      dataSelector:      'data ?? []',
+      xKey:              metric.xKey  ?? defaults.xKey  ?? 'date',
+      yKey:              metric.yKey  ?? defaults.yKey  ?? 'value',
+      valueExpression:   "'—'",
+      columns:           metric.columns ?? '[{key:"name",label:"Name"}]',
+      deltaDir:          metric.deltaDir ?? defaults.deltaDir ?? 'neutral',
+      deltaText:         metric.deltaText ?? defaults.deltaText ?? '',
+      series:            metric.series ?? defaults.series ?? '[{key:"value",color:"hsl(var(--chart-1))"}]',
+      pivotExpression:   metric.pivotExpression ?? defaults.pivotExpression ?? 'rawData',
     }
 
     let content = applyTemplate(spec.template, specToSubs(spec))
-
-    // Inject customDataFn block just before the exported component function
     content = content.replace(/\nexport function /, customFnBlock + '\nexport function ')
-
     return content
   }
 
-  // ── Shell path: KPI card and table types use t3-shell.tsx.template ───────────
+  // ── KPI / table path (shell template) ──────────────────────────────────────
   if (!existsSync(T3_SHELL_TEMPLATE_PATH)) {
     throw new Error(`T3 shell template not found at ${T3_SHELL_TEMPLATE_PATH}`)
   }
-
   const indentedFnBody = metric.fnBody.split('\n').map(l => '  ' + l).join('\n')
-  const columns   = metric.columns   ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]'
+  const columns    = metric.columns   ?? defaults.columns ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]'
   const valueField = metric.valueField ?? ''
   const valueLabel = metric.valueLabel ?? ''
 
@@ -783,14 +654,13 @@ export function buildT3WidgetFile(metric, timeRange = '30d') {
     .split('<<FN_BODY>>').join(indentedFnBody)
     .split('<<COMPONENT_NAME>>').join(componentName)
     .split('<<TITLE>>').join(metric.title ?? componentName)
-    .split('<<DESCRIPTION>>').join(metric.description ?? '')
+    .split('<<DESCRIPTION>>').join(metric.description ?? defaults.description ?? '')
     .split('<<ICON_NAME>>').join(iconName)
-    .split('<<DISPLAY_AS>>').join(metric.displayAs ?? 'ranked-table')
+    .split('<<DISPLAY_AS>>').join(displayAs ?? 'ranked-table')
     .split('<<COLUMNS>>').join(columns)
     .split('<<VALUE_FIELD>>').join(valueField)
     .split('<<VALUE_LABEL>>').join(valueLabel)
 
-  // Inject time constants after the last import line (same as applyTemplate)
   const lines = content.split('\n')
   let lastImportIdx = -1
   for (let i = 0; i < lines.length; i++) {
@@ -800,7 +670,6 @@ export function buildT3WidgetFile(metric, timeRange = '30d') {
     lines.splice(lastImportIdx + 1, 0, '', TIME_CONSTANTS.trimEnd())
     content = lines.join('\n')
   }
-
   return content
 }
 
@@ -909,7 +778,7 @@ async function detectDevServerPort(startPort, timeoutMs) {
 /**
  * Main intent.json build pipeline.
  * @param {DashboardIntent} intent
- * @param {string} intentPath - Absolute path to intent.json on disk (for T3 re-reads)
+ * @param {string} intentPath - Absolute path to intent.json on disk (for re-reads)
  * @returns {Promise<void>}
  */
 async function runDashboardBuild(intent, intentPath) {
@@ -980,7 +849,7 @@ async function runDashboardBuild(intent, intentPath) {
     }
 
     // Step 4 — Resolve + generate widgets
-    const t1t2Metrics = metrics.filter(m => m.tier !== 'T3')
+    const nonT3 = metrics.filter(m => m.tier !== 'T3')
     const t3Metrics = metrics.filter(m => m.tier === 'T3')
     const widgetHashes = {}
     const widgetMeta = []    // { componentName, template }
@@ -988,51 +857,32 @@ async function runDashboardBuild(intent, intentPath) {
     let widgetIndex = 0
     const total = metrics.length
 
-    // T1 + T2 in parallel
-    await Promise.all(t1t2Metrics.map(async (metric) => {
-      const { tier, entry } = resolveMetric(metric)
-      let widgetContent, componentName
+    // All non-T3 metrics use buildWidgetFile (unified path)
+    await Promise.all(nonT3.map(async (metric) => {
+      const { entry } = resolveMetric(metric)  // gets registry hints or null
+      const widgetContent = buildWidgetFile(metric, entry, timeRange)
 
-      if (tier === 'T1') {
-        const spec = buildT1WidgetSpec(metric, entry, timeRange)
-        componentName = spec.componentName
-        widgetContent = applyTemplate(spec.template, specToSubs(spec))
-        widgetSpecs[componentName] = {
-          componentName,
-          title: spec.title,
-          description: spec.description,
-          dataHook: spec.dataHook,
-          dataSelector: spec.dataSelector,
-          columns: spec.columns,
-        }
-      } else {
-        // T2 — use SDK directly; no detail view needed (widget already shows tabular data)
-        const spec = buildT2WidgetSpec(metric, entry)
-        componentName = spec.componentName
-        widgetContent = applyTemplate('sdk-data-table', {
-          COMPONENT_NAME: spec.componentName,
-          TITLE: spec.title,
-          DESCRIPTION: spec.description,
-          DETAIL_ROUTE: spec.detailRoute,
-          ICON: spec.icon,
-          SDK_IMPORT: spec.sdkImport,
-          SDK_SERVICE: spec.sdkService,
-          SDK_CALL: `getAll({})`,
-          SDK_RESULT_TYPE: 'any',
-          COLUMNS: spec.columns,
-          DELTA_DIR: spec.deltaDir ?? 'neutral',
-          DELTA_TEXT: spec.deltaText ?? '',
-          DATA_HOOK: '', DATA_SELECTOR: spec.dataSelector.replace(/\bdata\b/g, 'result'), X_KEY: '', Y_KEY: '',
-          VALUE_EXPRESSION: '', SERIES: '', PIVOT_EXPRESSION: '',
-        })
-        // T2 widgets are already tables — no separate detail view (skip widgetSpecs)
-      }
-
-      const resolvedTemplate = tier === 'T1' ? entry.template : (metric.displayAs ?? entry.defaultDisplayAs)
+      const displayAs = metric.displayAs ?? entry?.template ?? 'data-table'
+      const componentName = metric.componentName ?? toPascalCase(metric.name)
       const widgetPath = join(P, 'src', 'dashboard', 'widgets', `${componentName}.tsx`)
       writeAtomic(widgetPath, widgetContent)
-      widgetHashes[componentName] = { hash: hashContent(widgetContent), tier, metric: metric.name, template: resolvedTemplate }
-      widgetMeta.push({ componentName, template: resolvedTemplate })
+
+      widgetHashes[componentName] = { hash: hashContent(widgetContent), tier: metric.tier, metric: metric.name, template: displayAs }
+      widgetMeta.push({ componentName, template: displayAs })
+
+      // Generate view file for T1/T2 using registry's dataSelector + display hints
+      if (entry) {
+        widgetSpecs[componentName] = {
+          componentName,
+          title: metric.title ?? entry.defaults?.title ?? componentName,
+          description: metric.description ?? entry.defaults?.description ?? '',
+          dataHook: 'useInsightsSDK(customDataFn, [])',
+          dataSelector: metric.dataSelector ?? entry.defaults?.dataSelector ?? '[]',
+          columns: metric.columns ?? entry.defaults?.columns,
+          viewColumns: entry.defaults?.viewColumns,
+        }
+      }
+
       widgetIndex++
       emit('WIDGET_READY', { name: componentName, index: widgetIndex, total })
     }))
@@ -1044,7 +894,7 @@ async function runDashboardBuild(intent, intentPath) {
 
       let widgetContent
       try {
-        widgetContent = buildT3WidgetFile(currentMetric, timeRange)
+        widgetContent = buildWidgetFile(currentMetric, null, timeRange)
       } catch (e) {
         emit('T3_FAILED', { widget: metric.name, reason: e.message })
         fail(`T3 widget "${metric.name}" could not be generated: ${e.message}`)
@@ -1076,8 +926,6 @@ async function runDashboardBuild(intent, intentPath) {
     generateDashboardFiles(P, widgetMeta, dashboardName)
 
     // Step 5a — Generate view files and track which ones were written
-    // T3-SDK widgets (fnBody only, no namespace+method) are excluded from widgetSpecs
-    // and therefore get no view file — only T1 and T3-Insights produce view files.
     const generatedViewNames = []
     for (const [componentName, spec] of Object.entries(widgetSpecs)) {
       const info = widgetHashes[componentName]
@@ -1179,29 +1027,9 @@ async function runIncrementalEdit(editIntent, intentPath) {
 
   if (op === 'ADD') {
     const { tier, entry } = resolveMetric(metric)
-    let widgetContent, componentName
-
-    if (tier === 'T1') {
-      const spec = buildT1WidgetSpec(metric, entry, timeRange)
-      componentName = spec.componentName
-      widgetContent = applyTemplate(spec.template, specToSubs(spec))
-    } else if (tier === 'T3') {
-      componentName = toPascalCase(metric.name)
-      widgetContent = buildT3WidgetFile(metric)
-    } else {
-      const spec = buildT2WidgetSpec(metric, entry)
-      componentName = spec.componentName
-      widgetContent = applyTemplate('sdk-data-table', {
-        COMPONENT_NAME: componentName, TITLE: spec.title, DESCRIPTION: spec.description,
-        DETAIL_ROUTE: spec.detailRoute, ICON: spec.icon, SDK_IMPORT: spec.sdkImport,
-        SDK_SERVICE: spec.sdkService, SDK_CALL: 'getAll({})',
-        SDK_RESULT_TYPE: 'any',
-        COLUMNS: spec.columns, DELTA_DIR: spec.deltaDir ?? 'neutral', DELTA_TEXT: spec.deltaText ?? '',
-        DATA_HOOK: '', DATA_SELECTOR: spec.dataSelector.replace(/\bdata\b/g, 'result'), X_KEY: '', Y_KEY: '', VALUE_EXPRESSION: '', SERIES: '', PIVOT_EXPRESSION: '',
-      })
-    }
-
-    const addTemplate = tier === 'T1' ? entry.template : (tier === 'T3' ? (metric.displayAs ?? 'ranked-table') : (metric.displayAs ?? entry.defaultDisplayAs))
+    const componentName = metric.componentName ?? toPascalCase(metric.name)
+    const widgetContent = buildWidgetFile(metric, entry, timeRange)
+    const addTemplate = metric.displayAs ?? entry?.template ?? 'data-table'
     const widgetPath = join(P, 'src', 'dashboard', 'widgets', `${componentName}.tsx`)
     writeAtomic(widgetPath, widgetContent)
     state.widgets = state.widgets ?? {}
@@ -1230,45 +1058,17 @@ async function runIncrementalEdit(editIntent, intentPath) {
     }
     const tier = stored?.tier ?? 'T1'
     const metricRef = { name: stored?.metric ?? target.toLowerCase(), tier, ...delta }
-    if (tier === 'T1') {
-      const { entry } = resolveMetric(metricRef)
-      const spec = buildT1WidgetSpec(metricRef, entry, delta?.timeRange ?? timeRange)
-      const widgetContent = applyTemplate(spec.template, specToSubs(spec))
-      writeAtomic(widgetPath, widgetContent)
-      if (state.widgets) state.widgets[target] = { hash: hashContent(widgetContent), tier, metric: metricRef.name, template: entry.template }
-    } else if (tier === 'T2') {
-      const { entry } = resolveMetric(metricRef)
-      const spec = buildT2WidgetSpec(metricRef, entry)
-      const widgetContent = applyTemplate('sdk-data-table', {
-        COMPONENT_NAME: spec.componentName, TITLE: spec.title, DESCRIPTION: spec.description,
-        DETAIL_ROUTE: spec.detailRoute, ICON: spec.icon, SDK_IMPORT: spec.sdkImport,
-        SDK_SERVICE: spec.sdkService, SDK_CALL: 'getAll({})',
-        SDK_RESULT_TYPE: 'any',
-        COLUMNS: spec.columns, DELTA_DIR: spec.deltaDir ?? 'neutral', DELTA_TEXT: spec.deltaText ?? '',
-        DATA_HOOK: '', DATA_SELECTOR: spec.dataSelector.replace(/\bdata\b/g, 'result'), X_KEY: '', Y_KEY: '', VALUE_EXPRESSION: '', SERIES: '', PIVOT_EXPRESSION: '',
-      })
-      writeAtomic(widgetPath, widgetContent)
-      if (state.widgets) state.widgets[target] = { hash: hashContent(widgetContent), tier, metric: metricRef.name, template: spec.template ?? entry.defaultDisplayAs }
-    } else if (tier === 'T3') {
-      const widgetContent = buildT3WidgetFile(metricRef, timeRange)
-      writeAtomic(widgetPath, widgetContent)
-      const t3Template = metricRef.template ?? metricRef.displayAs ?? 'ranked-table'
-      if (state.widgets) state.widgets[target] = { hash: hashContent(widgetContent), tier, metric: metricRef.name, template: t3Template }
-    }
+    const { entry } = resolveMetric(metricRef)
+    const widgetContent = buildWidgetFile(metricRef, entry, delta?.timeRange ?? timeRange)
+    writeAtomic(widgetPath, widgetContent)
+    const changeTemplate = metricRef.displayAs ?? entry?.template ?? stored?.template ?? 'data-table'
+    if (state.widgets) state.widgets[target] = { hash: hashContent(widgetContent), tier, metric: metricRef.name, template: changeTemplate }
+
   } else if (op === 'REBUILD') {
-    // Rebuild all widgets from existing state entries
+    // Rebuild all widgets from existing state entries — requires fnBody not stored in state
     for (const [componentName, info] of Object.entries(state.widgets ?? {})) {
-      if (info.tier === 'T1') {
-        const rebuildMetric = { name: info.metric, tier: info.tier }
-        const { entry } = resolveMetric(rebuildMetric)
-        const spec = buildT1WidgetSpec(rebuildMetric, entry, timeRange)
-        const widgetContent = applyTemplate(spec.template, specToSubs(spec))
-        writeAtomic(join(P, 'src', 'dashboard', 'widgets', `${componentName}.tsx`), widgetContent)
-        state.widgets[componentName] = { hash: hashContent(widgetContent), tier: 'T1', metric: info.metric, template: info.template }
-      } else {
-        // T2 and T3 rebuilds require params/fnBody not stored in state — skip with warning
-        log(`⚠ Cannot rebuild ${info.tier} widget "${componentName}" from state alone — params/fnBody not persisted. Re-run full build with intent.json.`)
-      }
+      // All tiers require fnBody which is not persisted in state — skip with warning
+      log(`⚠ Cannot rebuild ${info.tier} widget "${componentName}" from state alone — fnBody not persisted. Re-run full build with intent.json.`)
     }
   }
 
