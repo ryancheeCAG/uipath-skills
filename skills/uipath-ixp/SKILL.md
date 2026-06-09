@@ -19,6 +19,7 @@ Skill for working with UiPath IXP (Intelligent eXtraction Platform) projects —
 ## Critical Rules
 
 1. **ONLY use `uip ixp` CLI commands as documented in this skill** — do NOT use curl, do NOT call REST APIs directly, do NOT grep/read source code, do NOT explore the codebase.
+   - **Fail fast on environment errors.** If a `uip ixp` command fails with `unknown command`, an auth/"not logged in" error, or a missing-plugin error, do NOT try to repair the environment — do NOT run `uip tools install`, `npm`/`npm search`, `uip login`, or `find`/`ls` over the filesystem to hunt for it. Report the error and stop. Chasing a missing command is the top cause of run timeouts.
 2. **Run workflows end-to-end automatically** — do NOT ask the user to do individual steps.
 3. **Always use `--output json`** when parsing CLI output programmatically.
 4. **Use `/tmp/ixp/<project-name>/` as the working directory with this structure:**
