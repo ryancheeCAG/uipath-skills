@@ -161,6 +161,13 @@ export const VALID_DISPLAY_TYPES = [
   'area-chart', 'line-chart', 'bar-chart', 'donut-chart', 'multi-line-chart',
 ]
 
+/**
+ * OAuth scopes required for the dashboard.
+ * These MUST match what is registered on the external OAuth app.
+ * Use parent scopes only — .Read sub-scopes are not reliably registered.
+ */
+const DASHBOARD_SCOPES = 'OR.Assets OR.Jobs OR.Folders OR.Buckets OR.Execution OR.Tasks OR.Queues OR.Users Insights Insights.RealTimeData'
+
 // ── Low-level utilities ────────────────────────────────────────────────────────
 
 function fail(msg) {
@@ -841,7 +848,7 @@ async function runDashboardBuild(intent, intentPath) {
       `VITE_UIPATH_TENANT_NAME=${tenantName}`,
       `VITE_INSIGHTS_TENANT_ID=${tenantId}`,
       `VITE_UIPATH_CLIENT_ID=${clientId}`,
-      `VITE_UIPATH_SCOPE=OR.Assets.Read OR.Jobs OR.Folders.Read OR.Buckets.Read OR.Execution.Read OR.Tasks OR.Queues.Read OR.Users.Read Insights Insights.RealTimeData`,
+      `VITE_UIPATH_SCOPE=${DASHBOARD_SCOPES}`,
       `VITE_DEV_PORT=${DASHBOARD_PORT}`,
     ].join('\n'))
     const uipathJsonPath = join(P, 'uipath.json')

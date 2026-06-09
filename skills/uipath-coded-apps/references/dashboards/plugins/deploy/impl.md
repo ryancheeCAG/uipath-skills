@@ -26,64 +26,23 @@ If `routingName` is empty: tell the user to run the build first.
 
 If `deployment.folderKey` is already in state.json, skip this entire step.
 
-Fire all three lookups **in one parallel message**:
+Use the provisioning script — it handles all lookups, creation, and role assignment idempotently:
 
 ```bash
-uip or roles list --limit 500 --output json
-```
-```bash
-uip or users list --username "Administrators" --output json
-```
-```bash
-uip or folders list --all --output json
+node "<SKILL_BASE_DIR>/assets/scripts/setup-admin-folder.mjs" "AdminDashboards" "<PROJECT_DIR>"
 ```
 
-From the responses (read in-context — no parsing scripts needed):
+`<PROJECT_DIR>` is the dashboard project directory (e.g. `~/dashboards/agent-health-x7k2`). The script reads `.dashboard/state.json` to check if already provisioned and exits immediately if so.
 
-**Find the Folder Administrator role key:**
-Look for the entry where `Name === "Folder Administrator"`. Extract its `Key`.
-If not found: stop and tell the user to check `uip or roles list --output json`.
+The script:
+1. Looks up the Folder Administrator role key, the Administrators group key, and the AdminDashboards folder in parallel.
+2. Creates the folder if it does not exist.
+3. Reads existing role assignments before assigning — `roles assign` replaces all roles, so the script builds the full union to avoid removing existing access.
+4. Persists `folderKey` and `folderName` into `.dashboard/state.json`.
 
-**Find the Administrators group key:**
-Look for an entry where the name is `"administrators"` (case-insensitive) and the type contains "group". Extract its `Key`.
-If not found: list the available groups from the response and ask the user which group to use.
+> ⚠️ The script's role assignment step grants elevated folder permissions. Claude Code will ask for explicit approval — this is expected.
 
-**Check if AdminDashboards folder exists:**
-Look for an entry where `Name === "AdminDashboards"`. If found, extract its `Key`. If not found, create it:
-
-```bash
-uip or folders create "AdminDashboards" --output json
-```
-
-Extract the folder `Key` from the response.
-
-**Check if role is already assigned:**
-
-```bash
-uip or roles user-roles list "Administrators" --type Group --output json
-```
-
-Look for an entry where `FolderPath === "AdminDashboards"` and `Role === "Folder Administrator"`. If found, skip assignment. If not:
-
-> ⚠️ The next command grants elevated folder permissions. Claude Code will ask for explicit approval — this is expected.
-
-```bash
-uip or roles assign --user-key <ADMINS_GROUP_KEY> --role-keys <ROLE_KEY> --folder-key <FOLDER_KEY> --output json
-```
-
-**Persist folder key to state.json:**
-
-```bash
-node -e "
-const fs   = require('fs')
-const fp   = '.dashboard/state.json'
-const s    = JSON.parse(fs.readFileSync(fp, 'utf8'))
-s.deployment.folderKey  = process.argv[1]
-s.deployment.folderName = 'AdminDashboards'
-fs.writeFileSync(fp + '.tmp', JSON.stringify(s, null, 2))
-fs.renameSync(fp + '.tmp', fp)
-" <FOLDER_KEY>
-```
+If the script fails with "Administrators group not found": run `uip or users list --username "Administrators" --output json` and show the user the available groups.
 
 Tell the user: "AdminDashboards folder is ready."
 
@@ -203,6 +162,11 @@ cd <PROJECT_DIR> && uip codedapp deploy \
 
 Read the JSON output:
 - **Success** → extract `SystemName` and `AppUrl`, continue
+- **Contains "indexing" or "not been published"** → this is a platform propagation delay after publish. Wait 10 seconds and retry (up to 3 times):
+  ```
+  ↻ App is indexing — retrying in 10 seconds (attempt N/3)…
+  ```
+  If all 3 retries fail, surface the error and stop.
 - **Contains "conflict", "already exist", or "path" + "name"** → generate a new routing suffix and retry:
 
 ```bash
@@ -266,6 +230,7 @@ Always: "To update after making changes, say 'deploy this dashboard' again."
 | Build fails | Show the error — dev credentials are always restored |
 | Publish 409 | Auto-bump version and retry (up to 4 times) |
 | Publish 5xx / HTML | Wait 10s and retry (up to 4 times) |
+| Deploy "indexing" / "not been published" | Platform propagation delay after publish — wait 10s, retry up to 3 times |
 | Deploy path-name conflict | Generate new suffix, retry deploy only (pack/publish already done) |
 | state.json missing | Tell user to run the build first |
 
