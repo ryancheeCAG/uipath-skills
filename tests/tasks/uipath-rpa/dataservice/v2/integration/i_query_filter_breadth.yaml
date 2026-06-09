@@ -1,0 +1,159 @@
+task_id: skill-rpa-ds-v2-i-query-filter-breadth
+description: >
+  v2 Integration (query filter breadth) — agent authors three
+  uda:QueryEntityRecords activities on CodingAgentsEvalEntity, each covering
+  a different cluster of filter operators. Asserts compound AND group on
+  Query A (value + value-less + boolean + array); nested AND-with-OR on
+  Query B (comparison + date range); string-direction + negation + ChoiceSet
+  + DATE-equality on Query C. Folds in v1 I18..I34, I36, I37 (18 scenarios).
+
+tags: [uipath-rpa, windows, integration, dataservice]
+
+run_limits:
+  expected_turns: 45
+  max_turns: 150
+  task_timeout: 2400
+  turn_timeout: 1800
+
+sandbox:
+  template_sources:
+    - type: template_dir
+      path: ../../templates/local-feed
+      mount_point: "."
+
+initial_prompt: |
+  Build a UiPath RPA project named `DataServiceEval` in the current working
+  directory that contains three independent `QueryEntityRecords` activities
+  on Data Service entity `CodingAgentsEvalEntity`. Each query produces a
+  separate output variable.
+
+  Query A — return all records where ALL of the following hold:
+    - `Status` equals `'Active'`
+    - `Notes` is empty
+    - `IsActive` is true
+    - `Tags` includes any of `'frontend'`, `'backend'`
+
+  Query B — return all records where ALL of the following hold:
+    - `Score` is greater than `50`
+    - `Price` is less than `20`
+    - `EventDate` is between `'2026-01-01'` and `'2026-12-31'` (inclusive on
+      both ends)
+    - EITHER `ScheduledAt` is after `'2026-04-01T00:00:00Z'` OR `Status`
+      equals `'Priority'`
+
+  Query C — return all records where ALL of the following hold:
+    - `Title` contains `'Invoice'`
+    - `Title` starts with `'INV'`
+    - `Status` ends with `'ed'`
+    - `Status` does not equal `'Closed'`
+    - `Title` does not contain `'DRAFT'`
+    - `Category` equals `'Urgent'`
+    - `EventDate` equals `'2026-04-18'`
+
+  Sandbox setup (already in place — do not modify):
+    - `./NuGet.Config` declares a local NuGet source at `./local-feed/`
+    - `./local-feed/` hosts `UiPath.DataService.Activities` version `23.1.4-dev`,
+      which is the version you must pin in your project dependencies (this
+      package version is not available on any public feed)
+
+  Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
+  connected Data Service tenant — install both into the project.
+
+  For the entity install step — equivalent of `uip rpa data-fabric-entities
+  install` in the skill docs — run the rpa-tool source directly:
+
+      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir "<PROJECT_DIR>" --helm-version 0.2.3 --verbose --format json
+
+  All other commands use the standard `uip rpa` CLI as documented in the skill.
+
+success_criteria:
+  - type: file_exists
+    description: "Project was scaffolded via uip rpa init under DataServiceEval/"
+    path: DataServiceEval/project.json
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_exists
+    description: "Main.xaml exists in the DataServiceEval project"
+    path: DataServiceEval/Main.xaml
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent ran uip rpa init"
+    tool_name: Bash
+    command_pattern: 'uip\s+rpa\s+init\b'
+    min_count: 1
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent installed entities via bun rpa-tool install-data-fabric-entities"
+    tool_name: Bash
+    command_pattern: 'bun\s+.*install-data-fabric-entities\b'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "project.json pins the local-feed DataService package version"
+    path: DataServiceEval/project.json
+    includes:
+      - 'UiPath.DataService.Activities'
+      - '23.1.4-dev'
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Main.xaml references QueryEntityRecords on CodingAgentsEvalEntity"
+    path: DataServiceEval/Main.xaml
+    includes:
+      - 'QueryEntityRecords'
+      - 'CodingAgentsEvalEntity'
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "XAML-escaped comparators + AND/OR group operators present"
+    path: DataServiceEval/Main.xaml
+    includes:
+      - '&gt;'
+      - '&lt;'
+      - 'AND'
+      - 'OR'
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Main.xaml binds QueryEntityRecords with a namespace alias for UiPath.DataService.Activities"
+    command: 'python -c "import re,sys; t=open(''DataServiceEval/Main.xaml'',encoding=''utf-8'').read(); sys.exit(0 if re.search(r''<[A-Za-z_][A-Za-z0-9_]*:QueryEntityRecords\b'', t) else 1)"'
+    timeout: 10
+    expected_exit_code: 0
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Entity install compiled CodingAgentsEvalEntity into the generated DLL"
+    command: 'python -c "import glob,sys; dlls=glob.glob(''DataServiceEval/.local/.entities/*/DataService.DataServiceEval.dll''); sys.exit(0 if dlls and b''CodingAgentsEvalEntity'' in open(dlls[0],''rb'').read() else 1)"'
+    timeout: 10
+    expected_exit_code: 0
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Three QueryEntityRecords with the expected filter clusters per query"
+    command: 'python "%TASK_DIR%/check_i_query_filter_breadth.py" DataServiceEval/Main.xaml'
+    timeout: 15
+    expected_exit_code: 0
+    weight: 3.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "uip rpa validate finds zero errors against the authored Main.xaml"
+    command: 'cd DataServiceEval && uip rpa validate --output json'
+    timeout: 120
+    expected_exit_code: 0
+    expected_stdout: '\A(?!.*\[error\])'
+    stdout_match: regex
+    weight: 5.0
+    pass_threshold: 1.0

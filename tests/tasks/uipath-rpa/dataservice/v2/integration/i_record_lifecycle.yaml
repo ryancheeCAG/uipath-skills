@@ -1,0 +1,174 @@
+task_id: skill-rpa-ds-v2-i-record-lifecycle
+description: >
+  v2 Integration (single-record CRUD lifecycle) — agent authors a workflow that
+  Creates a record (all scalars), Gets it by ID (ExpansionDepth=1), Updates it
+  (partial multi-type with empty-string Title), Gets it again, and Deletes it.
+  RecordId flows from createdRecord.Id through every downstream step.
+  ContinueOnError on Create + null guard on the post-create steps.
+  Folds in v1 I1+I2+I3+I4+I7+I8+I9+I11+I12+I13+I14+I16+I17+I55 + quality E3.
+
+tags: [uipath-rpa, windows, integration, dataservice]
+
+run_limits:
+  expected_turns: 45
+  max_turns: 150
+  task_timeout: 2400
+  turn_timeout: 1800
+
+sandbox:
+  template_sources:
+    - type: template_dir
+      path: ../../templates/local-feed
+      mount_point: "."
+
+initial_prompt: |
+  Build a UiPath RPA project named `DataServiceEval` in the current working
+  directory that executes a single-record CRUD lifecycle on Data Service
+  entity `CodingAgentsEvalEntity`. The workflow must contain these activities
+  in order:
+
+    1. Create a new record populating all seven scalar fields:
+         - `Title` (required) = `'Lifecycle Test'`
+         - `Notes` = `'Initial notes'`
+         - `Score` = `42`
+         - `Price` = `9.99`
+         - `IsActive` = `true`
+         - `EventDate` = `'2026-04-18'`
+         - `ScheduledAt` = `'2026-04-18T09:00:00+05:30'`
+       Set the activity to continue on error and bind the created record to
+       a workflow variable (e.g. `createdRecord`).
+
+    2. Conditionally proceed only if step 1 produced a record (null guard).
+       Inside the guard:
+
+       a. Fetch the record by `createdRecord.Id` with related-entity
+          expansion depth set to 1. Bind the fetched record to a separate
+          variable (e.g. `fetchedRecord`). Log `fetchedRecord.Title` to the
+          output.
+
+       b. Update the same record by `createdRecord.Id`, setting these four
+          fields and leaving every other field on the record unchanged:
+            - `Title` = `''` (empty string — intentional clear)
+            - `Score` = `99`
+            - `Price` = `19.99`
+            - `IsActive` = `false`
+          Set the activity to continue on error.
+
+       c. Fetch the record again by `createdRecord.Id`. Bind the result to a
+          third variable (e.g. `verifiedRecord`).
+
+       d. Delete the record by `createdRecord.Id`. Set the activity to
+          continue on error.
+
+  The output of step 1 must flow into steps 2a, 2b, 2c, and 2d as the record
+  ID — do not re-derive the ID from any other source.
+
+  Sandbox setup (already in place — do not modify):
+    - `./NuGet.Config` declares a local NuGet source at `./local-feed/`
+    - `./local-feed/` hosts `UiPath.DataService.Activities` version `23.1.4-dev`,
+      which is the version you must pin in your project dependencies (this
+      package version is not available on any public feed)
+
+  Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
+  connected Data Service tenant — install both into the project.
+
+  For the entity install step — equivalent of `uip rpa data-fabric-entities
+  install` in the skill docs — run the rpa-tool source directly:
+
+      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir "<PROJECT_DIR>" --helm-version 0.2.3 --verbose --format json
+
+  All other commands use the standard `uip rpa` CLI as documented in the skill.
+
+success_criteria:
+  - type: file_exists
+    description: "Project was scaffolded via uip rpa init under DataServiceEval/"
+    path: DataServiceEval/project.json
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_exists
+    description: "Main.xaml exists in the DataServiceEval project"
+    path: DataServiceEval/Main.xaml
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent ran uip rpa init"
+    tool_name: Bash
+    command_pattern: 'uip\s+rpa\s+init\b'
+    min_count: 1
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent installed entities via bun rpa-tool install-data-fabric-entities"
+    tool_name: Bash
+    command_pattern: 'bun\s+.*install-data-fabric-entities\b'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "project.json pins the local-feed DataService package version"
+    path: DataServiceEval/project.json
+    includes:
+      - 'UiPath.DataService.Activities'
+      - '23.1.4-dev'
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Main.xaml references all four entity-record activities on CodingAgentsEvalEntity"
+    path: DataServiceEval/Main.xaml
+    includes:
+      - 'CreateEntityRecord'
+      - 'GetEntityRecordById'
+      - 'UpdateEntityRecord'
+      - 'DeleteEntityRecord'
+      - 'CodingAgentsEvalEntity'
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Typed scalar literals present (INT, DECIMAL, BIT)"
+    path: DataServiceEval/Main.xaml
+    includes:
+      - 'x:Int32'
+      - 'x:Decimal'
+      - 'x:Boolean'
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Main.xaml binds each activity with a namespace alias for UiPath.DataService.Activities"
+    command: 'python -c "import re,sys; t=open(''DataServiceEval/Main.xaml'',encoding=''utf-8'').read(); names=[''CreateEntityRecord'',''GetEntityRecordById'',''UpdateEntityRecord'',''DeleteEntityRecord'']; sys.exit(0 if all(re.search(r''<[A-Za-z_][A-Za-z0-9_]*:''+n+r''\b'', t) for n in names) else 1)"'
+    timeout: 10
+    expected_exit_code: 0
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Entity install compiled CodingAgentsEvalEntity into the generated DLL"
+    command: 'python -c "import glob,sys; dlls=glob.glob(''DataServiceEval/.local/.entities/*/DataService.DataServiceEval.dll''); sys.exit(0 if dlls and b''CodingAgentsEvalEntity'' in open(dlls[0],''rb'').read() else 1)"'
+    timeout: 10
+    expected_exit_code: 0
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Lifecycle composition: 5 activities, RecordId chained from createdRecord, configs match"
+    command: 'python "%TASK_DIR%/check_i_record_lifecycle.py" DataServiceEval/Main.xaml'
+    timeout: 15
+    expected_exit_code: 0
+    weight: 3.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "uip rpa validate finds zero errors against the authored Main.xaml"
+    command: 'cd DataServiceEval && uip rpa validate --output json'
+    timeout: 120
+    expected_exit_code: 0
+    expected_stdout: '\A(?!.*\[error\])'
+    stdout_match: regex
+    weight: 5.0
+    pass_threshold: 1.0

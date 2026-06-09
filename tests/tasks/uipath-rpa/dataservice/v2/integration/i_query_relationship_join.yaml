@@ -1,0 +1,139 @@
+task_id: skill-rpa-ds-v2-i-query-relationship-join
+description: >
+  v2 Integration (relationship-join query) — agent authors a query on
+  CodingAgentsEvalFileEntity filtering on the related Owner entity's Title
+  via dot-notation, then fetches one of the matched records' Owner by ID
+  from CodingAgentsEvalEntity. Verifies cross-entity wiring + concrete
+  type-args on both activities. Folds in v1 I35.
+
+tags: [uipath-rpa, windows, integration, dataservice]
+
+run_limits:
+  expected_turns: 30
+  max_turns: 120
+  task_timeout: 1800
+  turn_timeout: 1800
+
+sandbox:
+  template_sources:
+    - type: template_dir
+      path: ../../templates/local-feed
+      mount_point: "."
+
+initial_prompt: |
+  Build a UiPath RPA project named `DataServiceEval` in the current working
+  directory that joins across two Data Service entities. The workflow must
+  contain these activities in order:
+
+    1. Query all records from `CodingAgentsEvalFileEntity` where the related
+       `Owner` entity's `Title` field contains `'Admin'`. Use dot notation
+       (`Owner.Title`) in the filter. Bind the results to a workflow variable
+       (e.g. `ownedFiles`).
+
+    2. For the first matched record from step 1, fetch the related Owner
+       entity by ID from `CodingAgentsEvalEntity`. Bind the fetched record
+       to a separate workflow variable (e.g. `ownerRecord`) and log
+       `ownerRecord.Title` to the output.
+
+  The Owner ID for step 2 must come from step 1's output collection — do not
+  derive it from any other source.
+
+  Sandbox setup (already in place — do not modify):
+    - `./NuGet.Config` declares a local NuGet source at `./local-feed/`
+    - `./local-feed/` hosts `UiPath.DataService.Activities` version `23.1.4-dev`,
+      which is the version you must pin in your project dependencies (this
+      package version is not available on any public feed)
+
+  Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
+  connected Data Service tenant — install both into the project.
+
+  For the entity install step — equivalent of `uip rpa data-fabric-entities
+  install` in the skill docs — run the rpa-tool source directly:
+
+      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir "<PROJECT_DIR>" --helm-version 0.2.3 --verbose --format json
+
+  All other commands use the standard `uip rpa` CLI as documented in the skill.
+
+success_criteria:
+  - type: file_exists
+    description: "Project was scaffolded via uip rpa init under DataServiceEval/"
+    path: DataServiceEval/project.json
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_exists
+    description: "Main.xaml exists in the DataServiceEval project"
+    path: DataServiceEval/Main.xaml
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent ran uip rpa init"
+    tool_name: Bash
+    command_pattern: 'uip\s+rpa\s+init\b'
+    min_count: 1
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent installed entities via bun rpa-tool install-data-fabric-entities"
+    tool_name: Bash
+    command_pattern: 'bun\s+.*install-data-fabric-entities\b'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "project.json pins the local-feed DataService package version"
+    path: DataServiceEval/project.json
+    includes:
+      - 'UiPath.DataService.Activities'
+      - '23.1.4-dev'
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Main.xaml references both activities on both entity types"
+    path: DataServiceEval/Main.xaml
+    includes:
+      - 'QueryEntityRecords'
+      - 'GetEntityRecordById'
+      - 'CodingAgentsEvalFileEntity'
+      - 'CodingAgentsEvalEntity'
+      - 'Owner.Title'
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Main.xaml binds Query + Get with namespace aliases for UiPath.DataService.Activities"
+    command: 'python -c "import re,sys; t=open(''DataServiceEval/Main.xaml'',encoding=''utf-8'').read(); names=[''QueryEntityRecords'',''GetEntityRecordById'']; sys.exit(0 if all(re.search(r''<[A-Za-z_][A-Za-z0-9_]*:''+n+r''\b'', t) for n in names) else 1)"'
+    timeout: 10
+    expected_exit_code: 0
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Entity install compiled both entities into the generated DLL"
+    command: 'python -c "import glob,sys; dlls=glob.glob(''DataServiceEval/.local/.entities/*/DataService.DataServiceEval.dll''); data=open(dlls[0],''rb'').read() if dlls else b''''; sys.exit(0 if (b''CodingAgentsEvalEntity'' in data and b''CodingAgentsEvalFileEntity'' in data) else 1)"'
+    timeout: 10
+    expected_exit_code: 0
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Relationship-join shapes: Owner.Title dot-notation filter + cross-entity data flow"
+    command: 'python "%TASK_DIR%/check_i_query_relationship_join.py" DataServiceEval/Main.xaml'
+    timeout: 15
+    expected_exit_code: 0
+    weight: 3.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "uip rpa validate finds zero errors against the authored Main.xaml"
+    command: 'cd DataServiceEval && uip rpa validate --output json'
+    timeout: 120
+    expected_exit_code: 0
+    expected_stdout: '\A(?!.*\[error\])'
+    stdout_match: regex
+    weight: 5.0
+    pass_threshold: 1.0

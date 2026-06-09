@@ -389,3 +389,217 @@ def assert_group_filter_operator(activity: ET.Element, expected: str) -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+
+
+# Argument-resolution helpers (data-flow assertions) ------------------------
+
+
+def _strip_vb_brackets(value: str | None) -> str | None:
+    """Strip the VB.NET expression brackets from a XAML InArgument/OutArgument value.
+
+    `'[createdRecord.Id]'` → `'createdRecord.Id'`; bare values pass through.
+    """
+    if value is None:
+        return None
+    v = value.strip()
+    if len(v) >= 2 and v.startswith("[") and v.endswith("]"):
+        return v[1:-1].strip()
+    return v
+
+
+def get_variable_declarations(root: ET.Element) -> dict[str, str]:
+    """Return `{name: type-local-name}` for every Variable + workflow Property.
+
+    Walks `<Variable>` elements (Sequence.Variables, etc.) and `<x:Property>`
+    entries (workflow arguments). For variables the type is taken from
+    `x:TypeArguments`; for properties from `Type` (form `OutArgument(...)`).
+    Only the local type name is recorded so xmlns aliases don't leak.
+    """
+    out: dict[str, str] = {}
+    for el in root.iter():
+        local = _local(el)
+        if local == "Variable":
+            name = _local_attr(el, "Name")
+            type_arg = _type_arg_local_name(_local_attr(el, "x:TypeArguments"))
+            if name and type_arg:
+                out[name] = type_arg
+        elif local == "Property":
+            name = _local_attr(el, "Name")
+            type_raw = _local_attr(el, "Type")
+            if name and type_raw:
+                out[name] = type_raw
+    return out
+
+
+def get_arg_expression(activity: ET.Element, prop_name: str) -> str | None:
+    """Return the VB expression bound to `prop_name` on `activity`, brackets stripped.
+
+    Handles both forms:
+      1. Inline attribute: `RecordId="[createdRecord.Id]"`
+      2. Verbose child: `<uda:Activity.RecordId><InArgument…>[createdRecord.Id]</…></>`
+    Returns `None` if the property is absent or carries no expression.
+    """
+    raw = _local_attr(activity, prop_name)
+    if raw is not None:
+        return _strip_vb_brackets(raw)
+
+    suffix = f".{prop_name}"
+    for child in activity:
+        if _local(child).endswith(suffix):
+            for desc in child.iter():
+                text = (desc.text or "").strip()
+                if text:
+                    return _strip_vb_brackets(text)
+    return None
+
+
+def assert_arg_references(
+    activity: ET.Element,
+    prop_name: str,
+    upstream_var: str,
+    member_path: str | None = None,
+) -> None:
+    """Assert the InArgument/OutArgument on `activity` resolves to `upstream_var`.
+
+    If `member_path` is supplied (e.g. `.Id`), the full expression must equal
+    `upstream_var + member_path`. Otherwise the expression must reference
+    `upstream_var` as its leading token (bare, with member access, or with a
+    trailing operator).
+
+    Used for data-flow assertions: prove the downstream activity's argument
+    actually consumes an upstream activity's out-arg variable rather than a
+    literal or a re-derived ID.
+    """
+    expr = get_arg_expression(activity, prop_name)
+    if expr is None:
+        print(
+            f"FAIL: {_local(activity)}.{prop_name} has no expression "
+            f"(expected reference to {upstream_var!r})",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if member_path is not None:
+        expected = upstream_var + member_path
+        if expr != expected:
+            print(
+                f"FAIL: {_local(activity)}.{prop_name} expected expression "
+                f"{expected!r}, got {expr!r}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        return
+
+    leading_ok = (
+        expr == upstream_var
+        or expr.startswith(upstream_var + ".")
+        or expr.startswith(upstream_var + " ")
+        or expr.startswith(upstream_var + "(")
+    )
+    if not leading_ok:
+        print(
+            f"FAIL: {_local(activity)}.{prop_name} expected reference to "
+            f"{upstream_var!r}, got expression {expr!r}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+def assert_variable_declared(
+    root: ET.Element, name: str, type_local_name: str | None = None
+) -> None:
+    """Assert a variable named `name` is declared (optionally with the expected type local-name)."""
+    decls = get_variable_declarations(root)
+    if name not in decls:
+        print(
+            f"FAIL: variable {name!r} not declared in workflow "
+            f"(declared: {sorted(decls.keys())})",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if type_local_name is not None:
+        actual_type = decls[name]
+        actual_local = _type_arg_local_name(actual_type) or actual_type
+        if type_local_name not in actual_type and actual_local != type_local_name:
+            print(
+                f"FAIL: variable {name!r} declared type {actual_type!r} "
+                f"does not contain {type_local_name!r}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+
+# Tree-walk helpers (ancestry + ordering) -----------------------------------
+
+
+def parent_map(root: ET.Element) -> dict[ET.Element, ET.Element]:
+    """Build a {child: parent} map for the entire tree.
+
+    ElementTree elements don't carry a parent reference, so callers that need
+    to walk upward should build this once and reuse it.
+    """
+    return {child: parent for parent in root.iter() for child in parent}
+
+
+def ancestor_chain(
+    el: ET.Element, parents: dict[ET.Element, ET.Element]
+) -> list[ET.Element]:
+    """Return `el`'s ancestors from immediate parent up to (and including) the root."""
+    chain: list[ET.Element] = []
+    cur = parents.get(el)
+    while cur is not None:
+        chain.append(cur)
+        cur = parents.get(cur)
+    return chain
+
+
+def under(
+    el: ET.Element, parents: dict[ET.Element, ET.Element], local_name: str
+) -> bool:
+    """True if any ancestor of `el` has the given local name (e.g. 'TryCatch', 'If', 'Catch')."""
+    return any(_local(a) == local_name for a in ancestor_chain(el, parents))
+
+
+def assert_activity_order(root: ET.Element, expected_names: list[str]) -> None:
+    """Assert uda:* activities appear in document order matching `expected_names`.
+
+    Walks all uda:* activities depth-first preorder. The expected list is
+    consumed greedily — when the next walked activity matches
+    `expected_names[i]`, advance to `i+1`. Extra activities between expected
+    ones are allowed (non-DS activities like Assign / LogMessage / If don't
+    interfere), and repeated names in the expected list are matched against
+    distinct occurrences.
+
+    Intentionally lenient with respect to branch wrapping. The agent may
+    wrap any subset of activities in If/Else, TryCatch, ForEach, Switch,
+    FlowDecision, etc. — this helper only checks that the activities appear
+    in the right relative document order somewhere in the tree, not that
+    they all execute or execute in that order at runtime. The agent's
+    choice to add a fallback in Catch, an alternate path in Else, or skip
+    error wrapping entirely is all valid; only literal doc-order violations
+    fail (e.g. Delete authored before Create). Use `under()` for the rare
+    case you need to assert branch placement.
+    """
+    expected = list(expected_names)
+    idx = 0
+    matched: list[str] = []
+    for el in root.iter():
+        if not el.tag.startswith(f"{{{UDA_NS}}}"):
+            continue
+        if idx >= len(expected):
+            break
+        name = _local(el)
+        if name == expected[idx]:
+            matched.append(name)
+            idx += 1
+    if idx < len(expected):
+        all_in_order = [
+            _local(el) for el in root.iter() if el.tag.startswith(f"{{{UDA_NS}}}")
+        ]
+        print(
+            f"FAIL: activity order mismatch — expected sequence {expected!r}, "
+            f"matched {matched!r} (stopped at expected[{idx}]={expected[idx]!r}); "
+            f"actual uda activities in document order: {all_in_order!r}",
+            file=sys.stderr,
+        )
+        sys.exit(1)

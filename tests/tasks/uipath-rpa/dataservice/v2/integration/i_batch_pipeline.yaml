@@ -1,0 +1,176 @@
+task_id: skill-rpa-ds-v2-i-batch-pipeline
+description: >
+  v2 Integration (batch pipeline) — agent authors a CreateMultiple → Query →
+  UpdateMultiple → retry → DeleteMultiple workflow on CodingAgentsEvalEntity.
+  Data flow: created records → filtered query results → batch update (entity
+  collection with .Id) → retry from FailedRecords → batch delete (Guid
+  collection). ContinueBatchOnFailure=False on every batch. FailedRecords
+  typed Tuple on create/update, plain Guid on delete. Folds in v1
+  I29+I32+I38..I46+I56+I57 + quality E1+E4.
+
+tags: [uipath-rpa, windows, integration, dataservice]
+
+run_limits:
+  expected_turns: 50
+  max_turns: 180
+  task_timeout: 2700
+  turn_timeout: 1800
+
+sandbox:
+  template_sources:
+    - type: template_dir
+      path: ../../templates/local-feed
+      mount_point: "."
+
+initial_prompt: |
+  Build a UiPath RPA project named `DataServiceEval` in the current working
+  directory that executes a batch pipeline on Data Service entity
+  `CodingAgentsEvalEntity`. The workflow must contain these activities in
+  order:
+
+    1. Create 10 records in a single batch operation with `Title` values
+       `'BATCH-01'` through `'BATCH-10'` and `Score` values that vary so some
+       will match the query in step 2. Set the batch to stop immediately if
+       any record fails. Bind the created records to a variable (e.g.
+       `createdRecords`) and capture failed creates with their error messages
+       into a separate variable (e.g. `failedCreates`).
+
+    2. Query the entity for records where ALL of the following hold:
+         - `Score` is greater than `50`
+         - `IsActive` is true
+       Sort the results by `Score` descending and return at most 10 records.
+       Bind the matching records to a variable (e.g. `highScoreRecords`) and
+       the total matching count to a separate variable (e.g. `totalMatches`).
+
+    3. Update every record from step 2's results in a single batch operation,
+       setting `Status` to `'Processed'`. Each entity in the batch input must
+       carry its `Id` (so the service knows which record to update). Set the
+       batch to stop immediately if any update fails. Capture failed updates
+       with their error messages into a variable (e.g. `failedUpdates`).
+       After the update completes, iterate over `failedUpdates` and log each
+       failure's error message together with the failed record's `Title`.
+
+    4. If step 3 produced any failed updates (`failedUpdates.Count > 0`),
+       retry only the failed records by extracting the entity objects from
+       `failedUpdates` and calling a second batch update.
+
+    5. Delete every record from step 2's results in a single batch operation
+       — pass the record IDs (`Guid` values) extracted from `highScoreRecords`,
+       not the entity objects themselves. Set the batch to stop immediately
+       if any deletion fails. Capture failed deletions as IDs into a variable
+       (e.g. `failedDeleteIds`).
+
+  The output of step 2 must flow into steps 3 and 5, and step 3's
+  `failedUpdates` must flow into step 4 — do not re-derive IDs or re-query
+  records from any other source.
+
+  Sandbox setup (already in place — do not modify):
+    - `./NuGet.Config` declares a local NuGet source at `./local-feed/`
+    - `./local-feed/` hosts `UiPath.DataService.Activities` version `23.1.4-dev`,
+      which is the version you must pin in your project dependencies (this
+      package version is not available on any public feed)
+
+  Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
+  connected Data Service tenant — install both into the project.
+
+  For the entity install step — equivalent of `uip rpa data-fabric-entities
+  install` in the skill docs — run the rpa-tool source directly:
+
+      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir "<PROJECT_DIR>" --helm-version 0.2.3 --verbose --format json
+
+  All other commands use the standard `uip rpa` CLI as documented in the skill.
+
+success_criteria:
+  - type: file_exists
+    description: "Project was scaffolded via uip rpa init under DataServiceEval/"
+    path: DataServiceEval/project.json
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_exists
+    description: "Main.xaml exists in the DataServiceEval project"
+    path: DataServiceEval/Main.xaml
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent ran uip rpa init"
+    tool_name: Bash
+    command_pattern: 'uip\s+rpa\s+init\b'
+    min_count: 1
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent installed entities via bun rpa-tool install-data-fabric-entities"
+    tool_name: Bash
+    command_pattern: 'bun\s+.*install-data-fabric-entities\b'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "project.json pins the local-feed DataService package version"
+    path: DataServiceEval/project.json
+    includes:
+      - 'UiPath.DataService.Activities'
+      - '23.1.4-dev'
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Main.xaml references the four batch + query activities"
+    path: DataServiceEval/Main.xaml
+    includes:
+      - 'CreateMultipleEntityRecords'
+      - 'QueryEntityRecords'
+      - 'UpdateMultipleEntityRecords'
+      - 'DeleteMultipleEntityRecords'
+      - 'CodingAgentsEvalEntity'
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "FailedRecords typed Tuple for create/update; Guid for delete; AND group filter present"
+    path: DataServiceEval/Main.xaml
+    includes:
+      - 'Tuple'
+      - 'Guid'
+      - 'AND'
+      - '&gt;'
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Main.xaml binds each batch activity with a namespace alias for UiPath.DataService.Activities"
+    command: 'python -c "import re,sys; t=open(''DataServiceEval/Main.xaml'',encoding=''utf-8'').read(); names=[''CreateMultipleEntityRecords'',''QueryEntityRecords'',''UpdateMultipleEntityRecords'',''DeleteMultipleEntityRecords'']; sys.exit(0 if all(re.search(r''<[A-Za-z_][A-Za-z0-9_]*:''+n+r''\b'', t) for n in names) else 1)"'
+    timeout: 10
+    expected_exit_code: 0
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Entity install compiled CodingAgentsEvalEntity into the generated DLL"
+    command: 'python -c "import glob,sys; dlls=glob.glob(''DataServiceEval/.local/.entities/*/DataService.DataServiceEval.dll''); sys.exit(0 if dlls and b''CodingAgentsEvalEntity'' in open(dlls[0],''rb'').read() else 1)"'
+    timeout: 10
+    expected_exit_code: 0
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Batch pipeline composition: filters, ContinueBatchOnFailure, FailedRecords types, data flow"
+    command: 'python "%TASK_DIR%/check_i_batch_pipeline.py" DataServiceEval/Main.xaml'
+    timeout: 15
+    expected_exit_code: 0
+    weight: 3.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "uip rpa validate finds zero errors against the authored Main.xaml"
+    command: 'cd DataServiceEval && uip rpa validate --output json'
+    timeout: 120
+    expected_exit_code: 0
+    expected_stdout: '\A(?!.*\[error\])'
+    stdout_match: regex
+    weight: 5.0
+    pass_threshold: 1.0

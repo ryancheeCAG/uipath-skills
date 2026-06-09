@@ -1,0 +1,122 @@
+task_id: skill-rpa-ds-v2-s-create-basic
+description: >
+  v2 Smoke (CreateEntityRecord) — agent authors a single uda:CreateEntityRecord
+  on CodingAgentsEvalEntity with the required field only. Asserts the activity
+  is configured for its purpose: RecordState.SelectedFields contains exactly the
+  Title field with IsRequired=True; build passes.
+
+tags: [uipath-rpa, windows, smoke, dataservice]
+
+run_limits:
+  expected_turns: 25
+  max_turns: 90
+  task_timeout: 1800
+  turn_timeout: 1800
+
+sandbox:
+  template_sources:
+    - type: template_dir
+      path: ../../templates/local-feed
+      mount_point: "."
+
+initial_prompt: |
+  Build a UiPath RPA project named `DataServiceEval` in the current working
+  directory that creates a single new record in Data Service entity
+  `CodingAgentsEvalEntity` with `Title` set to `'New Record'`.
+
+  Sandbox setup (already in place — do not modify):
+    - `./NuGet.Config` declares a local NuGet source at `./local-feed/`
+    - `./local-feed/` hosts `UiPath.DataService.Activities` version `23.1.4-dev`,
+      which is the version you must pin in your project dependencies (this
+      package version is not available on any public feed)
+
+  Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
+  connected Data Service tenant — install both into the project.
+
+  For the entity install step — equivalent of `uip rpa data-fabric-entities
+  install` in the skill docs — run the rpa-tool source directly:
+
+      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir "<PROJECT_DIR>" --helm-version 0.2.3 --verbose --format json
+
+  All other commands use the standard `uip rpa` CLI as documented in the skill.
+
+success_criteria:
+  - type: file_exists
+    description: "Project was scaffolded via uip rpa init under DataServiceEval/"
+    path: DataServiceEval/project.json
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_exists
+    description: "Main.xaml exists in the DataServiceEval project"
+    path: DataServiceEval/Main.xaml
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent ran uip rpa init"
+    tool_name: Bash
+    command_pattern: 'uip\s+rpa\s+init\b'
+    min_count: 1
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent installed entities via bun rpa-tool install-data-fabric-entities"
+    tool_name: Bash
+    command_pattern: 'bun\s+.*install-data-fabric-entities\b'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "project.json pins the local-feed DataService package version"
+    path: DataServiceEval/project.json
+    includes:
+      - 'UiPath.DataService.Activities'
+      - '23.1.4-dev'
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Main.xaml references CreateEntityRecord on CodingAgentsEvalEntity"
+    path: DataServiceEval/Main.xaml
+    includes:
+      - 'CreateEntityRecord'
+      - 'CodingAgentsEvalEntity'
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Main.xaml binds CreateEntityRecord with a namespace alias for UiPath.DataService.Activities"
+    command: 'python -c "import re,sys; t=open(''DataServiceEval/Main.xaml'',encoding=''utf-8'').read(); sys.exit(0 if re.search(r''<[A-Za-z_][A-Za-z0-9_]*:CreateEntityRecord\b'', t) else 1)"'
+    timeout: 10
+    expected_exit_code: 0
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Entity install compiled CodingAgentsEvalEntity into the generated DLL"
+    command: 'python -c "import glob,sys; dlls=glob.glob(''DataServiceEval/.local/.entities/*/DataService.DataServiceEval.dll''); sys.exit(0 if dlls and b''CodingAgentsEvalEntity'' in open(dlls[0],''rb'').read() else 1)"'
+    timeout: 10
+    expected_exit_code: 0
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "CreateEntityRecord has RecordState with Title (required) and no over-decoration"
+    command: 'python "%TASK_DIR%/check_s_create_basic.py" DataServiceEval/Main.xaml'
+    timeout: 15
+    expected_exit_code: 0
+    weight: 3.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "uip rpa validate finds zero errors against the authored Main.xaml"
+    command: 'cd DataServiceEval && uip rpa validate --output json'
+    timeout: 120
+    expected_exit_code: 0
+    expected_stdout: '\A(?!.*\[error\])'
+    stdout_match: regex
+    weight: 5.0
+    pass_threshold: 1.0

@@ -1,0 +1,171 @@
+task_id: skill-rpa-ds-v2-i-file-multi-record
+description: >
+  v2 Integration (multi-record file lifecycle) — agent authors a workflow
+  that batch-creates 3 records on CodingAgentsEvalFileEntity then performs
+  Upload/Download/DeleteFile on each record across three distinct file
+  fields (Attachment, Report, attachmentFile). One Upload uses FileResource
+  mode; one Download is resource-only (no FilePath). The camelCase field
+  name `attachmentFile` is preserved exactly. Folds in v1 I48+I49+I51 +
+  quality E2.
+
+tags: [uipath-rpa, windows, integration, dataservice]
+
+run_limits:
+  expected_turns: 55
+  max_turns: 180
+  task_timeout: 2700
+  turn_timeout: 1800
+
+sandbox:
+  template_sources:
+    - type: template_dir
+      path: ../../templates/local-feed
+      mount_point: "."
+
+initial_prompt: |
+  Build a UiPath RPA project named `DataServiceEval` in the current working
+  directory that executes a multi-record file lifecycle on Data Service
+  entity `CodingAgentsEvalFileEntity`. The workflow must contain these
+  activities in order:
+
+    1. Create 3 records in a single batch operation with Titles
+       `'Contract-A'`, `'Contract-B'`, `'Contract-C'`. Bind the created
+       records to a workflow variable (e.g. `createdRecords`).
+
+    2. For the first created record (Contract-A):
+       a. Upload the file at `'C:\docs\a.pdf'` to the `Attachment` field by
+          record ID. Use the file-path upload mode (pass the path string).
+       b. Download the file from the `Attachment` field by record ID, saving
+          it to `'C:\docs\downloaded-a.pdf'`. Bind the downloaded resource
+          to a workflow variable.
+       c. Delete the file from the `Attachment` field by record ID.
+
+    3. For the second created record (Contract-B):
+       a. Upload a file resource (already available in workflow variable
+          `fileRes`) to the `Report` field by record ID. Use the file-resource
+          upload mode (pass the resource object, NOT a path string).
+       b. Download the file from the `Report` field by record ID. Do NOT
+          set a file path — bind only the downloaded resource to a workflow
+          variable for further processing.
+       c. Delete the file from the `Report` field by record ID.
+
+    4. For the third created record (Contract-C):
+       a. Upload the file at `'C:\docs\c.pdf'` to the field named
+          `attachmentFile` (camelCase — preserve this name exactly) by
+          record ID. Use the file-path upload mode.
+       b. Download the file from the `attachmentFile` field by record ID.
+          Bind only the downloaded resource (no file path).
+       c. Delete the file from the `attachmentFile` field by record ID.
+
+  Each file-activity `RecordId` must come from the corresponding entry in
+  `createdRecords` — do not re-derive IDs from any other source.
+
+  Sandbox setup (already in place — do not modify):
+    - `./NuGet.Config` declares a local NuGet source at `./local-feed/`
+    - `./local-feed/` hosts `UiPath.DataService.Activities` version `23.1.4-dev`,
+      which is the version you must pin in your project dependencies (this
+      package version is not available on any public feed)
+
+  Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
+  connected Data Service tenant — install both into the project.
+
+  For the entity install step — equivalent of `uip rpa data-fabric-entities
+  install` in the skill docs — run the rpa-tool source directly:
+
+      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir "<PROJECT_DIR>" --helm-version 0.2.3 --verbose --format json
+
+  All other commands use the standard `uip rpa` CLI as documented in the skill.
+
+success_criteria:
+  - type: file_exists
+    description: "Project was scaffolded via uip rpa init under DataServiceEval/"
+    path: DataServiceEval/project.json
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_exists
+    description: "Main.xaml exists in the DataServiceEval project"
+    path: DataServiceEval/Main.xaml
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent ran uip rpa init"
+    tool_name: Bash
+    command_pattern: 'uip\s+rpa\s+init\b'
+    min_count: 1
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent installed entities via bun rpa-tool install-data-fabric-entities"
+    tool_name: Bash
+    command_pattern: 'bun\s+.*install-data-fabric-entities\b'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "project.json pins the local-feed DataService package version"
+    path: DataServiceEval/project.json
+    includes:
+      - 'UiPath.DataService.Activities'
+      - '23.1.4-dev'
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "Main.xaml references batch + file activities on FileEntity"
+    path: DataServiceEval/Main.xaml
+    includes:
+      - 'CreateMultipleEntityRecords'
+      - 'UploadFileToRecordField'
+      - 'DownloadFileFromRecordField'
+      - 'DeleteFileFromRecordField'
+      - 'CodingAgentsEvalFileEntity'
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: file_contains
+    description: "All three target field names appear exactly as written (camelCase preserved)"
+    path: DataServiceEval/Main.xaml
+    includes:
+      - 'Attachment'
+      - 'Report'
+      - 'attachmentFile'
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Main.xaml binds each activity with a namespace alias for UiPath.DataService.Activities"
+    command: 'python -c "import re,sys; t=open(''DataServiceEval/Main.xaml'',encoding=''utf-8'').read(); names=[''CreateMultipleEntityRecords'',''UploadFileToRecordField'',''DownloadFileFromRecordField'',''DeleteFileFromRecordField'']; sys.exit(0 if all(re.search(r''<[A-Za-z_][A-Za-z0-9_]*:''+n+r''\b'', t) for n in names) else 1)"'
+    timeout: 10
+    expected_exit_code: 0
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Entity install compiled CodingAgentsEvalFileEntity into the generated DLL"
+    command: 'python -c "import glob,sys; dlls=glob.glob(''DataServiceEval/.local/.entities/*/DataService.DataServiceEval.dll''); sys.exit(0 if dlls and b''CodingAgentsEvalFileEntity'' in open(dlls[0],''rb'').read() else 1)"'
+    timeout: 10
+    expected_exit_code: 0
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Multi-record file lifecycle: 3 uploads + 3 downloads + 3 deletes per field; FileResource + resource-only download present"
+    command: 'python "%TASK_DIR%/check_i_file_multi_record.py" DataServiceEval/Main.xaml'
+    timeout: 15
+    expected_exit_code: 0
+    weight: 3.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "uip rpa validate finds zero errors against the authored Main.xaml"
+    command: 'cd DataServiceEval && uip rpa validate --output json'
+    timeout: 120
+    expected_exit_code: 0
+    expected_stdout: '\A(?!.*\[error\])'
+    stdout_match: regex
+    weight: 5.0
+    pass_threshold: 1.0
