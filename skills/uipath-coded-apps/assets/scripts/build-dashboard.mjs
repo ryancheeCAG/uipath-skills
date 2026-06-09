@@ -1249,10 +1249,14 @@ async function runIncrementalEdit(editIntent, intentPath) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
 
-  // --prewarm <projectDir> mode: copy scaffold + run npm ci, then exit
-  // Used to pre-warm dependencies in the background while the agent shows the plan
+  // --prewarm <routingName> mode: copy scaffold + run npm ci, then exit
+  // Takes a routing name (e.g. "agent-health-x7k2"), always creates the project
+  // under ~/dashboards/<routingName> — never in cwd.
+  // Path is computed by Node.js (os.homedir) so no bash path manipulation needed.
   if (process.argv[2] === '--prewarm' && process.argv[3]) {
-    const prewarmDir = resolve(process.argv[3])
+    const { homedir } = await import('os')
+    const routingName = process.argv[3]
+    const prewarmDir  = join(homedir(), 'dashboards', routingName)
     if (!existsSync(join(prewarmDir, 'package.json'))) {
       if (!existsSync(SCAFFOLD_DIR)) {
         process.stderr.write(`ERROR: Scaffold not found at ${SCAFFOLD_DIR}\n`)

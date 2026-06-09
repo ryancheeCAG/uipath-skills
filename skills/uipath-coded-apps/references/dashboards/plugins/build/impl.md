@@ -177,53 +177,32 @@ If both fail: direct the user to `<CLOUD_URL>/<ORG>/portal_/adminui/#/externalAp
 
 ---
 
-## Phase 3.5 — Verify SDK types from scaffold (0–N parallel Reads)
+## Phase 3.5 — Verify SDK types (0–N parallel Reads)
 
-After the user confirms, before writing intent.json to disk, verify field names for any T2 or T3-SDK metrics against the actual TypeScript declaration files in the scaffold.
+After the user confirms, before writing intent.json to disk, verify field names for T2 and T3-SDK metrics using the Read tool directly on the `.d.ts` files.
 
-These files are the exact same source the TypeScript compiler uses — field names are guaranteed correct.
+**Do NOT use a bash check command.** Path escaping on Windows is unreliable in `node -e` inline scripts. Instead, attempt the Read directly — if the file doesn't exist the Read simply fails and you skip.
 
-**Path:** `<PROJECT_DIR>/node_modules/@uipath/uipath-typescript/dist/<service>/index.d.ts`
-
-Where `<PROJECT_DIR>` is the dashboard project directory (e.g. `~/dashboards/agent-health-x7k2`), NOT the skill's scaffold template directory.
-
-**When to read:**
-- **T2 metrics**: Read the `.d.ts` for the service in the registry entry (e.g. `dist/jobs/index.d.ts` for `jobs-by-state`). Verify the `filterField` exists on the response type.
-- **T3-SDK metrics**: Read the `.d.ts` for any service the `fnBody` imports (e.g. if fnBody uses `Jobs`, read `dist/jobs/index.d.ts`). Verify field names used in `.map()` expressions match the response type.
-- **T1 metrics**: Skip — field names come from the capability registry and are pre-verified against the SDK response types.
-
-**Fire all relevant reads in ONE parallel message.** If the project's node_modules doesn't exist yet (pre-warm still running), skip this phase and rely on the SDK docs from Turn 2.
-
-**Check: does the project have node_modules?**
-```bash
-node -e "
-const path = require('path')
-const sdkDist = path.join('<PROJECT_DIR>', 'node_modules', '@uipath', 'uipath-typescript', 'dist')
-process.exit(require('fs').existsSync(sdkDist) ? 0 : 1)
-" && echo SDK_TYPES_AVAILABLE || echo SDK_TYPES_NOT_READY
+**Path pattern:**
+```
+<ROUTING_NAME>'s project: ~/dashboards/<ROUTING_NAME>/node_modules/@uipath/uipath-typescript/dist/<service>/index.d.ts
 ```
 
-**If SDK_TYPES_AVAILABLE:** Read relevant `.d.ts` files in parallel, then adjust intent.json if any field names are wrong.
+Note: the `agents` service (Insights SDK, PR #438) may not be in the installed version yet. Only read services that actually exist — `jobs`, `queues`, `tasks`, `processes`, `assets` are available in the current release.
 
-**If SDK_TYPES_NOT_READY:** Skip — the build script's `tsc --noEmit` will catch type errors.
+**When to read:**
+- **T2 metrics**: Read `dist/<service>/index.d.ts` for the metric's service. Verify `filterField` exists on the response type.
+- **T3-SDK metrics**: Read `dist/<service>/index.d.ts` for each service the `fnBody` imports. Verify field names match the response type.
+- **T1 metrics using Insights** (`agent-errors`, `agent-latency`, etc.): Skip — the `agents` service isn't in the current SDK release. `tsc --noEmit` catches any errors.
+- **T1 metrics using Jobs** (`job-failures`, `job-completion-trend`): Read `dist/jobs/index.d.ts` to verify field names.
+
+**Fire all relevant reads in ONE parallel message.** If any Read fails (file not found), skip that service — pre-warm may still be running or the service isn't in this SDK version.
 
 **Example — verifying `jobs-by-state` T2 metric:**
 
-Read `<PROJECT_DIR>/node_modules/@uipath/uipath-typescript/dist/jobs/index.d.ts`
+Read `~/dashboards/<ROUTING_NAME>/node_modules/@uipath/uipath-typescript/dist/jobs/index.d.ts`
 
-Check that `JobGetResponse` has a `state` field. From the `.d.ts`:
-```typescript
-export interface JobGetResponse {
-  key: string
-  state: JobState         ← ✓ confirmed
-  processName: string
-  ...
-}
-```
-
-**Example — verifying a T3-SDK fnBody:**
-
-If fnBody uses `j.processName` after calling `Jobs.getAll()`, reading `dist/jobs/index.d.ts` confirms `processName` exists on `JobGetResponse`. If the code used `j.name` instead, this phase catches the error before the build script's tsc.
+Verify `JobGetResponse` has a `state` field. If read fails → skip.
 
 **After verification:** Update intent.json in memory with any corrected field names, then proceed to Phase 4.
 

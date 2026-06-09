@@ -50,8 +50,10 @@ fs.existsSync('.dashboard/state.json') ? process.exit(0) : process.exit(1)
 
 **Pre-warm (same message — `run_in_background: true` on the Bash tool call):**
 
+Derive the routing name from the user's request now (e.g. `"agent health dashboard"` → `"agent-health-x7k2"`). Pass **only the routing name**, not a full path. The build script computes `~/dashboards/<routing-name>` internally using `os.homedir()` — works on Windows and Unix, never touches cwd.
+
 ```bash
-node "<SKILL_BASE_DIR>/assets/scripts/build-dashboard.mjs" --prewarm "<PROJECT_DIR>"
+node "<SKILL_BASE_DIR>/assets/scripts/build-dashboard.mjs" --prewarm "<ROUTING_NAME>"
 ```
 
 ⚠️ `run_in_background: true` is a tool call parameter, not a shell flag. Without it, the call blocks for 60–90s before the plan appears.

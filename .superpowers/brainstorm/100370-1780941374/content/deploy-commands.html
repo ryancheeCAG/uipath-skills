@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Deploy Commands — Real Examples</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #080b14; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #e2e8f0; padding: 32px 28px 60px; max-width: 980px; margin: 0 auto; }
+h1 { font-size: 22px; font-weight: 700; color: #f8fafc; margin-bottom: 4px; }
+.sub { font-size: 13px; color: #475569; margin-bottom: 36px; letter-spacing: 0.5px; text-transform: uppercase; }
+
+.scenario { border-radius: 12px; margin-bottom: 28px; overflow: hidden; border: 1px solid; }
+.scenario-a { border-color: rgba(99,102,241,0.3); }
+.scenario-b { border-color: rgba(245,158,11,0.3); }
+
+.scenario-header { padding: 14px 20px; display: flex; align-items: center; gap: 12px; }
+.scenario-a .scenario-header { background: rgba(99,102,241,0.08); }
+.scenario-b .scenario-header { background: rgba(245,158,11,0.06); }
+
+.scenario-tag { font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; padding: 3px 9px; border-radius: 4px; flex-shrink: 0; }
+.scenario-a .scenario-tag { background: rgba(99,102,241,0.2); color: #a78bfa; }
+.scenario-b .scenario-tag { background: rgba(245,158,11,0.15); color: #fbbf24; }
+
+.scenario-title { font-size: 15px; font-weight: 700; }
+.scenario-a .scenario-title { color: #c4b5fd; }
+.scenario-b .scenario-title { color: #fcd34d; }
+
+.scenario-body { padding: 0 20px 20px; }
+
+.step-group { margin-top: 18px; }
+.step-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #334155; margin-bottom: 6px; }
+
+.cmd-block { background: rgba(0,0,0,0.5); border-radius: 8px; padding: 14px 16px; font-family: 'Fira Code', 'Cascadia Code', monospace; font-size: 12px; line-height: 1.9; border: 1px solid rgba(255,255,255,0.06); margin-bottom: 10px; }
+
+.prompt { color: #475569; user-select: none; }
+.cmd { color: #e2e8f0; }
+.flag { color: #818cf8; }
+.val { color: #fbbf24; }
+.cmt { color: #334155; }
+.out { color: #10b981; }
+.out-dim { color: #064e3b; }
+.err-out { color: #f87171; }
+.warn { color: #fbbf24; }
+
+.output-block { background: rgba(16,185,129,0.04); border-radius: 6px; padding: 10px 14px; font-family: monospace; font-size: 11px; line-height: 1.7; border: 1px solid rgba(16,185,129,0.12); margin-top: 6px; color: #6ee7b7; }
+.output-block.amber { background: rgba(245,158,11,0.04); border-color: rgba(245,158,11,0.12); color: #fcd34d; }
+
+.annotation { font-size: 11px; color: #475569; margin-top: 5px; padding-left: 4px; }
+.annotation strong { color: #94a3b8; }
+
+.divider { height: 1px; background: rgba(255,255,255,0.05); margin: 18px 0; }
+
+.var-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px; }
+.var-table tr { border-bottom: 1px solid rgba(255,255,255,0.04); }
+.var-table td { padding: 5px 10px; }
+.var-table td:first-child { color: #818cf8; font-family: monospace; white-space: nowrap; }
+.var-table td:nth-child(2) { color: #fbbf24; font-family: monospace; }
+.var-table td:last-child { color: #475569; }
+</style>
+</head>
+<body>
+
+<h1>Deploy Commands — Real Examples</h1>
+<p class="sub">Exact command calls with real values filled in</p>
+
+<!-- Context block -->
+<div style="background:rgba(255,255,255,0.02);border:1px solid #1e293b;border-radius:10px;padding:16px 20px;margin-bottom:28px;">
+  <div style="font-size:12px;font-weight:700;color:#e2e8f0;margin-bottom:10px;">Dashboard being deployed</div>
+  <table class="var-table">
+    <tr><td>APP_NAME</td><td>"Agent Health Dashboard"</td><td>from state.json — used as-is in -n flag</td></tr>
+    <tr><td>ROUTING_NAME</td><td>"agent-health-x7k2"</td><td>permanent URL slug</td></tr>
+    <tr><td>SEMVER</td><td>"1.0.0"</td><td>current version</td></tr>
+    <tr><td>NEXT_SEMVER</td><td>"1.0.1"</td><td>auto-bumped</td></tr>
+    <tr><td>FOLDER_NAME</td><td>"Shared"</td><td>auto-resolved</td></tr>
+    <tr><td>FOLDER_KEY</td><td>"a1b2c3d4-e5f6-7890-abcd-ef1234567890"</td><td>from folder list</td></tr>
+  </table>
+</div>
+
+<!-- ══ SCENARIO A: Fresh deploy, pinned ══ -->
+<div class="scenario scenario-a">
+  <div class="scenario-header">
+    <span class="scenario-tag">Scenario A</span>
+    <span class="scenario-title">First-ever deploy — user chooses to pin to Governance UI</span>
+  </div>
+  <div class="scenario-body">
+
+    <div class="step-group">
+      <div class="step-label">Pre-flight</div>
+      <div class="cmd-block">
+<span class="prompt">$ </span><span class="cmd">uip login status <span class="flag">--output</span> <span class="val">json</span></span>
+
+<span class="out">{ "Result": "Success", "Data": { "Status": "Logged in", "Organization": "appsdev", "Tenant": "appsdevDefault" } }</span>
+      </div>
+    </div>
+
+    <div class="step-group">
+      <div class="step-label">Folder check — "Shared" found automatically</div>
+      <div class="cmd-block">
+<span class="prompt">$ </span><span class="cmd">uip or folders list <span class="flag">--all</span> <span class="flag">--output</span> <span class="val">json</span> <span class="flag">></span> /tmp/uip-folders.json</span>
+
+<span class="cmt"># Check for "Shared" folder…</span>
+<span class="out">{ "key": "a1b2c3d4-e5f6-7890-abcd-ef1234567890", "name": "Shared" }</span>
+<span class="out-dim"># → FOLDER_KEY and FOLDER_NAME set automatically. No user prompt.</span>
+      </div>
+    </div>
+
+    <div class="step-group">
+      <div class="step-label">Deploy plan shown to user</div>
+      <div class="output-block">
+Your <strong>Agent Health Dashboard</strong> is ready to be deployed.
+
+📦  Version:   1.0.0 → 1.0.1
+🔗  URL path:  agent-health-x7k2
+📁  Folder:    Shared
+🔄  Type:      Fresh deploy
+
+📌  Do you want to pin this dashboard to the Governance UI?
+   → Say "deploy and pin" to make it visible in the Governance section
+   → Say "deploy" to deploy without pinning
+      </div>
+      <div class="annotation"><strong>User replies:</strong> "deploy and pin" → PIN_TO_GOVERNANCE=true</div>
+    </div>
+
+    <div class="step-group">
+      <div class="step-label">Step 5 — Production build</div>
+      <div class="cmd-block">
+<span class="prompt">$ </span><span class="cmd">mv .env.local .env.local.deploy-bak</span>
+<span class="prompt">$ </span><span class="cmd">npm run build</span>
+<span class="out">✓ built in 4.2s — dist/ ready (143 kB)</span>
+<span class="prompt">$ </span><span class="cmd">mv .env.local.deploy-bak .env.local</span>
+      </div>
+    </div>
+
+    <div class="step-group">
+      <div class="step-label">Step 6 — Pack</div>
+      <div class="cmd-block">
+<span class="prompt">$ </span><span class="cmd">uip codedapp pack dist \
+  <span class="flag">-n</span> <span class="val">"agent-health-x7k2"</span> \
+  <span class="flag">-v</span> <span class="val">"1.0.1"</span> \
+  <span class="flag">--output</span> <span class="val">json</span></span>
+
+<span class="out">{ "packagePath": "./agent-health-x7k2.1.0.1.nupkg", "name": "agent-health-x7k2", "version": "1.0.1" }</span>
+      </div>
+      <div class="annotation">Note: <strong>-n</strong> takes the routing slug, not the display name</div>
+    </div>
+
+    <div class="step-group">
+      <div class="step-label">Step 7 — Publish</div>
+      <div class="cmd-block">
+<span class="prompt">$ </span><span class="cmd">uip codedapp publish \
+  <span class="flag">-n</span> <span class="val">"agent-health-x7k2"</span> \
+  <span class="flag">-v</span> <span class="val">"1.0.1"</span> \
+  <span class="flag">--output</span> <span class="val">json</span></span>
+
+<span class="out">{ "DeploymentVersion": 3, "name": "agent-health-x7k2", "version": "1.0.1", "status": "Published" }</span>
+      </div>
+    </div>
+
+    <div class="step-group">
+      <div class="step-label">Step 8 — Deploy (pinned to Governance UI)</div>
+      <div class="cmd-block">
+<span class="prompt">$ </span><span class="cmd">uip codedapp deploy \
+  <span class="flag">-n</span>            <span class="val">"Agent Health Dashboard"</span> \
+  <span class="flag">--path-name</span>   <span class="val">"agent-health-x7k2"</span> \
+  <span class="flag">--folder-key</span>  <span class="val">"a1b2c3d4-e5f6-7890-abcd-ef1234567890"</span> \
+  <span class="flag">--tags</span>        <span class="val">"governance,dashboard"</span> \
+  <span class="flag">--output</span>      <span class="val">json</span></span>
+
+<span class="out">{ "SystemName": "app-7f3a", "AppUrl": "https://cloud.uipath.com/appsdev/appsdevDefault/apps_/app/agent-health-x7k2", "status": "Deployed" }</span>
+      </div>
+      <div class="annotation">
+        <strong>-n</strong> = sanitized display name (package lookup)<br/>
+        <strong>--path-name</strong> = routing slug → becomes the URL<br/>
+        <strong>--tags "governance,dashboard"</strong> → visible in Governance UI
+      </div>
+    </div>
+
+    <div class="step-group">
+      <div class="step-label">Success message</div>
+      <div class="output-block">
+🎉 <strong>Agent Health Dashboard</strong> is live.
+
+https://cloud.uipath.com/appsdev/appsdevDefault/apps_/app/agent-health-x7k2
+
+Version 1.0.1 · Folder: Shared
+
+Your dashboard is now visible in the Governance section.
+To update it after changes, say "deploy this dashboard" again.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ SCENARIO B: Upgrade, no pin, no Shared folder ══ -->
+<div class="scenario scenario-b">
+  <div class="scenario-header">
+    <span class="scenario-tag">Scenario B</span>
+    <span class="scenario-title">Upgrade (second deploy) — no Governance pin — no "Shared" folder in tenant</span>
+  </div>
+  <div class="scenario-body">
+
+    <div class="step-group">
+      <div class="step-label">state.json already has deployment info from Scenario A</div>
+      <div class="output-block amber">
+{
+  "app": { "semver": "1.0.1", "routingName": "agent-health-x7k2" },
+  "deployment": {
+    "systemName":  "app-7f3a",      ← non-null → this is an UPGRADE
+    "folderKey":   "a1b2c3d4-...",
+    "folderName":  "Shared",
+    "pinnedToGovernance": true
+  }
+}
+      </div>
+      <div class="annotation">Because <strong>systemName</strong> is set, folder resolution is skipped — already known.</div>
+    </div>
+
+    <div class="step-group">
+      <div class="step-label">Version bump</div>
+      <div class="cmd-block">
+<span class="cmt"># SEMVER="1.0.1" → NEXT_SEMVER="1.0.2"</span>
+<span class="prompt">$ </span><span class="cmd">uip codedapp list <span class="flag">--output</span> <span class="val">json</span></span>
+<span class="cmt"># 1.0.2 not found → proceed</span>
+      </div>
+    </div>
+
+    <div class="step-group">
+      <div class="step-label">Deploy plan shown to user</div>
+      <div class="output-block amber">
+Your <strong>Agent Health Dashboard</strong> is ready to be deployed.
+
+📦  Version:   1.0.1 → 1.0.2
+🔗  URL path:  agent-health-x7k2
+📁  Folder:    Shared
+🔄  Type:      Updating existing deployment (app-7f3a)
+
+📌  Do you want to pin this dashboard to the Governance UI?
+   → Say "deploy and pin" to make it visible in the Governance section
+   → Say "deploy" to deploy without pinning
+      </div>
+      <div class="annotation"><strong>User replies:</strong> "just deploy" → PIN_TO_GOVERNANCE=false</div>
+    </div>
+
+    <div class="step-group">
+      <div class="step-label">Steps 5–7 identical — build, pack, publish with new version</div>
+      <div class="cmd-block">
+<span class="prompt">$ </span><span class="cmd">npm run build</span>  <span class="cmt"># (env.local swapped out and back)</span>
+
+<span class="prompt">$ </span><span class="cmd">uip codedapp pack dist <span class="flag">-n</span> <span class="val">"agent-health-x7k2"</span> <span class="flag">-v</span> <span class="val">"1.0.2"</span> <span class="flag">--output</span> <span class="val">json</span></span>
+
+<span class="prompt">$ </span><span class="cmd">uip codedapp publish <span class="flag">-n</span> <span class="val">"agent-health-x7k2"</span> <span class="flag">-v</span> <span class="val">"1.0.2"</span> <span class="flag">--output</span> <span class="val">json</span></span>
+<span class="out">{ "DeploymentVersion": 4, "version": "1.0.2", "status": "Published" }</span>
+      </div>
+    </div>
+
+    <div class="step-group">
+      <div class="step-label">Step 8 — Deploy (no Governance pin)</div>
+      <div class="cmd-block">
+<span class="prompt">$ </span><span class="cmd">uip codedapp deploy \
+  <span class="flag">-n</span>            <span class="val">"Agent Health Dashboard"</span> \
+  <span class="flag">--path-name</span>   <span class="val">"agent-health-x7k2"</span> \
+  <span class="flag">--folder-key</span>  <span class="val">"a1b2c3d4-e5f6-7890-abcd-ef1234567890"</span> \
+  <span class="flag">--tags</span>        <span class="val">"governance"</span> \
+  <span class="flag">--output</span>      <span class="val">json</span></span>
+
+<span class="out">{ "SystemName": "app-7f3a", "AppUrl": "https://cloud.uipath.com/appsdev/appsdevDefault/apps_/app/agent-health-x7k2", "status": "Deployed" }</span>
+      </div>
+      <div class="annotation">
+        <strong>--tags "governance"</strong> only — no <code>dashboard</code> tag because user didn't opt in
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ SCENARIO C: No Shared folder ══ -->
+<div style="background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.2);border-radius:12px;padding:18px 20px;margin-bottom:24px;">
+  <div style="font-size:12px;font-weight:700;color:#fca5a5;margin-bottom:12px;">Edge case — "Shared" folder does not exist</div>
+  <div class="cmd-block">
+<span class="cmt"># Folder check returns NONE</span>
+<span class="prompt">$ </span><span class="cmd">uip or folders list <span class="flag">--all</span> <span class="flag">--output</span> <span class="val">json</span></span>
+<span class="cmt"># No "Shared" found → agent builds suggestion list</span>
+  </div>
+  <div class="output-block" style="background:rgba(239,68,68,0.04);border-color:rgba(239,68,68,0.15);color:#fca5a5;">
+There's no "Shared" folder in this tenant. Which folder should the dashboard live in?
+
+  1. Analytics
+  2. Customer Ops
+  3. Finance Automation
+  4. HR Workflows
+  5. IT Operations
+
+Or type a different folder name.
+  </div>
+  <div style="font-size:11px;color:#475569;margin-top:8px;">User picks "Analytics" → agent resolves its key → FOLDER_KEY set → continues with the same pack/publish/deploy steps above</div>
+</div>
+
+<!-- ══ Key differences table ══ -->
+<div style="background:rgba(255,255,255,0.02);border:1px solid #1e293b;border-radius:10px;padding:18px 20px;">
+  <div style="font-size:13px;font-weight:700;color:#e2e8f0;margin-bottom:12px;">At a glance — what changes between scenarios</div>
+  <table style="width:100%;border-collapse:collapse;font-size:12px;">
+    <tr style="border-bottom:1px solid #1e293b;">
+      <th style="text-align:left;padding:6px 10px;color:#475569;font-size:10px;letter-spacing:1px;text-transform:uppercase;">Condition</th>
+      <th style="text-align:left;padding:6px 10px;color:#475569;font-size:10px;letter-spacing:1px;text-transform:uppercase;">--tags value</th>
+      <th style="text-align:left;padding:6px 10px;color:#475569;font-size:10px;letter-spacing:1px;text-transform:uppercase;">Folder</th>
+      <th style="text-align:left;padding:6px 10px;color:#475569;font-size:10px;letter-spacing:1px;text-transform:uppercase;">Path-name</th>
+    </tr>
+    <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+      <td style="padding:8px 10px;color:#94a3b8;">Pin to Governance</td>
+      <td style="padding:8px 10px;font-family:monospace;color:#fbbf24;">"governance,dashboard"</td>
+      <td rowspan="2" style="padding:8px 10px;color:#94a3b8;vertical-align:top;">"Shared" if exists; otherwise ask</td>
+      <td rowspan="2" style="padding:8px 10px;font-family:monospace;color:#818cf8;vertical-align:top;">routing slug (permanent)</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 10px;color:#94a3b8;">No pin</td>
+      <td style="padding:8px 10px;font-family:monospace;color:#fbbf24;">"governance"</td>
+    </tr>
+  </table>
+</div>
+
+</body>
+</html>
