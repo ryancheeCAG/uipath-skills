@@ -82,8 +82,24 @@ success_criteria:
     description: "Main.xaml references DeleteEntityRecord on CodingAgentsEvalEntity"
     path: DataServiceEval/Main.xaml
     includes:
-      - 'uda:DeleteEntityRecord'
+      - 'DeleteEntityRecord'
       - 'CodingAgentsEvalEntity'
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Main.xaml binds DeleteEntityRecord with a namespace alias for UiPath.DataService.Activities"
+    command: 'python -c "import re,sys; t=open(''DataServiceEval/Main.xaml'',encoding=''utf-8'').read(); sys.exit(0 if re.search(r''<[A-Za-z_][A-Za-z0-9_]*:DeleteEntityRecord\b'', t) else 1)"'
+    timeout: 10
+    expected_exit_code: 0
+    weight: 1.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Entity install compiled CodingAgentsEvalEntity into the generated DLL"
+    command: 'python -c "import glob,sys; dlls=glob.glob(''DataServiceEval/.local/.entities/*/DataService.DataServiceEval.dll''); sys.exit(0 if dlls and b''CodingAgentsEvalEntity'' in open(dlls[0],''rb'').read() else 1)"'
+    timeout: 10
+    expected_exit_code: 0
     weight: 2.0
     pass_threshold: 1.0
 
