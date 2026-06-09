@@ -38,6 +38,18 @@ When a robot executes a UI activity (Click, Type Into, Get Text, etc.), it uses 
 - **ApplicationNotFoundException** — scope-level failure from `NApplicationCard` (Use Application / Use Browser) when the target application can't be located **and** the scope's `OpenMode=Never`. Distinct from `ApplicationOpenException` (which fires when `OpenMode != Never` and launch failed) and `WrongTargetApplicationException` (selector matched the wrong process).
 - **UiAutomationException — "Cannot send input to UI element because it is outside of screen bounds."** — input activity (`NClick`, `NTypeInto`, ...) located the element but the destination coordinate is outside the runtime host's virtual screen. Wraps `COMException 0x800402bd` at `UiPath.UiNodeClass.Click`. Distinct from the selector-failure family — element was resolved, coordinate was rejected. See [click-coordinate-off-screen.md](./playbooks/click-coordinate-off-screen.md).
 
+UIAutomationNext (`N*`) activities also raise these more specific exceptions:
+
+- **RuntimeTimeoutException** — modern activity timeout ("Activity execution exceeded the set timeout."). A UI timeout can also surface as **NodeNotFoundException** when the element never appeared within the timeout window.
+- **ApplicationOpenException** — a `Use Application/Browser` scope with `Open` ≠ `Never` tried to launch the app and the launch failed ("Could not open target application.")
+- **WrongTargetApplicationException** — the identified element belongs to a different application/browser than the scope's target
+- **BrowserFailedToNavigateToUrlException** / **BrowserInvalidURLException** — `Go To URL` could not navigate (failed navigation, invalid/empty URL, or a local `file://` blocked on Chromium)
+- **InvalidNodeException** / **UiNodeUninitializedElementException** — the element went invalid/stale between being found and acted on
+- **TargetFoundButNotVisibleException** — element found but its visibility did not match what the target expected
+- **TargetNotFoundBrowserBlockedException** — element could not be reached because a dialog is blocking the browser
+- **UiNodeHasNoItemsException** — Select Item's target container had no items
+- **UiAutomationException (activity configuration)** — an activity rejected an invalid property value (e.g. Mouse Scroll `Movement units` < 1, Keyboard Shortcuts empty/invalid sequence, Take Screenshot missing `File name`/`Saved image`, Go To URL / Inject Js Script missing required input)
+
 ## Features
 
 - **Healing Agent Data** — recovery data captured when HA is enabled and activities fail → [interpretations/healing-agent-data.md](./interpretations/healing-agent-data.md)
