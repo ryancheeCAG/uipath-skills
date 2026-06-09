@@ -146,7 +146,6 @@
 # IXP skills (designtime + runtime)
 /skills/uipath-ixp-designtime/ @cezara98t @paul-ciobanu @misupantea-uipath @andrei-uipath
 /tests/tasks/uipath-ixp-designtime/ @cezara98t @paul-ciobanu @misupantea-uipath @andrei-uipath
-/skills/uipath-ixp-runtime/ @cezara98t @paul-ciobanu @misupantea-uipath @andrei-uipath
 # MCP skill (UiPath AgentHub MCP server registration + tool authoring)
 /skills/uipath-mcp-servers/ @cosminpaunel @UiPath/team-coded-agents
 /tests/tasks/uipath-mcp-servers/ @cosminpaunel @UiPath/team-coded-agents
