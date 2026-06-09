@@ -81,7 +81,41 @@ The build script generates a filtered SDK query from the metric name and the fil
 
 Use when the metric doesn't match T1 or T2. The agent writes an async function body (`fnBody`) that fetches and shapes the data.
 
-`displayAs` must be one of: `kpi-card`, `ranked-table`, `data-table`.
+`displayAs` can be any widget type: `kpi-card`, `ranked-table`, `data-table`, `area-chart`, `line-chart`, `bar-chart`, `donut-chart`, `multi-line-chart`.
+
+For **chart types** (`area-chart`, `line-chart`, `bar-chart`, `donut-chart`), also provide `xKey` and `yKey` matching field names in the array your `fnBody` returns. The build script uses the standard chart template with your `customDataFn` injected — the `fnBody` return value is used directly as chart data.
+
+### Example — area chart from SDK data
+
+```json
+{
+  "name": "faulted-jobs-trend",
+  "tier": "T3",
+  "title": "Faulted Jobs Over Time",
+  "description": "Daily count of faulted jobs",
+  "displayAs": "area-chart",
+  "xKey": "date",
+  "yKey": "count",
+  "deltaDir": "down-good",
+  "deltaText": "faulted jobs today",
+  "fnBody": "const { Jobs } = await import('@uipath/uipath-typescript/jobs')\nconst svc = new Jobs(sdk as never)\nconst result = await svc.getAll({ filter: \"State eq 'Faulted'\" })\nconst byDate: Record<string, number> = {}\nfor (const j of result?.items ?? []) {\n  const date = String(j.createdTime).slice(0, 10)\n  byDate[date] = (byDate[date] ?? 0) + 1\n}\nreturn Object.entries(byDate).sort().map(([date, count]) => ({ date, count }))"
+}
+```
+
+### Example — donut chart showing job state distribution
+
+```json
+{
+  "name": "jobs-state-breakdown",
+  "tier": "T3",
+  "title": "Jobs by State",
+  "description": "Distribution of job execution states",
+  "displayAs": "donut-chart",
+  "xKey": "name",
+  "yKey": "value",
+  "fnBody": "const { Jobs } = await import('@uipath/uipath-typescript/jobs')\nconst svc = new Jobs(sdk as never)\nconst result = await svc.getAll({})\nconst counts: Record<string, number> = {}\nfor (const j of result?.items ?? []) { counts[j.state ?? 'Unknown'] = (counts[j.state ?? 'Unknown'] ?? 0) + 1 }\nreturn Object.entries(counts).map(([name, value]) => ({ name, value }))"
+}
+```
 
 ### Example — ranked table from Insights
 

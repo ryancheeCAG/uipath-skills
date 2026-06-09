@@ -148,8 +148,18 @@ const T2_OP_TO_JS = { gt: '>', lt: '<', eq: '===', gte: '>=', lte: '<=', neq: '!
 
 const VALID_EDIT_OPS = ['ADD', 'REMOVE', 'CHANGE', 'REBUILD']
 
-/** Display types supported by the T3-SDK shell template */
-export const VALID_T3_SDK_DISPLAY_TYPES = ['kpi-card', 'ranked-table', 'data-table']
+/**
+ * Display types supported for T3-SDK widgets.
+ * Table/KPI types use t3-shell.tsx.template.
+ * Chart types use the standard chart templates with customDataFn injected.
+ */
+export const VALID_T3_SDK_DISPLAY_TYPES = [
+  'kpi-card', 'ranked-table', 'data-table',        // shell template path
+  'area-chart', 'line-chart', 'bar-chart',          // chart template path
+  'donut-chart', 'multi-line-chart',                // chart template path
+]
+
+const T3_CHART_TYPES = new Set(['area-chart', 'line-chart', 'bar-chart', 'donut-chart', 'multi-line-chart'])
 
 // ── Low-level utilities ────────────────────────────────────────────────────────
 
@@ -706,24 +716,68 @@ export function buildT2WidgetSpec(metric, entry) {
  * @returns {string} Full TypeScript file content
  */
 export function buildT3WidgetFile(metric, timeRange = '30d') {
-  if (!metric.title) throw new Error(`T3 metric "${metric.name}" missing title`)
+  if (!metric.title)   throw new Error(`T3 metric "${metric.name}" missing title`)
+  if (!metric.fnBody)  throw new Error(`T3 metric "${metric.name}" missing fnBody`)
+  if (!metric.displayAs) throw new Error(`T3 metric "${metric.name}" needs displayAs`)
 
   const componentName = metric.componentName ?? toPascalCase(metric.name)
+  const iconName      = metric.icon ?? 'Activity'
 
-  // T3-SDK path: injects fnBody into shell template
-  if (!metric.fnBody) throw new Error(`T3 metric "${metric.name}" missing fnBody`)
-  if (!metric.displayAs) throw new Error(`T3 metric "${metric.name}" with fnBody needs displayAs`)
+  // ── Chart path: use existing chart templates with customDataFn injected ──────
+  // fnBody returns Row[] directly, so DATA_SELECTOR is just `data ?? []`.
+  // customDataFn is injected before the exported component function.
+  if (T3_CHART_TYPES.has(metric.displayAs)) {
+    const indented = metric.fnBody.split('\n').map(l => '  ' + l).join('\n')
+    const customFnBlock = [
+      '',
+      '// ── Custom data function (T3-SDK, injected at build time) ──────────────────',
+      'const customDataFn = async (sdk: any, getToken: () => Promise<string>): Promise<Record<string, unknown>[]> => {',
+      indented,
+      '}',
+      '// ────────────────────────────────────────────────────────────────────────────',
+      '',
+    ].join('\n')
 
+    const spec = {
+      componentName,
+      template:         metric.displayAs,
+      detailRoute:      metric.detailRoute ?? `/${componentName.toLowerCase()}`,
+      icon:             iconName,
+      title:            metric.title,
+      description:      metric.description ?? '',
+      dataHook:         'useInsightsSDK(customDataFn, [])',
+      sdkImportLine:    '',            // SDK imports are inside fnBody (dynamic)
+      responseTypeImport: '',
+      hookImport:       "import { useInsightsSDK } from '@/hooks/useInsightsSDK'",
+      dataSelector:     'data ?? []', // fnBody returns the array directly
+      xKey:             metric.xKey  ?? 'date',
+      yKey:             metric.yKey  ?? 'value',
+      valueExpression:  "'—'",
+      columns:          metric.columns ?? '[{key:"name",label:"Name"}]',
+      deltaDir:         metric.deltaDir ?? 'neutral',
+      deltaText:        metric.deltaText ?? '',
+      series:           metric.series ?? '[{key:"value",color:"hsl(var(--chart-1))"}]',
+      pivotExpression:  metric.pivotExpression ?? 'rawData',
+    }
+
+    let content = applyTemplate(spec.template, specToSubs(spec))
+
+    // Inject customDataFn block just before the exported component function
+    content = content.replace(/\nexport function /, customFnBlock + '\nexport function ')
+
+    return content
+  }
+
+  // ── Shell path: KPI card and table types use t3-shell.tsx.template ───────────
   if (!existsSync(T3_SHELL_TEMPLATE_PATH)) {
     throw new Error(`T3 shell template not found at ${T3_SHELL_TEMPLATE_PATH}`)
   }
 
-  const iconName = metric.icon ?? 'Activity'
   const indentedFnBody = metric.fnBody.split('\n').map(l => '  ' + l).join('\n')
-  const columns = metric.columns
-    ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]'
+  const columns   = metric.columns   ?? '[{key:"name",label:"Name"},{key:"value",label:"Value",align:"right" as const}]'
   const valueField = metric.valueField ?? ''
   const valueLabel = metric.valueLabel ?? ''
+
   let content = readFileSync(T3_SHELL_TEMPLATE_PATH, 'utf8')
   content = content
     .split('<<FN_BODY>>').join(indentedFnBody)

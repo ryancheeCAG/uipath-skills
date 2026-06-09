@@ -307,12 +307,22 @@ test('parseEvent: recognizes AUTH_MISSING event', () => {
 
 // ── VALID_T3_SDK_DISPLAY_TYPES + T3-SDK displayAs validation tests ────────────
 
-test('validateIntent: rejects T3-SDK with chart displayAs', () => {
+test('validateIntent: accepts T3-SDK with chart displayAs (area-chart, line-chart, bar-chart, donut-chart)', () => {
+  for (const chartType of ['area-chart', 'line-chart', 'bar-chart', 'donut-chart']) {
+    const errors = validateIntent({
+      dashboardName: 'x', timeRange: '7d',
+      metrics: [{ name: 'custom', tier: 'T3', title: 'X', fnBody: 'return []', displayAs: chartType }]
+    })
+    assert.deepEqual(errors, [], `${chartType} should be valid for T3-SDK`)
+  }
+})
+
+test('validateIntent: rejects T3-SDK with truly unsupported displayAs', () => {
   const errors = validateIntent({
     dashboardName: 'x', timeRange: '7d',
-    metrics: [{ name: 'custom', tier: 'T3', title: 'X', fnBody: 'return []', displayAs: 'donut-chart' }]
+    metrics: [{ name: 'custom', tier: 'T3', title: 'X', fnBody: 'return []', displayAs: 'unknown-widget' }]
   })
-  assert.ok(errors.some(e => e.includes('unsupported displayAs') && e.includes('donut-chart')))
+  assert.ok(errors.some(e => e.includes('unsupported displayAs')))
 })
 
 test('validateIntent: accepts T3-SDK with ranked-table displayAs', () => {
