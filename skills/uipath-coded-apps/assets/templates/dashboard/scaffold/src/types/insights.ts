@@ -49,6 +49,24 @@ export interface JobTopFailuresResponse { data: JobRankedItem[] }
 export interface JobCompletionPoint { date: string; count: number; state: 'Successful' | 'Faulted' | 'Stopped' }
 export interface JobCompletedTimelineResponse { data: JobCompletionPoint[] }
 
+// ── Jobs service (@uipath/uipath-typescript/jobs) ─────────────────────────────
+// Note: These types mirror JobGetResponse from the SDK for dashboard display
+
+/** getAll() filtered response item */
+export interface JobDisplayItem {
+  key?: string
+  state?: string
+  processName?: string
+  startTime?: Date | string
+  endTime?: Date | string
+  createdTime?: Date | string
+}
+
+export interface PaginatedJobsResponse {
+  items?: JobDisplayItem[]
+  value?: JobDisplayItem[]
+}
+
 // ── Governance service (@uipath/uipath-typescript/governance) ────────────────
 
 /** getOperationSummary() — /Governance/operation/summary */

@@ -348,6 +348,19 @@ test('buildT3WidgetFile: no unresolved << >> placeholders remain', () => {
   assert.equal(unresolved, null, `Unresolved placeholders: ${(unresolved ?? []).join(', ')}`)
 })
 
+// ── sdkCallOverride tests ─────────────────────────────────────────────────────
+
+test('buildT1WidgetSpec: uses sdkCallOverride when present (Jobs.getAll with filter)', () => {
+  const spec = buildT1WidgetSpec(
+    { name: 'job-failures', tier: 'T1' },
+    registry.t1['job-failures'],
+    '30d'
+  )
+  assert.ok(spec.dataHook.includes("getAll({ filter:"))
+  assert.ok(!spec.dataHook.includes('THIRTY_DAYS_AGO'), 'should not use positional date params')
+  assert.ok(spec.sdkImportLine.includes('Jobs'), 'sdkImportLine should reference Jobs service')
+})
+
 // ── T2 string equality filter tests ──────────────────────────────────────────
 
 test('compileT2ToTypeScript: generates string equality filter for filterType:string', () => {

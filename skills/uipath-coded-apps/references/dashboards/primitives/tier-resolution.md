@@ -51,6 +51,8 @@ These are pre-built. The build script generates the entire widget from the metri
 | `top-failing-agents` | Agents ranked by error count |
 | `active-agents-kpi` | Count of agents with at least one run |
 | `agent-latency` | P50 and P95 execution time side by side |
+| `job-failures` | Faulted jobs (process name, state, start time) |
+| `job-completion-trend` | Recently completed jobs |
 
 ---
 

@@ -91,6 +91,42 @@
         "series": "[{key:\"P50\",color:\"hsl(var(--chart-1))\",label:\"P50 ms\"},{key:\"P95\",color:\"hsl(var(--chart-2))\",label:\"P95 ms\"}]",
         "pivotExpression": "rawData.reduce((acc: Record<string, unknown>[], row: any) => { const existing = acc.find((r: any) => r.date === row.date); if (existing) { existing[row.name] = row.value; } else { acc.push({ date: row.date, [row.name]: row.value }); } return acc; }, [])"
       }
+    },
+    "job-failures": {
+      "aliases": ["faulted jobs", "failed jobs", "job failures", "rpa failures", "process failures", "jobs that failed"],
+      "sdkImport": "@uipath/uipath-typescript/jobs",
+      "sdkService": "Jobs",
+      "sdkMethod": "getAll",
+      "sdkCallOverride": "getAll({ filter: \"State eq 'Faulted'\" })",
+      "template": "data-table",
+      "responseType": "PaginatedJobsResponse",
+      "defaults": {
+        "title": "Faulted Jobs",
+        "description": "Jobs currently in a faulted state",
+        "icon": "XCircle",
+        "dataSelector": "data?.items ?? data?.value ?? []",
+        "columns": "[{key:\"processName\",label:\"Process\"},{key:\"state\",label:\"State\"},{key:\"createdTime\",label:\"Started\"}]",
+        "deltaDir": "down-good",
+        "deltaText": "faulted jobs"
+      }
+    },
+    "job-completion-trend": {
+      "aliases": ["completed jobs", "job completions", "jobs completed", "rpa throughput", "successful jobs", "jobs over time"],
+      "sdkImport": "@uipath/uipath-typescript/jobs",
+      "sdkService": "Jobs",
+      "sdkMethod": "getAll",
+      "sdkCallOverride": "getAll({ filter: \"State eq 'Successful'\" })",
+      "template": "data-table",
+      "responseType": "PaginatedJobsResponse",
+      "defaults": {
+        "title": "Completed Jobs",
+        "description": "Recently completed jobs",
+        "icon": "CheckCircle",
+        "dataSelector": "data?.items ?? data?.value ?? []",
+        "columns": "[{key:\"processName\",label:\"Process\"},{key:\"state\",label:\"State\"},{key:\"endTime\",label:\"Completed\"}]",
+        "deltaDir": "up-good",
+        "deltaText": "completed jobs"
+      }
     }
   },
   "t2": {
@@ -186,8 +222,6 @@
     { "pattern": "sla.*breach|breach.*sla", "reason": "Raw counts only — no SLA metadata in any API.", "alternative": "T3-SDK: new Jobs(sdk as never).getAll({ filter: \"State eq 'Faulted'\" }) to compute failure rate" },
     { "pattern": "error.*message|stack.*trace|exception.*text", "reason": "No aggregation endpoint for error text or stack traces.", "alternative": "Error count by type (metric: agent-errors)" },
     { "pattern": "governance.*policy.*summary|policy.*summary.*governance|getPolicySummary", "reason": "governance.getPolicySummary requires a specific policy UUID that must be supplied by the user.", "alternative": "Ask the user which policy UUID to report on, then classify as T3-Insights with method: getPolicySummary and the UUID injected into the request body." },
-    { "pattern": "queue.*failure.*threshold|queues.*failing|high.failure.*queue", "reason": "QueueGetResponse does not include a failure count field. SDK fields are: id, name, maxRetries, acceptsRejectedItems only.", "alternative": "T3-Insights: use namespace: 'jobs', method: 'getTopFailures' to see processes with most failures, or request queue metrics via T3-SDK if your tenant has queue analytics enabled." },
-    { "pattern": "job failures|job failure rate|top failing processes|process failures", "reason": "Jobs analytics SDK service not yet available. Use T3-SDK with @uipath/uipath-typescript/jobs to query raw job data.", "alternative": "T3-SDK: new Jobs(sdk as never).getAll({ filter: \"State eq 'Faulted'\" })" },
-    { "pattern": "job completion trend|completed jobs over time|jobs per day|rpa throughput", "reason": "Jobs analytics SDK service not yet available. Use T3-SDK with @uipath/uipath-typescript/jobs to query raw job data.", "alternative": "T3-SDK: new Jobs(sdk as never).getAll({ filter: \"EndTime ge ...\" })" }
+    { "pattern": "queue.*failure.*threshold|queues.*failing|high.failure.*queue", "reason": "QueueGetResponse does not include a failure count field. SDK fields are: id, name, maxRetries, acceptsRejectedItems only.", "alternative": "T3-Insights: use namespace: 'jobs', method: 'getTopFailures' to see processes with most failures, or request queue metrics via T3-SDK if your tenant has queue analytics enabled." }
   ]
 }

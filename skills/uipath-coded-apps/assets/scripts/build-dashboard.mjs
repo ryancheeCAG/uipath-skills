@@ -575,7 +575,7 @@ export function resolveMetric(metric) {
 /**
  * Build a complete WidgetSpec from a T1 registry entry, merging any intent overrides.
  * @param {IntentMetric} metric
- * @param {object} entry  - Registry entry from capability-registry.json
+ * @param {object} entry  - Registry entry. Optional sdkCallOverride replaces the auto-generated method(startTime, NOW) call.
  * @param {'1d'|'7d'|'30d'|'90d'} timeRange
  * @returns {WidgetSpec}
  */
@@ -584,8 +584,11 @@ export function buildT1WidgetSpec(metric, entry, timeRange) {
   const componentName = metric.componentName ?? toPascalCase(metric.name)
   const { sdkService, sdkMethod, sdkImport, responseType } = entry
 
-  // Generate the typed SDK hook call — positional Date params match actual SDK signatures
-  const dataHook = `useInsightsSDK<${responseType}>(sdk => new ${sdkService}(sdk as never).${sdkMethod}(${startConst}, NOW), [])`
+  // sdkCallOverride: use verbatim for services that don't take positional Date params
+  const sdkCall = entry.sdkCallOverride
+    ? entry.sdkCallOverride
+    : `${sdkMethod}(${startConst}, NOW)`
+  const dataHook = `useInsightsSDK<${responseType}>(sdk => new ${sdkService}(sdk as never).${sdkCall}, [])`
 
   // Static SDK service import — injected into the template before the component
   const sdkImportLine = `import { ${sdkService} } from '${sdkImport}'`
