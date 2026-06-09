@@ -4,9 +4,9 @@ description: >
   uda:CreateEntityRecord on CodingAgentsEvalEntity covering all scalar SqlTypes
   with required+optional differentiation. Asserts RecordState has 7
   DynamicEntityField entries with correct IsRequired flags and the
-  InputEntityInFieldView VB expression uses the right typed literals (x:Int32
-  for INT, x:Decimal for DECIMAL, x:Boolean for BIT, x:String ISO 8601 for
-  DATE/DATETIMEOFFSET).
+  InputEntityInFieldView VB expression uses the right typed literals
+  (x:Decimal for DECIMAL fields, x:Boolean for BIT, x:String ISO 8601 for
+  DATE/DATETIMEOFFSET) per the tenant entity schema.
 
 tags: [uipath-rpa, windows, integration, dataservice]
 
@@ -109,10 +109,9 @@ success_criteria:
     pass_threshold: 1.0
 
   - type: file_contains
-    description: "Typed scalar literals present (INT, DECIMAL, BIT, plus string for DATE/DATETIMEOFFSET)"
+    description: "Typed scalar literals present (DECIMAL for Score+Price, BIT for IsActive)"
     path: DataServiceEval/Main.xaml
     includes:
-      - 'x:Int32'
       - 'x:Decimal'
       - 'x:Boolean'
     weight: 2.0

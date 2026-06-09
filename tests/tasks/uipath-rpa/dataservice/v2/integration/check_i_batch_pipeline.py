@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "_shared"
 from xaml_check import (  # noqa: E402
     assert_activity_order,
     assert_attr,
+    assert_attr_bool,
     assert_group_filter_operator,
     assert_simple_filters_contain,
     get_activities,
@@ -54,7 +55,7 @@ if __name__ == "__main__":
 
     # --- CreateMultiple ---
     create = get_activity(root, "CreateMultipleEntityRecords", type_arg=ENTITY)
-    assert_attr(create, "ContinueBatchOnFailure", "[False]")
+    assert_attr_bool(create, "ContinueBatchOnFailure", False)
     created_var = get_arg_expression(create, "OutputRecords")
     if not created_var:
         fail("CreateMultipleEntityRecords.OutputRecords is not bound")
@@ -73,7 +74,7 @@ if __name__ == "__main__":
     )
     # Sort + pagination
     assert_attr(query, "SortByField", "Score")
-    assert_attr(query, "SortAscending", "[False]")
+    assert_attr_bool(query, "SortAscending", False)
     query_out_var = get_arg_expression(query, "OutputRecords")
     if not query_out_var:
         fail("QueryEntityRecords.OutputRecords is not bound")
@@ -89,7 +90,7 @@ if __name__ == "__main__":
         )
     update_primary, update_retry = updates[0], updates[-1]
 
-    assert_attr(update_primary, "ContinueBatchOnFailure", "[False]")
+    assert_attr_bool(update_primary, "ContinueBatchOnFailure", False)
     primary_input = get_arg_expression(update_primary, "InputRecords") or ""
     if first_token(primary_input) != first_token(query_out_var):
         fail(
@@ -110,7 +111,7 @@ if __name__ == "__main__":
 
     # --- DeleteMultiple ---
     delete = get_activity(root, "DeleteMultipleEntityRecords", type_arg=ENTITY)
-    assert_attr(delete, "ContinueBatchOnFailure", "[False]")
+    assert_attr_bool(delete, "ContinueBatchOnFailure", False)
     delete_input = get_arg_expression(delete, "InputRecords") or ""
     if first_token(delete_input) != first_token(query_out_var):
         fail(

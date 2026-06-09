@@ -9,6 +9,7 @@ from xaml_check import (  # noqa: E402
     assert_activity_order,
     assert_arg_references,
     assert_attr,
+    assert_attr_bool,
     assert_record_state_fields,
     get_activity,
     get_arg_expression,
@@ -88,7 +89,7 @@ if __name__ == "__main__":
     # --- DeleteFile ---
     delete_file = get_activity(root, "DeleteFileFromRecordField", type_arg=FILE_ENTITY)
     assert_attr(delete_file, "Field", "Contract")
-    assert_attr(delete_file, "ContinueOnError", "[True]")
+    assert_attr_bool(delete_file, "ContinueOnError", True)
     assert_arg_references(delete_file, "RecordId", created_var, ".Id")
     if not get_arg_expression(delete_file, "OutputEntity"):
         fail("DeleteFileFromRecordField.OutputEntity is not bound")

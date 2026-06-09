@@ -130,10 +130,9 @@ success_criteria:
     pass_threshold: 1.0
 
   - type: file_contains
-    description: "Typed scalar literals present (INT, DECIMAL, BIT)"
+    description: "Typed scalar literals present (DECIMAL for Score+Price, BIT for IsActive)"
     path: DataServiceEval/Main.xaml
     includes:
-      - 'x:Int32'
       - 'x:Decimal'
       - 'x:Boolean'
     weight: 2.0

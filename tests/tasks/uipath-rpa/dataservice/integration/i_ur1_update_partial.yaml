@@ -3,8 +3,8 @@ description: >
   Integration I-UR1 (Confluence §2.3, merges I11+I12+I13) — agent authors a
   single uda:UpdateEntityRecord on CodingAgentsEvalEntity setting Title (empty
   string), Score, Price, IsActive. Notes and Status must be absent from
-  RecordState and InputEntityInFieldView. Asserts type mapping (x:Int32,
-  x:Decimal, x:Boolean) and InputEntityInFieldView anti-pattern guard.
+  RecordState and InputEntityInFieldView. Asserts type mapping (x:Decimal
+  for DECIMAL fields, x:Boolean for BIT) and InputEntityInFieldView guard.
 
 tags: [uipath-rpa, windows, integration, dataservice]
 
@@ -103,10 +103,9 @@ success_criteria:
     pass_threshold: 1.0
 
   - type: file_contains
-    description: "Typed scalar literals present for INT/DECIMAL/BIT update payload"
+    description: "Typed scalar literals present for DECIMAL/BIT update payload"
     path: DataServiceEval/Main.xaml
     includes:
-      - 'x:Int32'
       - 'x:Decimal'
       - 'x:Boolean'
     weight: 2.0

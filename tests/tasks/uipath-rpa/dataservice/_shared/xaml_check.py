@@ -204,11 +204,57 @@ def get_activities(
 
 
 def assert_attr(el: ET.Element, name: str, expected: str) -> None:
-    """Attribute (by local name) must equal `expected`."""
+    """Attribute (by local name) must equal `expected`, with VB-expression brackets tolerated.
+
+    `ExpansionDepth="1"` and `ExpansionDepth="[1]"` are both valid XAML;
+    the bracketed form is a VB expression literal and the agent's choice
+    between them is stylistic. Strip brackets from both sides before
+    comparison. For booleans (where `True` vs `true` might also vary), use
+    `assert_attr_bool` which adds case-insensitivity.
+    """
     actual = _local_attr(el, name)
-    if actual != expected:
+
+    def _strip(v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = v.strip()
+        if len(s) >= 2 and s.startswith("[") and s.endswith("]"):
+            return s[1:-1].strip()
+        return s
+
+    if _strip(actual) != _strip(expected):
         print(
             f"FAIL: {_local(el)}.{name} expected {expected!r}, got {actual!r}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+def assert_attr_bool(el: ET.Element, name: str, expected: bool) -> None:
+    """Boolean attribute must equal `expected`, accepting any well-formed XAML form.
+
+    Both `ContinueOnError="True"` (bare literal) and `ContinueOnError="[True]"`
+    (bracketed VB expression) compile to the same runtime value and the agent's
+    choice between them is stylistic. Bracket stripping + case-insensitive
+    compare unifies them. Use this for boolean activity properties
+    (ContinueOnError, ContinueBatchOnFailure, IsInRecordView, SortAscending,
+    IsActive, etc.) instead of `assert_attr` with a hardcoded `[True]`/`[False]`.
+    """
+    actual = _local_attr(el, name)
+    if actual is None:
+        print(
+            f"FAIL: {_local(el)}.{name} expected boolean {expected!r}, attribute absent",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    normalized = actual.strip()
+    if normalized.startswith("[") and normalized.endswith("]"):
+        normalized = normalized[1:-1].strip()
+    normalized = normalized.lower()
+    expected_str = "true" if expected else "false"
+    if normalized != expected_str:
+        print(
+            f"FAIL: {_local(el)}.{name} expected boolean {expected!r}, got {actual!r}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -276,7 +322,9 @@ def assert_record_state_fields(
     fields = collect_dynamic_entity_fields(activity)
     by_name = {}
     for f in fields:
-        n = _local_attr(f, "FieldName")
+        # DynamicEntityField uses Name (per CreateEntityRecord.md property table);
+        # SimpleFilter is the one that uses FieldName — distinct elements.
+        n = _local_attr(f, "Name")
         if n:
             by_name[n] = f
 

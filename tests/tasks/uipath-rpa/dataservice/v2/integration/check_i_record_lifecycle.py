@@ -15,6 +15,7 @@ from xaml_check import (  # noqa: E402
     assert_activity_order,
     assert_arg_references,
     assert_attr,
+    assert_attr_bool,
     assert_child_absent,
     assert_record_state_fields,
     get_activities,
@@ -57,7 +58,7 @@ if __name__ == "__main__":
         optional=["Notes", "Score", "Price", "IsActive", "EventDate", "ScheduledAt"],
         forbidden=["Category", "Tags"],
     )
-    assert_attr(create, "ContinueOnError", "[True]")
+    assert_attr_bool(create, "ContinueOnError", True)
     created_var = get_arg_expression(create, "OutputEntity")
     if not created_var:
         fail("CreateEntityRecord.OutputEntity is not bound to a variable")
@@ -89,14 +90,14 @@ if __name__ == "__main__":
         optional=["Score", "Price", "IsActive"],
         forbidden=["Notes", "EventDate", "ScheduledAt", "Category", "Tags"],
     )
-    assert_attr(update, "ContinueOnError", "[True]")
+    assert_attr_bool(update, "ContinueOnError", True)
     assert_arg_references(update, "RecordId", created_var, ".Id")
 
     # --- Delete ---
     delete = get_activity(root, "DeleteEntityRecord", type_arg=ENTITY)
     for forbidden in ("DynamicEntityField", "InputEntityInFieldView"):
         assert_child_absent(delete, forbidden)
-    assert_attr(delete, "ContinueOnError", "[True]")
+    assert_attr_bool(delete, "ContinueOnError", True)
     assert_arg_references(delete, "RecordId", created_var, ".Id")
 
     # --- Null guard: post-Create activities live under an If or FlowDecision ---
