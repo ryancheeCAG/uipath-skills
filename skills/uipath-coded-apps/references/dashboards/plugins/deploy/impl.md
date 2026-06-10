@@ -97,7 +97,7 @@ If this is a fresh deploy, also show:
 
 ## Step 5 — Production build
 
-Protect dev credentials — rename `.env.local` before building, restore after:
+Rename `.env.local` away before building (it may hold a dev `VITE_UIPATH_PAT`), restore after. The build still gets its SDK config from **`.env.production`** — the public config (cloud/base URL, org, tenant, client ID, scope) the build script writes. Vite loads it in production mode and the rename doesn't touch it.
 
 ```bash
 node -e "const fs=require('fs'); if(fs.existsSync('.env.local')) fs.renameSync('.env.local','.env.local.bak')"
@@ -112,6 +112,19 @@ node -e "const fs=require('fs'); if(fs.existsSync('.env.local.bak')) fs.renameSy
 ```
 
 If build fails: restore has already run. Show the error.
+
+**Verify the SDK config is baked into the bundle** — turns the silent "UiPath SDK configuration not found" runtime crash into a build-time stop. The org name must appear in the emitted JS:
+
+```bash
+cd <PROJECT_DIR> && node -e "
+const fs=require('fs'),path=require('path')
+const dir='dist/assets'
+const ok = fs.existsSync(dir) && fs.readdirSync(dir).some(f => f.endsWith('.js') && fs.readFileSync(path.join(dir,f),'utf8').includes(process.argv[1]))
+process.stdout.write(ok ? 'CONFIG_OK' : 'CONFIG_MISSING')
+" "<ORG_NAME>"
+```
+
+If it prints `CONFIG_MISSING`, `.env.production` was absent at build time — re-run the build (the build script writes it) and re-check. **Never deploy a `CONFIG_MISSING` bundle** — it loads blank in the browser.
 
 ---
 

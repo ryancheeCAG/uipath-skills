@@ -941,15 +941,21 @@ async function runDashboardBuild(intent, intentPath) {
     emit('SCAFFOLD_READY')
 
     // Step 2 — Env
-    writeAtomic(join(P, '.env.local'), [
+    // Public, non-secret SPA config (auth is OAuth PKCE — non-confidential client ID,
+    // never a PAT/secret). Written to BOTH .env.local (dev) and .env.production so that
+    // `vite build` still has the SDK config even though the deploy flow renames
+    // .env.local away to strip any dev PAT. Without .env.production the deployed bundle
+    // has no config and throws "UiPath SDK configuration not found" at runtime.
+    const publicEnv = [
       `VITE_UIPATH_CLOUD_URL=${cloudUrl}`,
       `VITE_UIPATH_BASE_URL=${apiUrl}`,
       `VITE_UIPATH_ORG_NAME=${orgName}`,
       `VITE_UIPATH_TENANT_NAME=${tenantName}`,
       `VITE_UIPATH_CLIENT_ID=${clientId}`,
       `VITE_UIPATH_SCOPE=${DASHBOARD_SCOPES}`,
-      `VITE_DEV_PORT=${DASHBOARD_PORT}`,
-    ].join('\n'))
+    ]
+    writeAtomic(join(P, '.env.local'), [...publicEnv, `VITE_DEV_PORT=${DASHBOARD_PORT}`].join('\n'))
+    writeAtomic(join(P, '.env.production'), publicEnv.join('\n') + '\n')
     const uipathJsonPath = join(P, 'uipath.json')
     if (existsSync(uipathJsonPath) && clientId) {
       const uj = JSON.parse(readFileSync(uipathJsonPath, 'utf8'))
