@@ -146,6 +146,8 @@ The full metadata contains:
 
 **Run whenever the activity has a parent-field-driven schema** — an api-type ObjectAction in `objectActions[]` or `connectorMethodInfo.design.actions[]` (see Step 6c's support table). Applies to **every** operation with such an action — Create/Edit/Update for parent-driven required body fields AND Get/Retrieve/Query for the response-schema fields downstream nodes will reference. The base `describe` returns only static metadata; this step runs the matching ObjectAction against the live connection so the cache you author in Step 6c is a replay of a real call, not a fabrication.
 
+> **Ping is not a gate for Step 3a.** If `uip is connections ping <id>` returns 424 or 5xx but `uip maestro flow registry get` returns a connector with `actionType: "api"` / `ActionType: "Api"`, STILL attempt Step 3a. The design-action endpoint is independent of the ping endpoint and frequently succeeds when ping does not. Abort Step 3a only if the `is resources describe -f ...` call itself returns 4xx/5xx — and in that case surface the user-actionable message from § Debug → Common Errors (`Connection ping failed` row). Do NOT fabricate `customFieldsRequestDetails` from prompt context as a fallback — that is the silent-corruption mode tracked in ENGCE-57901.
+
 Pass parent values via `-f, --field` — see [/uipath:uipath-platform — resources.md > Parent-Field-Driven Custom Fields (api-type ObjectActions)](../../../../../../uipath-platform/references/integration-service/resources.md#parent-field-driven-custom-fields-api-type-objectactions) for the full procedure, flag table, merge semantics, and error recovery.
 
 > **Skipping is not free even when the runtime call works.** For Get/Retrieve the upstream API returns data regardless — runtime stays green. The fetch is what makes Step 6c's `customFieldsRequestDetails` honest: without it, Studio Web has no schema to render the activity's custom fields, and any downstream `$vars.<thisNode>.output.<custom-field>` resolves to undefined. `flow validate` does not catch this — it surfaces as silent design-time corruption (MST-9107-class).
@@ -471,6 +473,22 @@ JSON
 
 The CLI embeds the payload verbatim in `essentialConfiguration.customFieldsRequestDetails` inside the `=jsonString:` blob. Top-level `inputs.detail.customFieldsRequestDetails` is NOT set — the field lives only inside `essentialConfiguration`.
 
+#### Step 6c attestation — confirm the cache came from a live describe
+
+**Before reporting the task done, inspect the configured node's `essentialConfiguration.customFieldsRequestDetails`.** If present (non-null, non-empty `parameterValues`), your final message MUST contain one of these lines verbatim:
+
+- `STEP_3A_CONFIRMED: ran uip is resources describe <connector> <method> --connection-id <id> --operation <op> -f <parent>=<value> ... (step <N>)`
+- `STEP_3A_SKIPPED: <reason — e.g. no api-type ObjectAction for this activity, connection unreachable on describe, no-live-tenant mode>`
+
+`<N>` is the concrete tool-call sequence number of the describe invocation in this conversation's transcript. A vague claim ("I ran it earlier") is not an attestation — the step number is the forcing function.
+
+If `customFieldsRequestDetails` is present but you cannot produce a real `STEP_3A_CONFIRMED` with a concrete step number, the cache is fabricated. Either:
+
+1. Remove `customFieldsRequestDetails` from `--detail` and re-run `node configure` (acceptable in no-live-tenant mode — emit `STEP_3A_SKIPPED` with that reason), OR
+2. Run Step 3a now, author the cache from the live response, re-run `node configure`, then attest.
+
+`flow validate` does NOT catch this — fabricated caches surface only on re-open in Studio Web or at debug time (MST-9107-class). See ENGCE-57901.
+
 ---
 
 ## IS CLI Commands
@@ -665,7 +683,7 @@ For connector-trigger flows, the same pattern applies — top-level `bindings[]`
 | Error | Cause | Fix |
 | --- | --- | --- |
 | No connection found | Connection not bound — top-level `bindings[]` missing or `resourceKey` doesn't match the node | Run Step 1 above to bind a connection; verify both entries (`ConnectionId` + `FolderKey`) are in the top-level `bindings[]` |
-| Connection ping failed | Connection expired or misconfigured | Re-authenticate the connection in the IS portal |
+| Connection ping failed (424 / 5xx on `uip is connections ping`) | Connection expired or misconfigured — OR ping endpoint is unhealthy while design-action endpoint still works | Re-authenticate the connection in the IS portal. **Before falling back: still attempt Step 3a's `uip is resources describe ... -f <parent>=<value>` against the same connection.** Ping and design-action hit different endpoints. If `describe` also returns 4xx/5xx, surface to the user verbatim: `"Connection '<name>' cannot reach the <connector> design endpoint. Fix it in the UiPath UI: Integration Service → Connections → <connector> → reconnect or re-authorize, then retry."` Do NOT fabricate `customFieldsRequestDetails` from prompt context — see Step 3a and Step 6c attestation. |
 | Missing `inputs.detail` | Node added but not configured | Run `uip maestro flow node configure` with the detail JSON (Step 6) |
 | Reference field has display name instead of ID | `uip is resources run list` was skipped | Resolve the reference field to get the actual ID (Step 4) |
 | Node faults at runtime with "resource not found" or similar after a clean build and validate | Reference field uses an ID scoped to a **different** connection (common when copying from a prior flow in the same session — e.g., a Slack channel ID from workspace A pasted into a node bound to workspace B's connection) | Re-run `uip is resources run list "<connector-key>" "<objectName>" --connection-id <CURRENT_CONNECTION_ID>`, extract the fresh ID, update `bodyParameters` / `queryParameters` in `--detail`, re-run `node configure`, re-debug. See Step 4 and the top-level Anti-Pattern on reference-ID reuse in [SKILL.md](../../../../../SKILL.md). |
