@@ -142,6 +142,16 @@ Common `uip tm` commands organized by resource type.
 |---|---|
 | `uip tm wait --execution-id <EXECUTION_ID>` | Wait for a test execution to reach a terminal state. Optional `--project-key`, `--test-set-key`, `--timeout <SECONDS>`. |
 
+### SAP Planner Commands
+
+> **Dev-build only (preview).** Not yet shipped in the published `uip` binary. Invoke via the local CLI build: `node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage …`. The `uip tm sapplanner …` form will work once the next CLI release ships. See [references/sapplanner-guide.md](references/sapplanner-guide.md) for options, output schema, and workflows.
+>
+> **Duplicate `TCode` rows = Interface variants, not separate connectors.** Same connector, split by SAP Interface (WinGui / WebGui / Fiori / …). The interface field is not exposed in the current schema. Do not deduplicate by `TCode` during analysis.
+
+| Command | Purpose |
+|---|---|
+| `node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage --project-key <PROJECT_KEY>` | List SAP transaction coverage for a Test Manager project — transactions touched by transports, plus the test cases and test sets that cover each. Optional `--connector-id <UUID>`, `--transports <ID...>`, `--include-unused`, `--from-date <ISO>`, `--to-date <ISO>`, `--limit`, `--offset`, `-t/--tenant`. |
+
 ### User Commands
 
 | Command | Purpose |
@@ -286,6 +296,8 @@ If the probe in Rule #2 shows singular subjects, the CLI predates the closed-ver
 |---|---|
 | **Generate a shareable test report** (tester or release manager view) | [references/test-result-report-guide.md](references/test-result-report-guide.md) |
 | **Publish a project and link it to a Test Manager test case** | [references/publish-and-link-guide.md](references/publish-and-link-guide.md) |
+| **Audit SAP transport coverage for a project** (which TCodes have test cases, which are unused) | [references/sapplanner-guide.md](references/sapplanner-guide.md) |
+| **Run SAP coverage fits and report gaps** (pull coverage → segregate fits / gaps → run all fits in one execution → wait → pass/fail report + gap list) | [references/sapplanner-guide.md#coverage-driven-execution--reporting](references/sapplanner-guide.md#coverage-driven-execution--reporting) |
 
 
 ## Anti-patterns
