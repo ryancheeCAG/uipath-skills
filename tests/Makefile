@@ -33,6 +33,9 @@ smoke:  ## Run all smoke tests (Linux, docker)
 smoke_rpa:  ## Run all Windows RPA smoke tests (tempdir)
 	$(CODER_EVAL) run $(TASKS) -e experiments/smoke-windows.yaml --tags smoke -j $(TASK_PARALLELISM) -v
 
+smoke_rpa_dataservice:  ## Run Windows RPA Data Service tests (tempdir + helm pre-warm)
+	$(CODER_EVAL) run $(shell find tasks/uipath-rpa/dataservice/v2 -name '*.yaml' -type f) -e experiments/smoke-windows-dataservice.yaml -j $(TASK_PARALLELISM) -v
+
 e2e:  ## Run all end-to-end tests
 	$(CODER_EVAL) run $(TASKS) -e experiments/default.yaml --tags e2e -j $(TASK_PARALLELISM) -v
 

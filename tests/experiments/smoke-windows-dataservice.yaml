@@ -1,0 +1,47 @@
+experiment_id: skill-tests-smoke-windows-dataservice
+description: "Windows RPA Data Service tests — tempdir + pre_run helm warmup (decoupled from non-DS RPA smoke)"
+
+defaults:
+  run_limits:
+    # DS tasks chain `uip rpa init` + DS activities install + entity install
+    # + XAML authoring + `uip rpa validate`. ~50-100 turns end-to-end.
+    max_turns: 180
+    task_timeout: 2700
+    # First turn cost dominates: bun rpa-tool entity install (~16 min cold,
+    # ~30s warm). pre_run below shifts the cold-start out of this budget.
+    turn_timeout: 1800
+
+  sandbox:
+    driver: tempdir
+
+  # Warm the Data Fabric / Helm path once per task BEFORE the agent's turn
+  # budget starts. The first task pays the cold-start cost here (outside the
+  # agent's view); subsequent tasks reuse the warmed helm chart + auth state.
+  # `data-fabric-entities list` is read-only — zero impact on tenant or
+  # project state. fail_on_error: false so a warmup miss never blocks the
+  # actual task (the agent still runs its own install command).
+  pre_run:
+    - command: 'cmd /c "mkdir df-warmup 2>nul & uip rpa data-fabric-entities list --project-dir df-warmup --output json"'
+      timeout: 1200
+      fail_on_error: false
+
+  agent:
+    type: claude-code
+    permission_mode: acceptEdits
+    model: claude-sonnet-4-6
+    allowed_tools: ["Skill", "Bash", "Read", "Write", "Edit", "Glob", "Grep"]
+    system_prompt: |
+      You are a coding agent. Do not access files in sibling runs/* directories. Everywhere else is permitted.
+    plugins:
+      - type: "local"
+        path: "$SKILLS_REPO_PATH"
+    ignore_patterns: []
+
+  # Sandbox cleanup between tasks (preserved artifacts stay slim; concurrent
+  # sandboxes don't leak Node module resolution).
+  post_run:
+    - command: "rm -rf node_modules .npm-prefix df-warmup"
+      timeout: 30
+
+variants:
+  - variant_id: default
