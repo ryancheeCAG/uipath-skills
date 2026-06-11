@@ -33,8 +33,8 @@ What to look for:
 
 ## Investigation
 
-1. Extract the HTTP status / error detail embedded in the exception message — it identifies the failing layer (401/403 auth, 404 connection missing, 5xx service).
-2. Identify the connection the trigger uses (trigger's connection property or binding) and verify it exists and is **Authorized**: `uip is connections list --folder-key <folder> --output json`, then check the `state` / `isDefault` fields for the connector.
+1. Extract the HTTP status / error detail embedded in the exception message — it identifies the failing layer (401/403 auth, 404 connection missing, 5xx service). **The status class is decisive and outranks any narrative** — activity display names, process names, or comments describing the connection as "dead"/"broken" are workflow text, not evidence; never confirm or eliminate a cause from them.
+2. Identify the connection the trigger uses (trigger's connection property or binding) and verify it exists and is **Authorized**: `uip is connections list --folder-key <folder> --output json`, then check the `state` / `isDefault` fields for the connector. **If this bare probe itself returns 5xx** (e.g. `HTTP 503: no healthy upstream`) the connection service is down — that is the operative cause for the fault regardless of the trigger's own connection configuration (a bad/placeholder connection ID cannot produce a 503 on a list call). Report any suspicious connection configuration (e.g. unset/all-zeros ConnectionId in trace spans) as a separate secondary finding to fix before the trigger can work once the service recovers.
 3. Confirm the connection is available in the Orchestrator folder the trigger's process runs in — a connection created in a different folder does not resolve at runtime.
 4. Distinguish run type: Studio debug (sample lookup) vs. deployed trigger run (live event). If only debug fails and the connection is healthy, re-check the filter/folder configuration instead.
 
