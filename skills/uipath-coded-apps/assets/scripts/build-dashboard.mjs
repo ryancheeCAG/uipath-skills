@@ -22,7 +22,7 @@ import { readFileSync, writeFileSync, copyFileSync, mkdirSync, readdirSync, exis
 import { createConnection } from 'net'
 import { join, dirname, resolve } from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
-import { execSync, spawn } from 'child_process'
+import { execSync } from 'child_process'
 import { createHash } from 'crypto'
 
 // ── Path constants ─────────────────────────────────────────────────────────────
@@ -149,7 +149,7 @@ const NINETY_DAYS_AGO = new Date(Date.now() - 7_776_000_000)
 const KNOWN_EVENTS = new Set([
   'PREWARM_START', 'PREWARM_DONE', 'PREWARM_FAILED', 'SCAFFOLD_READY', 'ENV_WRITTEN',
   'WIDGET_READY', 'T3_RETRY', 'T3_FAILED', 'TSC_PASS', 'TSC_FAIL',
-  'SERVER_READY', 'BUILD_RESULT', 'PARTIAL_BUILD_DETECTED', 'AUTH_MISSING',
+  'BUILD_RESULT', 'PARTIAL_BUILD_DETECTED', 'AUTH_MISSING',
   'HAND_EDIT_DETECTED', 'T2_SCHEMA_ERROR', 'INCREMENTAL_READY',
 ])
 
@@ -916,30 +916,6 @@ async function killPreviousDevServer(pidFile) {
 }
 
 /**
- * Poll until a TCP port accepts connections or the deadline passes.
- * Returns the port that responded, or the starting port if none responded.
- * @param {number} startPort
- * @param {number} timeoutMs
- * @returns {Promise<number>}
- */
-async function detectDevServerPort(startPort, timeoutMs) {
-  const deadline = Date.now() + timeoutMs
-  let port = startPort
-  while (Date.now() < deadline) {
-    const open = await new Promise(resolve => {
-      const socket = createConnection({ port, host: 'localhost' })
-      socket.once('connect', () => { socket.destroy(); resolve(true) })
-      socket.once('error', () => resolve(false))
-      socket.setTimeout(500, () => { socket.destroy(); resolve(false) })
-    })
-    if (open) return port
-    port++
-    if (port > startPort + 10) port = startPort
-  }
-  return startPort
-}
-
-/**
  * Main intent.json build pipeline.
  * @param {DashboardIntent} intent
  * @param {string} intentPath - Absolute path to intent.json on disk (for re-reads)
@@ -1139,32 +1115,20 @@ async function runDashboardBuild(intent, intentPath) {
     }
     writeAtomic(statePath, JSON.stringify(newState, null, 2))
 
-    // Step 8 — Start dev server (kill previous one first to guarantee port 57173)
+    // Step 8 — Clean up any server a PREVIOUS script version spawned (legacy
+    // pid file). The script itself no longer starts the dev server: a detached
+    // child here outlives the session and leaks. The calling agent starts
+    // `npm run dev` as a tracked background job instead (see build impl.md).
     const serverPidFile = join(P, '.dashboard', 'server.pid')
     await killPreviousDevServer(serverPidFile)
+    try { unlinkSync(serverPidFile) } catch { /* ignore */ }
 
-    const isWindows = process.platform === 'win32'
-    const server = spawn(
-      'npm',
-      ['run', 'dev', '--', '--port', String(DASHBOARD_PORT)],
-      { cwd: P, detached: true, stdio: 'ignore', shell: isWindows }
-    )
-    server.on('error', () => {})
-    server.unref()
-
-    // Persist PID so future builds can kill this server before starting their own
-    if (server.pid) {
-      writeAtomic(serverPidFile, String(server.pid))
-    }
-
-    const port = await detectDevServerPort(DASHBOARD_PORT, 8000)
-
-    emit('SERVER_READY', { port, url: `http://localhost:${port}` })
     emit('BUILD_RESULT', {
-      success: true, projectDir: P, port,
-      previewUrl: `http://localhost:${port}`,
+      success: true, projectDir: P, port: DASHBOARD_PORT,
+      previewUrl: `http://localhost:${DASHBOARD_PORT}`,
       widgets: Object.keys(widgetHashes),
       dashboardName,
+      serverStart: `npm run dev -- --port ${DASHBOARD_PORT}`,
     })
 
   } finally {
