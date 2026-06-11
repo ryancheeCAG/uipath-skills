@@ -84,6 +84,10 @@
     },
     "uipath-mcp-servers": {
       "status": "in-development",
+      "featureGates": {
+        "is-activity": { "environments": ["alpha", "staging"] },
+        "platform-mcp": { "environments": ["alpha", "staging"] }
+      },
       "confluence": { "page_id": null, "url": null },
       "last_synced": null
     },

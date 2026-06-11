@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 1,
-  "generated_at": "2026-06-02T00:00:00Z",
+  "schemaVersion": 2,
+  "generated_at": "2026-06-11T00:00:00Z",
   "environments": {
     "alpha": {
       "cliVersion": "1.2"
@@ -9,7 +9,10 @@
       "cliVersion": "1.1"
     },
     "cloud": {
-      "cliVersion": "0.1"
+      "cliVersion": "0.1",
+      "excludedSkillFeatures": {
+        "uipath-mcp-servers": ["is-activity", "platform-mcp"]
+      }
     }
   }
 }
