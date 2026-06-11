@@ -125,10 +125,17 @@ if __name__ == "__main__":
     xaml_text = Path(xaml).read_text(encoding="utf-8")
     if "Tuple" not in xaml_text:
         fail("FailedRecords must use Tuple type for batch create/update")
-    if not re.search(r"IList\s*\(\s*Of\s+Guid\s*\)|List\s*\(\s*Of\s+Guid\s*\)|Collection\s*\(\s*Of\s+Guid\s*\)", xaml_text):
+    # Generic Guid-collection guard: accept any List/Collection/Enumerable-flavoured
+    # type whose direct element type is Guid, in either VB form `IList(Of Guid)`
+    # or XAML-prefix form `scg:IList(s:Guid)`. Rejects nested wraps like
+    # `IList(Of Tuple(String, Guid))` — the anti-pattern this check guards.
+    if not re.search(
+        r"\b\w*(?:List|Collection|Enumerable)\w*\s*\(\s*(?:Of\s+)?(?:\w+:)?Guid\s*\)",
+        xaml_text,
+    ):
         fail(
             "DeleteMultipleEntityRecords must bind Guid collections "
-            "(InputRecords ICollection(Of Guid) + FailedRecords IList(Of Guid))"
+            "(InputRecords ICollection<Guid> + FailedRecords IList<Guid>)"
         )
 
     # ForEach loop over FailedRecords (I56 — iteration with .Item1/.Item2).
