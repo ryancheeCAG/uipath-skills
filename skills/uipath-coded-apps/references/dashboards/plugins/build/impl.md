@@ -268,9 +268,20 @@ Then call the `Task` tool with this prompt (substitute the two paths):
 > 3. On `T3_RETRY`, fix the named widgets' `fnBody` in `<INTENT_JSON_PATH>` using the SDK references, then re-run — at most 2 attempts, then drop the widget.
 > 4. Return ONLY the milestone block defined in § "Build subagent — returns".
 
-**Step 3 — Relay the subagent's returned block verbatim**, then open the preview URL in the browser. Add nothing else — no commentary about the subagent, no raw output.
+**Step 3 — Relay the subagent's returned block verbatim.** Add nothing else — no commentary about the subagent, no raw output.
 
-If the subagent reports `AUTH_MISSING` or a failure it couldn't recover, surface its message and stop.
+**Step 4 — Start the dev server as a background job in the MAIN thread** (the build script deliberately does not start it — a server spawned inside the script outlives the session and leaks). Run with the background option on the shell tool call (same mechanism as pre-warm):
+
+```bash
+cd "<PROJECT_DIR>" && npm run dev -- --port 57173
+```
+
+- If a dev-server background job from THIS session is already running for this project (e.g. after an incremental edit): do NOT start another — Vite hot-reloads; just open the URL.
+- If the start fails with a port-in-use error: a stale server from an earlier session is still holding 57173 — tell the user and ask before killing anything (Windows: `netstat -ano | findstr :57173` then `taskkill /PID <pid> /F`; macOS/Linux: `lsof -ti:57173 | xargs kill`).
+
+**Step 5 — Open `http://localhost:57173` in the browser.**
+
+If the subagent reports `AUTH_MISSING` or a failure it couldn't recover, surface its message and stop (no server start).
 
 ---
 
@@ -285,7 +296,7 @@ Run the build script once. Most events are silent — translate the rest to mile
 **Collect into milestones:**
 - `WIDGET_READY:{"name":"X",...}` → a `✓ X` line
 - `TSC_PASS` → `✓ All code validated`
-- `SERVER_READY:{"url":"..."}` → capture the URL
+- `BUILD_RESULT.previewUrl` → the URL for the return block (the script does NOT start the server — the main thread does that after you return)
 
 **Act on:**
 - `T3_RETRY:{"widgets":[...],"errors":[...]}` → fix each widget's `fnBody` in intent.json (use the SDK references + the tsc errors), re-run. Max 2 attempts; if a widget still fails, remove it from intent.json, re-run, and note it as dropped.
@@ -316,4 +327,4 @@ If some widgets were dropped after retries, add one line before the success line
 
 On unrecoverable failure, return a one-line reason (e.g. `Dependency install failed — run npm ci in [projectDir]`) and nothing else.
 
-The main thread relays this block verbatim and opens the URL. Keep it warm — the user just got something real.
+The main thread relays this block verbatim, starts the dev server as a background job (Step 4), and opens the URL. Keep it warm — the user just got something real.

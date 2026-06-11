@@ -48,7 +48,7 @@ Each widget's full intent metric (`intentMetric` — fnBody, title, display hint
 - `HAND_EDIT_DETECTED:{"widget":"X"}` — file was hand-edited; the whole batch is rejected before any write. Ask the user (see [customization.md](customization.md)).
 - `TSC_PASS` — edit validated clean
 - `TSC_FAIL:{"errors":"..."}` — surface to user
-- `INCREMENTAL_READY:{"count":N,"ops":[{"op":"ADD","widget":"X"},…]}` — done; hot-reload fires automatically
+- `INCREMENTAL_READY:{"count":N,"ops":[{"op":"ADD","widget":"X"},…]}` — done; the running dev server hot-reloads automatically. If no dev-server background job is running, start one per `plugins/build/impl.md` Phase 4 Step 4 (the script never starts servers).
 
 ## Rules
 
