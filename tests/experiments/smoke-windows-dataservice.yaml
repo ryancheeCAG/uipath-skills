@@ -21,8 +21,12 @@ defaults:
   # project state. fail_on_error: false so a warmup miss never blocks the
   # actual task (the agent still runs its own install command).
   pre_run:
+    # coder_eval caps per-step timeout at 300s, so this is a best-effort warmup,
+    # not a full cold-start absorption. `list` is a fast tenant API call but
+    # still pays bun startup + auth handshake + chart load if cold — enough to
+    # take the worst-case spike off the agent's first turn.
     - command: 'cmd /c "mkdir df-warmup 2>nul & uip rpa data-fabric-entities list --project-dir df-warmup --output json"'
-      timeout: 1200
+      timeout: 300
       fail_on_error: false
 
   agent:
