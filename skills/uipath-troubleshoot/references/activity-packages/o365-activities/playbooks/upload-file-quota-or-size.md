@@ -12,7 +12,7 @@ What this looks like — an upload to OneDrive/SharePoint faults on storage limi
 - `Max file size exceeded.` / `Maximum stream size exceeded.` — the file exceeds the service's per-file limit.
 - `Upload session failed.` / `Upload session incomplete.` / `Upload session not found.` — the chunked upload session for a large file broke mid-transfer (network interruption, session expiry) or could not be completed.
 
-Legacy `UploadFile` surfaces the same conditions as a raw `Microsoft.Graph.ServiceException` with Graph's own wording (message embeds the Graph error code, e.g. `Code: quotaLimitReached`) — match on the code/theme, not the friendly sentence.
+Legacy `UploadFile` surfaces the same conditions as a raw `Microsoft.Graph.ServiceException` with Graph's own wording (message embeds the Graph error code, e.g. `Code: quotaLimitReached`) — match on the code/theme, not the friendly sentence. Verified raw over-size form: `Code: invalidRequest` / `The payload of the request was too large` with `Inner error: Code: maxFileSizeExceeded` — rejected at upload-session creation from the file's declared size, before any bytes are transferred.
 
 What activities can produce this error:
 - **Upload Files** (`UploadFilesConnections`), legacy **Upload File** (`UploadFile`).
