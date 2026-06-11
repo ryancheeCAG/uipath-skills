@@ -6,6 +6,60 @@
 
 > **Always use `core.action.http.v2`** for all HTTP requests. The older `core.action.http` (v1) is deprecated.
 
+## Pre-flight: Vendor detection — pick the right mode BEFORE configuring
+
+The prompt's vendor name decides `authentication` mode and which connector you wire. Get this wrong and the flow runs with hardcoded URLs + placeholder auth tokens that fail at runtime.
+
+| Prompt mentions … | Mode | `targetConnector` | Source of URL + body shape |
+|---|---|---|---|
+| A specific SaaS vendor by name (slack, jira, outlook, gmail, salesforce, servicenow, hubspot, …) | **Connector** | The vendor's IS connector key (e.g. `uipath-salesforce-slack`, `uipath-atlassian-jira`, `uipath-microsoft-outlook365`) | StandardResource cache — see [sr-cache-authoring.md](sr-cache-authoring.md) |
+| A public unauthenticated API or no-vendor URL the user pasted | **Manual** | (none — `ImplicitConnection`) | The pasted URL, agent-authored body |
+| The user says "use the HTTP connector" / `uipath-uipath-http` explicitly | **Connector** | `uipath-uipath-http` | A real `uipath-uipath-http` connection's base URL |
+
+**Default is connector mode.** Switch to manual ONLY when there is no IS connector for the vendor OR the user explicitly asked for manual.
+
+The phrase "using http request activity" in the prompt names the NODE TYPE (`core.action.http.v2`), NOT the mode. It does NOT mean "use manual mode". Keep connector mode unless the vendor recognition table sends you elsewhere.
+
+### Anti-pattern — what the wrong path looks like
+
+This is the failure mode this skill exists to prevent. Do not produce flows shaped like:
+
+```jsonc
+// WRONG — manual mode for a vendor that has an IS connector
+{
+  "detail": {
+    "connector": "uipath-uipath-http",           // generic, not the vendor's connector
+    "connectionId": "ImplicitConnection",
+    "bodyParameters": {
+      "authentication": "manual",
+      "url": "https://slack.com/api/chat.postMessage",   // vendor URL hardcoded
+      "headers": { "Authorization": "Bearer <SLACK_BOT_TOKEN>" }, // placeholder token
+      "body": { "channel": "#order-ops", "text": "Hello" }
+    }
+  }
+}
+```
+
+Why it fails: `<SLACK_BOT_TOKEN>` is a literal string at runtime. Slack rejects. The flow never works without the user editing the file by hand to paste a real token, which defeats the connector model.
+
+Correct shape for the same intent — connector mode + the Slack IS connection:
+
+```jsonc
+{
+  "detail": {
+    "authentication": "connector",
+    "targetConnector": "uipath-salesforce-slack",
+    "connectionId": "<real-slack-connection-id>",
+    "folderKey": "<folder-key>",
+    "method": "POST",
+    "url": "/chat.postMessage",                 // RELATIVE — connector prepends base URL
+    "body": { "channel": "<resolved-channel-id>", "text": "Hello" }
+  }
+}
+```
+
+Read URL + body shape + reference resolution rules from `uip is resources sr <connector> <object>` after running `uip is resources standardize` once. Full loop in [sr-cache-authoring.md](sr-cache-authoring.md).
+
 ## Registry validation
 
 ```bash
@@ -46,7 +100,7 @@ Record the chosen connection's `Id` and `FolderKey` for Step 3.
 
 ### Step 3 — Configure the node
 
-> **Find missing values first.** Before composing `url` / `query` / `body`, resolve any values the agent doesn't have (IDs from names, required body fields, response shape, …). See [/uipath:uipath-platform — http-request.md](../../../../../../uipath-platform/references/integration-service/http-request.md).
+> **Find missing values first.** Before composing `url` / `query` / `body`, resolve any values the agent doesn't have (IDs from names, required body fields, response shape, …). See [/uipath:uipath-platform — http-request.md](../../../../../../uipath-platform/references/integration-service/http-request.md). When the action exists as a known IS resource (e.g. Slack `send_message`, Outlook `send_email`), prefer the SR-cache loop — see [sr-cache-authoring.md](sr-cache-authoring.md).
 
 **Connector mode** (IS connection auth):
 

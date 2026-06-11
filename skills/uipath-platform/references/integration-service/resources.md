@@ -10,6 +10,7 @@ Resources represent the data objects available through a connector (e.g., Salesf
 - Describe Response
 - Describe Failures
 - Parent-Field-Driven Custom Fields (api-type ObjectActions)
+- StandardResource (SR) cache
 - Execute Operations
 - Pagination
 - Execute Error Handling
@@ -110,6 +111,40 @@ What it does — runs the matching api-type ObjectAction against the IS Element 
 Requires `--connection-id` and `--operation`. Cache is bypassed when `--field` is supplied — the action response varies per parent-field combination. The merge mode (`replace` / `append` / `prepend` / `noop`) comes from the action's `remapConfiguration.input`; for Jira `GenerateSchema` it is `replace`.
 
 When no api-type action's `rules[]` are satisfied by the supplied fields, the CLI errors with `No api-type ObjectAction matched for fields [...]`. List the operation's actions from the describe output's `connectorMethodInfo.design.actions[]` (or top-level `objectActions[]` for older shapes) to see which fields each action requires.
+
+---
+
+## StandardResource (SR) cache
+
+`describe` returns an agent-friendly compact summary derived from IS metadata. The **StandardResource (SR)** is a richer JSON shape carrying the vendor's actual API surface (relative path, method, body fields with `reference`/`design`/`enum`, base URL) — the payload an HTTP-request-activity node needs to plug in.
+
+> **SRs are built from VENDOR API DOCS, not IS metadata.** The IS metadata API speaks in curated slugs (often identical to the object name, like `/create_issue` for object `create_issue`) and reshaped field names; the HTTP node needs the vendor's documented relative path and vendor-shaped fields. The cli does NOT auto-fetch docs. The agent reads vendor docs (`WebFetch`) and supplies the SR as a file; the cli validates and caches it.
+
+Two subcommands:
+
+| Command | Effect |
+|---|---|
+| `uip is resources standardize <connector> <object> --connection-id <id> --from-sr <path>` | Read a full SR JSON the agent built, validate against `StandardResourceSchema`, write to cache (`~/.uipath/cache/integrationservice/<tenantId>/<connector>/<connection>/<object>.standard.json`, TTL 24h), emit it. |
+| `uip is resources standardize <connector> <object> --connection-id <id> --from-spec <path>` | Same but reads the compact ipe spec format (~58% smaller than full SR); cli expands to SR before validating. Use when you'd rather author the spec shape. |
+| `uip is resources sr <connector> <object> --connection-id <id>` | Read SR from cache. Errors on miss with the hint above. No HTTP. |
+
+`--connection-id` is REQUIRED on both (cache scoping — same connector + object can have different SRs across connections, e.g. tenant-specific custom fields).
+
+### Authoring loop (cache miss)
+
+```
+sr → miss → WebFetch vendor docs → write SR JSON → standardize --from-sr → sr
+```
+
+The agent owns the docs-reading + JSON-authoring steps. See [standard-resource-format.md](standard-resource-format.md) for the SR shape and the `uipath-maestro-flow` skill's `sr-cache-authoring.md` for the full HTTP-node-authoring loop.
+
+### When to use describe vs standardize vs sr
+
+| Need | Use |
+|------|-----|
+| Quick look at fields for an operation, agent-readable summary (IS-flavored) | `describe --operation <op>` |
+| Author an HTTP-request-activity node — need base URL, vendor URL, full body shape, design metadata | `sr` (cache hit) or build SR from docs and `standardize --from-sr` (cache miss) |
+| Read SR your earlier turn (or another agent) already cached | `sr` |
 
 ---
 
