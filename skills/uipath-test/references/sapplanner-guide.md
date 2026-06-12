@@ -1,20 +1,12 @@
 # SAP Planner — Transport Coverage Guide
 
-How to query SAP transaction coverage for a Test Manager project using `uip tm sapplanner coverage`. Answers: which SAP transactions (TCodes) are touched by your transports, which test cases / test sets cover them, and which are unused.
+Query SAP transaction coverage for a Test Manager project via `uip tm sapplanner coverage`, run the automated test cases that cover used transactions, and report fits/gaps in one pass.
 
-> **Dev-build only (preview).** The command is not yet on the published `uip` binary. Use the local CLI build:
+> **Dev-build only (preview).** Not on the published `uip` binary yet. Use the local CLI build:
 > ```bash
 > node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage --project-key <PROJECT_KEY> --output json
 > ```
-> Once the next CLI release ships, swap `node "C:\repos\cli\packages\cli\dist\index.js"` for plain `uip`. Every command in this guide uses the dev-build form.
-
-## When to Use
-
-- Pre-release impact analysis: which SAP transactions are affected by a set of transports.
-- Coverage gap audit: which transactions are exercised by tests, which are not.
-- Connector scoping: same audit constrained to a single SAP connector on the project.
-- Time-windowed regression review: coverage activity within a date range.
-- **Coverage-driven execution**: fetch coverage, split into fits vs gaps, run every fit's test cases as one execution, wait for completion, report pass/fail per test case and a separate gap list. See [Coverage-driven execution & reporting](#coverage-driven-execution--reporting) below.
+> When the next CLI release ships, swap `node "C:\repos\cli\packages\cli\dist\index.js"` for plain `uip`.
 
 ## Surface
 
@@ -22,313 +14,281 @@ How to query SAP transaction coverage for a Test Manager project using `uip tm s
 uip tm sapplanner coverage [options]
 ```
 
-One subcommand under `sapplanner`. No `build`, `report`, or other verbs exist today.
+Only `coverage` exists under `sapplanner`. No `build`, `report`, `connectors list`.
 
 ## Options
 
 | Flag | Required | Purpose |
 |---|---|---|
-| `--project-key <KEY>` | Yes | Test Manager project key (e.g. `DEMO`). |
-| `--connector-id <UUID>` | No | Scope to a single SAP connector. Omit to include every SAP connector registered on the project. |
-| `--transports <ID...>` | No | Restrict to these transport numbers (space-separated, variadic). Omit to include all transports. |
-| `--include-unused` | No | Include transactions with no execution history. Default: server returns only used transactions (`usageRating > 0`). |
-| `--from-date <ISO>` | No | Lower bound for transaction execution. ISO-8601 (e.g. `2026-01-01` or `2026-01-01T00:00:00Z`). |
-| `--to-date <ISO>` | No | Upper bound for transaction execution. ISO-8601. |
+| `--project-key <KEY>` | Yes | Test Manager project key. |
+| `--connector-id <UUID>` | No | Scope to one SAP connector. Omit = all connectors on the project. |
+| `--transports <ID...>` | No | Restrict to these transport numbers (space-separated, variadic). |
+| `--include-unused` | No | Include `usageRating == 0` rows. Default: only-used. |
+| `--from-date <ISO>` | No | Lower bound for execution history (ISO-8601). |
+| `--to-date <ISO>` | No | Upper bound for execution history (ISO-8601). |
 | `--limit <N>` | No | Results per page. Default: 20. |
-| `--offset <N>` | No | Results to skip. Server default: 0. |
-| `-t, --tenant <NAME>` | No | Tenant name. Defaults to the authenticated tenant. |
-| `--output <FMT>` | No | `json` (default — always use this), `table`, `yaml`, `plain`. |
+| `--offset <N>` | No | Results to skip. Default: 0. |
+| `-t, --tenant <NAME>` | No | Tenant name. Defaults to authenticated tenant. |
+| `--output <FMT>` | No | Always pass `--output json`. |
 
-> Date parsing rejects invalid input upfront with `Invalid date "<raw>". Use an ISO-8601 value like 2026-01-01 or 2026-01-01T00:00:00Z.` — no silent fallback.
+Bad dates fail upfront: `Invalid date "<raw>". Use an ISO-8601 value like 2026-01-01 or 2026-01-01T00:00:00Z.`
 
 ## Output Schema
 
-Envelope:
 ```json
-{
-  "Result": "Success",
-  "Code": "SapPlannerCoverage",
-  "Data": [ /* coverage rows */ ]
-}
+{ "Result": "Success", "Code": "SapPlannerCoverage", "Data": [ /* rows */ ] }
 ```
 
-Each row:
+Row fields:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `TCode` | string | SAP transaction code (e.g. `ME22`). |
-| `TCodeDesc` | string | Human description (e.g. `Change Purchase Order`). |
-| `UsageRating` | number | Execution-frequency score. `0` only appears when `--include-unused` is set. |
-| `TestCases` | array | Test cases covering this TCode. Each: `{ TestCaseId, TestCaseObjKey }`. |
-| `TestSets` | array | Test sets covering this TCode. Each: `{ TestSetId, TestSetObjKey }`. |
+| `TCode` | string | SAP transaction (e.g. `ME22N`). |
+| `TCodeDesc` | string | Description. |
+| `UsageRating` | number | Execution-frequency score. `0` only when `--include-unused`. |
+| `TestCases` | array | `{ TestCaseId, TestCaseObjKey }[]`. |
+| `TestSets` | array | `{ TestSetId, TestSetObjKey }[]`. |
 
-Empty `TestCases` + `TestSets` on a row = used in production but **no test coverage**. This is the primary signal for gap analysis.
+Empty `TestCases` + empty `TestSets` = **gap**. Non-empty `TestCases` = **fit**.
 
-### Duplicate TCodes — interpret as Interface variants, not separate connectors
+### Duplicate `TCode` rows = Interface variants
 
-When the response contains multiple rows with the **same `TCode`**, they are **not** from different SAP connectors. They are the same transaction on the same connector, split by **Interface type** — `WinGui`, `WebGui`, `Fiori`, etc. The current output schema does not expose the interface field, so the rows look identical apart from differing `UsageRating`, `TestCases`, and `TestSets`.
+Same TCode on multiple rows = same connector split by SAP Interface (WinGui / WebGui / Fiori). The interface field is **not** in the response schema. Do **not** dedupe by `TCode` — a TCode can be a fit on one interface and a gap on another. Keep rows separate in the report.
 
-How to handle this in analysis:
+## The Workflow
 
-- **Do not deduplicate by `TCode`.** Each row represents real, distinct coverage on a separate UI surface. Collapsing them hides interface-specific gaps (e.g. `ME22` covered on WinGui but not Fiori).
-- **Do not attribute duplicates to multiple connectors.** `--connector-id` scoping already constrains to one connector; duplicates inside that scope are interface variants.
-- When summarising coverage for the user, group by `TCode` but list each row separately ("ME22 — 2 interface variants: 1 covered, 1 gap"). Ask the user which interface a row corresponds to if it matters — the CLI cannot tell you today.
-- When this matters for a workflow, surface the limitation explicitly so the user knows the interface dimension is opaque in the current preview build.
+Pull coverage → identify automated fits → execute → emit one combined report.
 
-## Examples
-
-### List first page of used transactions (default)
+### Step 1. Pull coverage
 
 ```bash
 node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage \
-  --project-key DEMO --output json
-```
-
-Server defaults: `onlyUsed: true`, all connectors, all transports, limit 20.
-
-### Include unused transactions, scope to one connector, page deeper
-
-```bash
-node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage \
-  --project-key DEMO \
-  --connector-id b7741d2b-9500-0000-6b20-0b499e3c8808 \
-  --include-unused \
-  --limit 100 --offset 100 \
+  --project-key <PROJECT_KEY> \
+  [--from-date <FROM> --to-date <TO>] \
+  [--connector-id <UUID>] \
   --output json
 ```
 
-### Restrict to specific transports within a date window
+`Data: []` → stop. No SAP activity in window. Emit gap-empty + fit-empty report.
 
+### Step 2. Segregate fits vs gaps
+
+- **Fit row**: `TestCases.length > 0`.
+- **Gap row**: `TestCases.length == 0 AND TestSets.length == 0`.
+- **Test-set-only** (empty `TestCases`, non-empty `TestSets`): rare. Surface separately if present; not runnable via `testcases run`.
+
+JMESPath partition shortcut:
 ```bash
-node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage \
-  --project-key DEMO \
-  --transports TR0001 TR0002 \
-  --from-date 2026-01-01 --to-date 2026-06-01 \
-  --output json
+--output-filter "{Fits: [?length(TestCases) > \`0\`], Gaps: [?length(TestCases) == \`0\` && length(TestSets) == \`0\`]}"
 ```
 
-### Filter to coverage-gap rows only (client-side JMESPath)
+### Step 3. Collect unique `TestCaseId`s from fit rows
 
-```bash
-node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage \
-  --project-key DEMO --include-unused \
-  --output json \
-  --output-filter "[?length(TestCases) == \`0\` && length(TestSets) == \`0\`].{TCode: TCode, Desc: TCodeDesc, Usage: UsageRating}"
-```
-
-### Partition fits vs gaps in one call
-
-```bash
-node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage \
-  --project-key DEMO --from-date 2026-05-27 --to-date 2026-06-10 \
-  --output json \
-  --output-filter "{Fits: [?length(TestCases) > \`0\`], Gaps: [?length(TestCases) == \`0\` && length(TestSets) == \`0\`]}"
-```
-
-### Full pipeline — fits run + gaps report (PowerShell)
+The same `TestCaseId` can appear under multiple TCodes and multiple interface variants. Dedupe.
 
 ```powershell
-$cli  = "C:\repos\cli\packages\cli\dist\index.js"
-$proj = "<PROJECT_KEY>"
-
-# 1. Pull coverage
-$cov = (& node $cli tm sapplanner coverage --project-key $proj `
-          --from-date 2026-05-27 --to-date 2026-06-10 --output json) | ConvertFrom-Json
-
-# 2. Segregate
+$cli = "C:\repos\cli\packages\cli\dist\index.js"
+$cov = (& node $cli tm sapplanner coverage --project-key <KEY> --output json) | ConvertFrom-Json
 $fits = $cov.Data | Where-Object { $_.TestCases.Count -gt 0 }
-$gaps = $cov.Data | Where-Object { $_.TestCases.Count -eq 0 -and $_.TestSets.Count -eq 0 }
-
-# 3. Dedupe test case IDs
-$ids = $fits | ForEach-Object { $_.TestCases.TestCaseId } | Select-Object -Unique
-
-# 4. Run all fits (space-separated UUIDs)
-$run = (& node $cli tm testcases run --project-key $proj --test-case-id @ids --async --output json) | ConvertFrom-Json
-$execId = $run.Data.ExecutionId
-
-# 5. Wait
-& node $cli tm wait --execution-id $execId --project-key $proj --timeout 1800 --output json | Out-Null
-
-# 6. Fits report (per test case)
-$logs = (& node $cli tm executions testcaselogs list --execution-id $execId --project-key $proj --output json) | ConvertFrom-Json
-$logs.Data | Select-Object TestCaseObjKey, TestCaseName, Status, StartTime, EndTime
-
-# 7. Gaps report (per row, sorted by usage)
-$gaps | Sort-Object -Property UsageRating -Descending |
-  Select-Object TCode, TCodeDesc, UsageRating
+$candidateIds = $fits | ForEach-Object { $_.TestCases.TestCaseId } | Select-Object -Unique
 ```
 
-## Workflows
+### Step 4. Find which candidates are actually automated
 
-### Coverage-driven execution & reporting
+**Do NOT trust `IsAutomated` from `testcases list`.** It frequently reads `false` even when the case is linked to a runnable Orchestrator package. `testcases run --execution-type automated` will accept a case that `IsAutomated` claims is manual, and reject one it claims is automated.
 
-End-to-end pipeline: pull coverage → segregate fits vs gaps → run every unique fit test case as one execution → wait for terminal state → produce two reports (fits with pass/fail, gaps prioritized by usage).
+The authoritative signal is the presence of **linked-package fields** on the list row. A test case is automated when **any** of these is present and non-empty:
 
-**Inputs**
+- `PackageIdentifier` — Orchestrator package name (e.g. `ayushi.test.automation`)
+- `PackageEntryPointUniqueId` — linked entry point UUID
+- `AutomationId` / `AutomationTestCaseName` / `AutomationProjectName` — XAML-based link
 
-- `<PROJECT_KEY>` — required.
-- Optional time window: `<FROM>` / `<TO>` (ISO-8601). Omit for all-time.
-- Optional connector scope: `<CONNECTOR_ID>`.
+Classify a row as **manual** only when **all** are absent.
 
-**Preconditions**
+```powershell
+$tcList = (& node $cli tm testcases list --project-key <KEY> --output json) | ConvertFrom-Json
+$automatedIds = $tcList.Data |
+  Where-Object {
+    $candidateIds -contains $_.Id -and (
+      $_.PackageIdentifier -or
+      $_.PackageEntryPointUniqueId -or
+      $_.AutomationId -or
+      $_.AutomationTestCaseName -or
+      $_.AutomationProjectName
+    )
+  } |
+  Select-Object -ExpandProperty Id
+```
 
-1. Authenticated: `uip login status --output json`.
-2. Default Orchestrator folder set on the project (parent skill Critical Rule #10). Set with `uip tm project set-default-folder --project-key <KEY> --folder-key <FOLDER_KEY>`.
-3. Test cases linked to automations. `uip tm testcases run` requires `IsAutomated: true` and a linked package on each target. Inspect with `uip tm testcases list --project-key <KEY> --output json` and `IsAutomated`. Link missing ones with `uip tm testcases link-automation`.
+Bash (jq):
+```bash
+node "..." tm testcases list --project-key <KEY> --output json |
+  jq -r --argjson ids '["<UUID1>","<UUID2>"]' \
+    '.Data[] | select((.Id | IN($ids[])) and (
+        .PackageIdentifier // .PackageEntryPointUniqueId //
+        .AutomationId // .AutomationTestCaseName // .AutomationProjectName
+    )) | .Id'
+```
 
-**Steps**
+Result: `$automatedIds` = fits that can actually run. Cases in `$candidateIds` but not `$automatedIds` are manual fits — list them in the report as "covered, not automated."
 
-1. **Pull coverage** for the window.
-   ```bash
-   node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage \
-     --project-key <PROJECT_KEY> \
-     [--from-date <FROM> --to-date <TO>] \
-     [--connector-id <UUID>] \
-     --output json
-   ```
-   Empty `Data` → stop. No SAP activity in window. Report this and exit.
+### Step 5. Resolve the Orchestrator folder hosting the linked package
 
-2. **Segregate fits vs gaps per row.** Fit row: `TestCases.length > 0`. Gap row: `TestCases.length == 0 AND TestSets.length == 0`. Test-set-only coverage (empty `TestCases`, non-empty `TestSets`) is neither — surface separately if present (rare).
+Required because `uip tm testcases run` reads from the project's **default folder**, and a Test Manager project can map to 50+ Orchestrator folders. Don't guess by folder name — resolve from the `PackageIdentifier` and `PackageEntryPointUniqueId` carried on the test-case row (collected in Step 4).
 
-   JMESPath partition shortcut:
-   ```bash
-   --output-filter "{Fits: [?length(TestCases) > \`0\`], Gaps: [?length(TestCases) == \`0\` && length(TestSets) == \`0\`]}"
-   ```
+Find candidate folders by package identifier:
 
-   > Duplicate `TCode` rows are SAP Interface variants (WinGui / WebGui / Fiori) of the same connector, not separate connectors. Do not dedupe by `TCode` — a TCode can legitimately be a fit in one variant and a gap in another.
+```bash
+uip or processes list --all-folders --output json \
+  --output-filter "[?ProcessKey == '<PackageIdentifier>' || contains(ProcessKey, '<PackageIdentifier>')].{FolderKey: FolderKey, FolderPath: FolderPath, ProcessKey: ProcessKey, ProcessVersion: ProcessVersion}"
+```
 
-3. **Collect unique test-case IDs from all fit rows.** The same test case can appear under multiple TCodes (one automation covering several transactions) and under multiple interface variants. Dedupe by `TestCaseId`.
+Each match exposes `FolderKey`, `FolderPath`, `ProcessKey`. Confirm the entry point matches `PackageEntryPointUniqueId` from Step 4 — **always pass `--package-name`** to narrow:
 
-   PowerShell:
-   ```powershell
-   $coverage = node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage `
-     --project-key <KEY> --output json | ConvertFrom-Json
-   $testCaseIds = $coverage.Data |
-     Where-Object { $_.TestCases.Count -gt 0 } |
-     ForEach-Object { $_.TestCases.TestCaseId } |
-     Select-Object -Unique
-   ```
+```bash
+uip tm testcases list-automations --project-key <KEY> --folder-key <FOLDER_KEY> --package-name <PackageIdentifier> --output json
+```
 
-   Bash (jq):
-   ```bash
-   node "..." tm sapplanner coverage --project-key <KEY> --output json |
-     jq -r '.Data[] | select(.TestCases | length > 0) | .TestCases[].TestCaseId' |
-     sort -u
-   ```
+Without `--package-name` this command returns every entry point in the folder (one session saw 5559 rows). With it, you get only the package's entry points; confirm `Id` matches `PackageEntryPointUniqueId`.
 
-4. **Run all fits in one execution.** `--test-case-id` is **space-separated** for multiple UUIDs.
-   ```bash
-   node "..." tm testcases run \
-     --project-key <PROJECT_KEY> \
-     --test-case-id <UUID1> <UUID2> <UUID3> \
-     --async \
-     --output json
-   ```
-   Capture `ExecutionId` from the response (under `Data`). `--async` returns immediately; omit to block synchronously (then skip Step 5).
+Set the resolved folder as the project default:
 
-5. **Wait for terminal state.**
-   ```bash
-   node "..." tm wait \
-     --execution-id <EXECUTION_ID> \
-     --project-key <PROJECT_KEY> \
-     --timeout 1800 \
-     --output json
-   ```
-   Default timeout per command. Override `--timeout` (seconds) for long suites.
+```bash
+uip tm project set-default-folder --project-key <KEY> --folder-key <FOLDER_KEY> --output json
+```
 
-6. **Pull per-test-case results — fits report.**
-   ```bash
-   node "..." tm executions testcaselogs list \
-     --execution-id <EXECUTION_ID> \
-     --project-key <PROJECT_KEY> \
-     --output json
-   ```
-   Each row exposes `TestCaseId`, `TestCaseName`, `Status` (`Passed` / `Failed` / `Skipped` / …), `StartTime`, `EndTime`. For top-line counts use `uip tm executions get-stats --execution-id <ID> --project-key <KEY> --output json`.
+**Pagination note.** `or processes list --all-folders` returns 50 rows per call with `Pagination.HasMore: true` when more exist. `--output-filter` runs client-side over the current page only. If the current page yields no matches and `HasMore` is true, advance with `--offset 50`, `--offset 100`, … until a match appears or `HasMore: false`. Never list-all-then-grep client-side without checking `HasMore` — you'll miss matches on later pages.
 
-7. **Compose the two reports.**
+### Step 6. Run automated fits
 
-   **Fits report (pass/fail per test case, with the TCodes each covers):**
+Preconditions:
+- Default folder set on the project (Step 5 above).
+- `--execution-type automated` is **required** by the dev-build CLI. Omitting it errors: `required option '--execution-type <type>' not specified`.
 
-   | Test Case (Key) | Name | TCodes Covered | Status | Duration |
-   |---|---|---|---|---|
+```bash
+node "..." tm testcases run \
+  --project-key <PROJECT_KEY> \
+  --test-case-id <UUID1> <UUID2> <UUID3> \
+  --execution-type automated \
+  --async \
+  --output json
+```
 
-   Annotate each row with the TCodes it covers by reverse-mapping from the Step 1 payload: for each `TestCaseId` in the test-case-log list, collect every `TCode` whose `TestCases[].TestCaseId` matches. Then surface counters (`Passed / Failed / Skipped / Total`).
+`--test-case-id` is **space-separated** for multiple UUIDs. Capture `Data.ExecutionId`.
 
-   **Gaps report (prioritized by usage):**
+`$automatedIds` empty → skip to Step 9 and emit fits-empty + gaps report.
 
-   | TCode | Description | UsageRating | Interface Variant # | Priority |
-   |---|---|---|---|---|
+### Step 7. Wait for terminal state
 
-   Sort by `UsageRating` desc. Each gap row from Step 2 is one TCode × interface variant — keep rows separate. Recommend authoring tests for the top 3 by usage; cite the variant index so the author knows which interface is in scope.
+```bash
+node "..." tm wait \
+  --execution-id <EXECUTION_ID> \
+  --project-key <PROJECT_KEY> \
+  --timeout 1800 \
+  --output json
+```
 
-**Output to user**
+### Step 8. Pull per-test-case results
 
-Two sections, in order:
-1. **Fits — execution result.** Pass/fail counters, per-test-case table, link to the Test Manager execution URL.
-2. **Gaps — coverage holes.** Prioritized table, recommendation block with `uip tm testcases create` / `link-automation` commands.
+```bash
+node "..." tm executions testcaselogs list \
+  --execution-id <EXECUTION_ID> \
+  --project-key <PROJECT_KEY> \
+  --output json
+```
 
-**Failure handling**
+Each row has `TestCaseId`, `TestCaseName`, `Status` (`Passed` / `Failed` / `Skipped`), `StartTime`, `EndTime`, `HasError`. For totals: `uip tm executions get-stats --execution-id <ID> --project-key <KEY> --output json`.
+
+**Distinguish test-logic failure from infrastructure failure.** A `Status: Failed` row with `HasError: false` means the automation never ran — typically a robot-session issue (`Robot.Session.UserLogonFailed`, `ERROR_LOGON_FAILURE`, machine unavailable). Report this as an infrastructure failure, not a coverage failure: the TCode is still effectively unvalidated this run. Test-logic failures have `HasError: true` with assertion details.
+
+### Step 9. Emit the combined report
+
+**Fits — covered TCodes** (annotate each row with its execution result by joining `TestCaseId` back to the Step 1 payload):
+
+| Test Case (Key) | Name | TCodes Covered | Automated? | Status | Cause |
+|---|---|---|---|---|---|
+
+- Automated, Status=Passed → ✅
+- Automated, Status=Failed, HasError=true → ❌ assertion/exception (include error message)
+- Automated, Status=Failed, HasError=false → ⚠ infrastructure (cite robot/machine + Windows logon error)
+- Manual (in `$candidateIds` minus `$automatedIds`) → 🟡 covered, manual only — not executed this run
+
+**Gaps — uncovered TCodes** (sort `UsageRating` desc; keep interface variants separate):
+
+| Priority | TCode | Description | UsageRating | Interface Variant # |
+|---|---|---|---|---|
+
+Recommend authoring tests for the top 3 by usage. Include `uip tm testcases create` + `link-automation` template for each.
+
+### Failure handling
 
 | Condition | Action |
 |---|---|
-| Step 1 returns `Data: []` | Stop. Report "no SAP activity in window." No execution, no gap report (nothing to report). |
-| Zero fits collected in Step 3 | Skip Steps 4–7. Produce gap report only. Tell the user no automated coverage exists for this window. |
-| `--test-case-id` rejected: test case not automated | The corresponding `IsAutomated` is false or `link-automation` was never run. Reuse Preconditions step 3 to fix. |
-| `set-default-folder` not run | `testcases run` fails. Set the folder and retry. |
-| Per-`uip` retries | Cap at 3 per parent skill Critical Rule #4. |
+| Step 1 returns `Data: []` | Stop. Report "no SAP activity in window." |
+| Step 4 yields zero automated fits | Skip Steps 6–8. Emit fits report listing manual-only coverage + gaps report. |
+| `testcases run` rejects: `required option '--execution-type <type>' not specified` | Re-issue with `--execution-type automated`. |
+| `testcases run` rejects: case not automated despite `PackageIdentifier` present | Re-confirm via `uip tm testcases list-automations --project-key <KEY> --folder-key <FOLDER_KEY>`. Stale link → re-run `link-automation`. |
+| `executions retry` returns `HTTP 404: TestSet does not exist` | The ad-hoc test set from the original `testcases run` was reaped. Start a **fresh** `testcases run` instead of retrying. |
+| `set-default-folder` not run | `testcases run` fails. Set the folder, then retry. |
+| Robot logon failure on every retry, different robot each time | Robot/machine Windows credentials are invalid for that machine. Fix in Orchestrator before running again — repeated retries on the same machine will keep failing. |
 
+## Standalone Examples
 
+First page of used transactions:
+```bash
+node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage --project-key DEMO --output json
+```
 
-1. Verify auth: `uip login status --output json`. Re-login if needed.
-2. Resolve the project: `uip tm project list --filter <NAME_OR_KEY> --output json`. Capture `PROJECT_KEY`.
-3. Run coverage with unused transactions included:
-   ```bash
-   node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage \
-     --project-key <PROJECT_KEY> --include-unused --output json
-   ```
-4. Filter for rows where both `TestCases` and `TestSets` are empty. Those are the gaps.
-5. For each gap row with `UsageRating > 0`, recommend a new test case (highest production usage, no coverage = highest risk).
-6. Page with `--limit` / `--offset` until `Data` is shorter than `--limit`.
+Include unused, scope to a connector, paginate:
+```bash
+node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage \
+  --project-key DEMO --connector-id <UUID> --include-unused \
+  --limit 100 --offset 100 --output json
+```
 
-### Transport impact preview
+Restrict to transports in a date window:
+```bash
+node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage \
+  --project-key DEMO --transports TR0001 TR0002 \
+  --from-date 2026-01-01 --to-date 2026-06-01 --output json
+```
 
-1. Collect the transport IDs in the proposed release.
-2. Run coverage scoped to those transports:
-   ```bash
-   node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage \
-     --project-key <PROJECT_KEY> --transports <ID1> <ID2> … --output json
-   ```
-3. Aggregate `TestCases` / `TestSets` across rows. Those are the regression sets to schedule before the transports promote.
-4. Cross-reference with `uip tm executions list-filtered --labels <RELEASE_LABEL>` to confirm coverage was actually exercised in recent runs.
-
-### Connector-scoped review
-
-When the project has multiple SAP connectors and only one is in scope for the review:
-1. Get the connector UUID from your project's connector registry (out of scope for this guide — ask the user).
-2. Pass `--connector-id <UUID>` to constrain results to that connector's transactions only.
+Gap rows only:
+```bash
+node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage \
+  --project-key DEMO --include-unused --output json \
+  --output-filter "[?length(TestCases) == \`0\` && length(TestSets) == \`0\`].{TCode: TCode, Desc: TCodeDesc, Usage: UsageRating}"
+```
 
 ## Pagination
 
 - `--limit` caps a single response (default 20).
-- `--offset` skips rows; combine with `--limit` to walk pages.
-- Stop paginating when the returned `Data` length is less than `--limit`.
+- `--offset` skips rows.
+- Stop when returned `Data.length < --limit`.
 
-## Error Handling
+## Errors
 
-| Failure | Likely cause | Fix |
-|---|---|---|
-| `Invalid date "<raw>"` | Bad `--from-date` / `--to-date` format. | Use `YYYY-MM-DD` or full ISO-8601. |
-| Auth error from `initializeContextWithProject` | Missing login or no access to the project. | `uip login`, then verify project access with `uip tm project list --filter <PROJECT_KEY>`. |
-| `403 Forbidden` (TM forbidden message) | User lacks Test Manager read permission on the project. | Ask a project owner to grant access. |
-| `unknown command 'sapplanner'` | You invoked the published `uip` binary instead of the local dev build. | Use `node "C:\repos\cli\packages\cli\dist\index.js" …`. |
-| Empty `Data` array | No transactions match the filters (or `--include-unused` was needed). | Drop the date / transport filters, or add `--include-unused`. |
+| Failure | Fix |
+|---|---|
+| `Invalid date "<raw>"` | Use `YYYY-MM-DD` or full ISO-8601. |
+| `unknown command 'sapplanner'` | Invoked the published `uip` instead of the dev build. Use `node "C:\repos\cli\packages\cli\dist\index.js" …`. |
+| Auth error from `initializeContextWithProject` | `uip login`, then verify with `uip tm project list --filter <KEY> --output json`. |
+| `403 Forbidden` | User lacks Test Manager read permission on the project. |
+| Empty `Data` | No transactions match. Drop date/transport filters or add `--include-unused`. |
+| `HTTP 404: TestSet does not exist` on `executions retry` | Run a fresh `testcases run` instead — ad-hoc test set was reaped. |
 
-Cap retries at 3 per the parent skill's Critical Rules. On the 4th failure, stop and report to the user.
+Cap retries at 3 (parent skill Critical Rule #4).
 
 ## Anti-patterns
 
-- **Do NOT collapse duplicate `TCode` rows.** Same TCode appearing twice = same connector, different SAP Interface (WinGui / WebGui / Fiori / …). The interface field is not in the current output schema. Deduplicating loses interface-level coverage gaps. See *Duplicate TCodes* in the Output Schema section.
-- **Do NOT mix `--include-unused` with date filters and expect zero-usage rows in that window.** `--include-unused` lifts the `onlyUsed` server flag globally; date bounds still apply to execution history. A truly unused transaction has no executions to date-bound.
-- **Do NOT page without checking response length.** A returned `Data` array shorter than `--limit` means you've reached the end — keep paging and you'll just get empty arrays.
-- **Do NOT guess connector UUIDs.** No `sapplanner connectors list` exists yet. Ask the user, or look them up via the Test Manager UI / project configuration.
-- **Do NOT swap `uip tm sapplanner` for the dev-build path silently.** When the command lands in a public `uip` release, update this guide and the SKILL.md row to drop the `node "…\index.js"` prefix.
+- **Do NOT classify automation status via `IsAutomated`.** It lies. Use `PackageIdentifier` / `PackageEntryPointUniqueId` / `AutomationId` instead. See Step 4.
+- **Do NOT omit `--execution-type automated` on `testcases run`.** The dev-build CLI rejects the call.
+- **Do NOT list `tm testcases list-automations` for a whole folder.** Production folders contain thousands of entry points (one session saw 5559 rows). Always pass `--package-name <PackageIdentifier>` to narrow.
+- **Do NOT guess the default Orchestrator folder by name.** Resolve it from `PackageIdentifier` via `or processes list --all-folders` + `--output-filter`, then verify the entry point matches `PackageEntryPointUniqueId`. See Step 5.
+- **Do NOT use `executions retry` for an infrastructure-failed run after the ad-hoc test set is gone.** Start a fresh `testcases run`.
+- **Do NOT collapse duplicate `TCode` rows.** Different SAP Interface variants of the same connector. Dedupe loses interface-level gaps.
+- **Do NOT mix `--include-unused` with date filters and expect zero-usage rows in that window.** `--include-unused` lifts the `onlyUsed` server flag globally; date bounds still apply to execution history.
+- **Do NOT page without checking response length.** `Data.length < --limit` = end of results.
+- **Do NOT guess connector UUIDs.** No `sapplanner connectors list` exists. Ask the user.
+- **Do NOT keep retrying after a robot-logon failure on the same machine.** Fix the Windows credentials in Orchestrator first.
+- **Do NOT swap `node "…\index.js"` for plain `uip` silently.** When the command lands in a public release, update this guide and the SKILL.md row in the same commit.

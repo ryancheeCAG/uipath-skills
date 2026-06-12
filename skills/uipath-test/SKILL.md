@@ -1,6 +1,6 @@
 ---
 name: uipath-test
-description: "UiPath Test Manager — manage test projects, cases, sets, executions; generate reports. For Orchestrator→uipath-platform. For test automation→uipath-rpa."
+description: "UiPath Test Manager — manage test projects, cases, sets, executions; generate reports. For Orchestrator→uipath-platform. For test automation→uipath-rpa. Use it for SAP Change Impact Analysis, also called SAP CIA."
 allowed-tools: Bash, Read, Write, Glob, Grep
 user-invocable: true
 ---
@@ -18,6 +18,7 @@ Manage UiPath Test Manager resources (projects, test cases, test sets, execution
 - User wants to **generate a shareable test report** tailored to a QA engineer, developer, or release manager
 - User asks about **test coverage, regression trends, or failure rates**
 - User needs a **go/no-go decision summary** based on recent test executions
+- User asks about SAP Change Impact Analysis also called as SAP CIA.
 
 ## Concepts
 ### What is Testmanager?
@@ -104,6 +105,19 @@ Common `uip tm` commands organized by resource type.
 > - `uip tm testsets run` — start a new execution for an entire **test set** (`--test-set-key`).
 > - `uip tm executions run` — **re-run an existing** execution by `--execution-id`, optionally narrowed to specific `--test-case-log-ids`.
 
+### Running executions without blocking
+
+`uip tm testsets run` and `uip tm testcases run` return immediately with a **Pending** execution — they do not block. The blocking step is `uip tm wait`, which polls until a terminal state. Run the wait in the **background** so the session stays responsive:
+
+1. Start the run — capture `ExecutionId` from the JSON.
+2. Launch `uip tm wait --execution-id <ID> --project-key <KEY> --timeout 1800` in the **background**; do not foreground it. Default `--timeout` to `1800` (30 minutes) unless the user specifies otherwise.
+3. Hand control back to the user immediately.
+4. On wait completion, fetch results with `uip tm executions get-stats --execution-id <ID> --project-key <KEY>` and report.
+
+`uip tm testcases run` and `uip tm executions run` also accept `--async` for non-blocking starts of individual cases.
+
+> **Poll cadence:** `uip tm wait` polls every 5s and blocks up to `--timeout` seconds. For short test sets, wall-clock wait is dominated by the poll interval, not the run — a 23s execution still shows ~1m elapsed waiting for the next 60s tick.
+
 ### Test Case Log Commands
 
 | Command | Purpose |
@@ -141,16 +155,6 @@ Common `uip tm` commands organized by resource type.
 | Command | Purpose |
 |---|---|
 | `uip tm wait --execution-id <EXECUTION_ID>` | Wait for a test execution to reach a terminal state. Optional `--project-key`, `--test-set-key`, `--timeout <SECONDS>`. |
-
-### SAP Planner Commands
-
-> **Dev-build only (preview).** Not yet shipped in the published `uip` binary. Invoke via the local CLI build: `node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage …`. The `uip tm sapplanner …` form will work once the next CLI release ships. See [references/sapplanner-guide.md](references/sapplanner-guide.md) for options, output schema, and workflows.
->
-> **Duplicate `TCode` rows = Interface variants, not separate connectors.** Same connector, split by SAP Interface (WinGui / WebGui / Fiori / …). The interface field is not exposed in the current schema. Do not deduplicate by `TCode` during analysis.
-
-| Command | Purpose |
-|---|---|
-| `node "C:\repos\cli\packages\cli\dist\index.js" tm sapplanner coverage --project-key <PROJECT_KEY>` | List SAP transaction coverage for a Test Manager project — transactions touched by transports, plus the test cases and test sets that cover each. Optional `--connector-id <UUID>`, `--transports <ID...>`, `--include-unused`, `--from-date <ISO>`, `--to-date <ISO>`, `--limit`, `--offset`, `-t/--tenant`. |
 
 ### User Commands
 
@@ -218,6 +222,7 @@ Object labels are tag-style metadata applied to Requirement, TestCase, TestSet, 
 9. **Narrow `list` calls server-side when the user names an entity.** When the user provides a name, key, label, or tag, check `uip tm <resource> list --help` (or `uip or <resource> list --help`) for the narrowing flag the command exposes and pass it on the `list` call. Never list all results and filter client-side — it wastes tokens and misses paginated entries. Applies to every entity across `uip tm` and `uip or`.
 10. **Set default folder before any `run` command** — `uip tm testcases run` and `uip tm testsets run` both require a default Orchestrator folder on the project. Run `uip tm project set-default-folder --project-key <PROJECT_KEY> --folder-key <FOLDER_KEY> --output json` first. Get folder keys with `uip or folders list -n <folder-name> --all --output json`.
 11. **On any `uip` command failure or ambiguity, STOP and ask the user — do NOT fall back to direct REST API calls.** When a `uip` command errors, returns malformed output, or the right flag/value is unclear (e.g., multiple matching entities, missing identifier, unexpected schema), interrupt and ask the user before proceeding. This overrides any instinct to "try the underlying API instead."
+12. **Never block the session on a long-running execution.** After starting a run, launch `uip tm wait` in the background so the user can keep working; fetch stats and report once it signals completion. Use `--timeout 1800` (30 minutes) as the default cap unless the user specifies otherwise. Wait in the foreground only when the user explicitly asks to block until done.
 
 ### Pre-rename fallbacks
 
@@ -285,6 +290,7 @@ If the probe in Rule #2 shows singular subjects, the CLI predates the closed-ver
 | Problem | Fix |
 |---|---|
 | `401 Unauthorized` on REST API | `uip login` to re-authenticate. |
+| Execution `Finished` but stats show `Restricted` / all "None" | Verdicts can lag behind the `Finished` status. Re-fetch `executions get-stats` after a short delay before concluding it's a license/permission issue. |
 
 > If a command fails unexpectedly:
 > 1. Verify the command syntax: `uip tm <command> --help`
@@ -296,8 +302,7 @@ If the probe in Rule #2 shows singular subjects, the CLI predates the closed-ver
 |---|---|
 | **Generate a shareable test report** (tester or release manager view) | [references/test-result-report-guide.md](references/test-result-report-guide.md) |
 | **Publish a project and link it to a Test Manager test case** | [references/publish-and-link-guide.md](references/publish-and-link-guide.md) |
-| **Audit SAP transport coverage for a project** (which TCodes have test cases, which are unused) | [references/sapplanner-guide.md](references/sapplanner-guide.md) |
-| **Run SAP coverage fits and report gaps** (pull coverage → segregate fits / gaps → run all fits in one execution → wait → pass/fail report + gap list) | [references/sapplanner-guide.md#coverage-driven-execution--reporting](references/sapplanner-guide.md#coverage-driven-execution--reporting) |
+| **Execute SAP Change Impact Analysis** | [references/sap-cia-guide.md](references/sap-cia-guide.md) |
 
 
 ## Anti-patterns
