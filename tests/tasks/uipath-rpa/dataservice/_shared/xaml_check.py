@@ -13,6 +13,7 @@ YAML `file_contains` criteria, not here — those are too brittle to walk.
 
 from __future__ import annotations
 
+import re
 import sys
 import xml.etree.ElementTree as ET
 from typing import Iterable
@@ -518,17 +519,19 @@ def get_variable_declarations(root: ET.Element) -> dict[str, str]:
 def get_arg_expression(activity: ET.Element, prop_name: str) -> str | None:
     """Return the VB expression bound to `prop_name` on `activity`, brackets stripped.
 
-    Handles both forms:
-      1. Inline attribute: `RecordId="[createdRecord.Id]"`
-      2. Verbose child: `<uda:Activity.RecordId><InArgument…>[createdRecord.Id]</…></>`
+    Handles every form Studio emits for the same intent:
+      1. Inline attribute:           `RecordId="[createdRecord.Id]"`
+      2. Verbose child + text:       `<uda:Activity.RecordId><InArgument…>[createdRecord.Id]</…></>`
+      3. Verbose child + VBReference:`<uda:Activity.RecordId><InArgument…><VisualBasicReference
+                                       ExpressionText="createdRecord.Id"/></…></>`
+      4. Verbose child + Literal:    `<uda:Activity.RecordId><InArgument…><Literal Value="42"/></…></>`
 
-    Returns `None` if the property is absent OR explicitly null-marked.
-    Studio serializes unused nullable properties as `{x:Null}` (per skill
-    ref, e.g. UploadFileToRecordField.md:62 — "Studio explicitly serializes
-    unused nullable properties as `{x:Null}`"). Semantically that's null,
-    so callers checking "is this property meaningfully bound" should get
-    `None` back for both absent and `{x:Null}` cases.
+    Returns `None` if the property is absent OR explicitly null-marked
+    (`{x:Null}`). Callers checking "is this property meaningfully bound"
+    get `None` back for both absent and null cases — see `has_binding`
+    for a boolean wrapper.
     """
+    # Form 1: attribute on the activity
     raw = _local_attr(activity, prop_name)
     if raw is not None:
         stripped = _strip_vb_brackets(raw)
@@ -536,17 +539,45 @@ def get_arg_expression(activity: ET.Element, prop_name: str) -> str | None:
             return None
         return stripped
 
+    # Forms 2/3/4: verbose child element `<Activity.PropName>`
     suffix = f".{prop_name}"
     for child in activity:
-        if _local(child).endswith(suffix):
-            for desc in child.iter():
-                text = (desc.text or "").strip()
-                if text:
-                    stripped = _strip_vb_brackets(text)
-                    if stripped and stripped.strip() == "{x:Null}":
-                        return None
-                    return stripped
+        if not _local(child).endswith(suffix):
+            continue
+        for desc in child.iter():
+            if desc is child:
+                continue
+            # Form 2: text content (e.g. `<InArgument>[createdRecord]</InArgument>`)
+            text = (desc.text or "").strip()
+            if text:
+                stripped = _strip_vb_brackets(text)
+                if stripped and stripped.strip() == "{x:Null}":
+                    return None
+                return stripped
+            # Forms 3/4: self-closing with ExpressionText (VBReference) or Value (Literal)
+            for attr_name in ("ExpressionText", "Value"):
+                attr_val = _local_attr(desc, attr_name)
+                if attr_val is None:
+                    continue
+                stripped = _strip_vb_brackets(attr_val)
+                if stripped and stripped.strip() == "{x:Null}":
+                    return None
+                return stripped
     return None
+
+
+def has_binding(activity: ET.Element, prop_name: str) -> bool:
+    """True iff `prop_name` is bound to *something* (in any of the 4 known forms)
+    and not the explicit null sentinel.
+
+    Use this when the check only cares "did the agent express *something* here"
+    — pure presence assertion, independent of the bound expression's content.
+    For content comparisons (specific upstream var, specific literal), keep
+    using `get_arg_expression` + `_norm_const_attr`.
+    """
+    return get_arg_expression(activity, prop_name) is not None
+
+
 
 
 def assert_arg_references(

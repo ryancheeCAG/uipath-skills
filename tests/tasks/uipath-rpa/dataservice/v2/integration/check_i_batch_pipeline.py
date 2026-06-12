@@ -15,6 +15,7 @@ from xaml_check import (  # noqa: E402
     get_activities,
     get_activity,
     get_arg_expression,
+    has_binding,
     load,
 )
 import xml.etree.ElementTree as ET
@@ -90,34 +91,27 @@ if __name__ == "__main__":
         )
     update_primary, update_retry = updates[0], updates[-1]
 
+    # Lineage-free existence checks: each downstream activity must have its
+    # InputRecords / FailedRecords bound to *something*. We deliberately do
+    # NOT enforce "must derive from <upstream var>" — agents legitimately
+    # introduce intermediate variables, inline LINQ expressions, etc., and
+    # tracing VB through every form is brittle. `uip rpa validate` (weight
+    # 5.0) catches broken data flow at the runtime level.
     assert_attr_bool(update_primary, "ContinueBatchOnFailure", False)
-    primary_input = get_arg_expression(update_primary, "InputRecords") or ""
-    if first_token(primary_input) != first_token(query_out_var):
-        fail(
-            f"primary UpdateMultipleEntityRecords.InputRecords must reference "
-            f"{query_out_var!r}; got {primary_input!r}"
-        )
+    if not has_binding(update_primary, "InputRecords"):
+        fail("primary UpdateMultipleEntityRecords.InputRecords is not bound")
     failed_updates_var = get_arg_expression(update_primary, "FailedRecords")
     if not failed_updates_var:
         fail("primary UpdateMultipleEntityRecords.FailedRecords is not bound")
 
-    # Retry: InputRecords must reference the failed-updates variable
-    retry_input = get_arg_expression(update_retry, "InputRecords") or ""
-    if first_token(retry_input) != first_token(failed_updates_var):
-        fail(
-            f"retry UpdateMultipleEntityRecords.InputRecords must reference "
-            f"{failed_updates_var!r}; got {retry_input!r}"
-        )
+    if not has_binding(update_retry, "InputRecords"):
+        fail("retry UpdateMultipleEntityRecords.InputRecords is not bound")
 
     # --- DeleteMultiple ---
     delete = get_activity(root, "DeleteMultipleEntityRecords", type_arg=ENTITY)
     assert_attr_bool(delete, "ContinueBatchOnFailure", False)
-    delete_input = get_arg_expression(delete, "InputRecords") or ""
-    if first_token(delete_input) != first_token(query_out_var):
-        fail(
-            f"DeleteMultipleEntityRecords.InputRecords must derive from "
-            f"{query_out_var!r}; got {delete_input!r}"
-        )
+    if not has_binding(delete, "InputRecords"):
+        fail("DeleteMultipleEntityRecords.InputRecords is not bound")
     if not get_arg_expression(delete, "FailedRecords"):
         fail("DeleteMultipleEntityRecords.FailedRecords is not bound")
 
@@ -139,19 +133,23 @@ if __name__ == "__main__":
         )
 
     # ForEach loop over FailedRecords (I56 — iteration with .Item1/.Item2).
-    # Locate ForEach elements and verify at least one iterates failedUpdates.
+    # Locate a ForEach whose Values expression *mentions* the failed-updates
+    # variable as a whole-word identifier — accepts plain reference,
+    # `failedUpdates.Where(...)`, `(From t In failedUpdates ...)` etc.
     failed_token = first_token(failed_updates_var)
+    failed_pat = re.compile(rf"\b{re.escape(failed_token)}\b") if failed_token else None
     foreach_iterating_failed = None
-    for el in root.iter():
-        if local_name(el) != "ForEach":
-            continue
-        values_expr = get_arg_expression(el, "Values") or ""
-        if first_token(values_expr) == failed_token:
-            foreach_iterating_failed = el
-            break
+    if failed_pat is not None:
+        for el in root.iter():
+            if local_name(el) != "ForEach":
+                continue
+            values_expr = get_arg_expression(el, "Values") or ""
+            if failed_pat.search(values_expr):
+                foreach_iterating_failed = el
+                break
     if foreach_iterating_failed is None:
         fail(
-            f"expected a ForEach whose Values references {failed_updates_var!r} "
+            f"expected a ForEach whose Values mentions {failed_updates_var!r} "
             f"(no such ForEach found — agent must iterate FailedRecords)"
         )
     # And the body of that specific ForEach must access .Item1 / .Item2
