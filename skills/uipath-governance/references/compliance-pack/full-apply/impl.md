@@ -80,43 +80,74 @@ Note: compliance status is determined by your auditor, not this tool.
 
 ## Org-scope deployment (all tenants)
 
-When the user says "apply to all tenants", "organization-wide", or "entire org", use the organization scope. One command configures recommended settings across every tenant in the organization.
+When the user says "apply to all tenants", "organization-wide", or "entire org", configure each tenant individually.
+
+> **Note:** `state enable organization` is exposed by the CLI but is not implemented on the backend — calling it has no effect. The correct approach is to iterate over all tenants in the org and call `state enable tenant` for each one.
+
+### Step 1 — Discover all tenants in the org
 
 ```bash
-ORG_ID=$(grep '^UIPATH_ORGANIZATION_ID=' ~/.uipath/.auth | cut -d'=' -f2-)
-
-# Run posture analysis at org scope first
-uip gov compliance-packs state coverage organization $ORG_ID <packId> --output json
-
-# Configure after confirmation
-uip gov compliance-packs state enable organization $ORG_ID <packId> --output json
+uip login tenant list --output json > "$SESSION_TEMP/tenants.json"
 ```
 
-**Confirmation for org-scope:**
+Parse `Data[].TenantName` and `Data[].TenantId` for the list of tenants.
+
+### Step 2 — Run posture analysis per tenant
+
+For each tenant, run coverage to understand current state:
+
+```bash
+uip gov compliance-packs state coverage tenant <tenantId> <packId> --output json
+```
+
+Aggregate results: note how many tenants have gaps vs are already fully Applied.
+
+### Step 3 — Confirmation
 
 ```
-Configure ISO 42001 settings across ALL tenants in your organization?
-Organization: <UIPATH_ORGANIZATION_NAME from ~/.uipath/.auth>
+Configure ISO 42001 settings across all tenants in <UIPATH_ORGANIZATION_NAME>?
 
-<posture plan from coverage>
+Tenants to configure:
+  <tenantName1> — <N> settings Not Applied
+  <tenantName2> — <N> settings Not Applied
+  <tenantName3> — already fully Applied (will skip)
 
-This configures settings on every tenant. Your auditor determines compliance status.
+<totalTenantsToConfig> tenants will be configured. Your auditor determines compliance status.
 Continue? (y/n)
 ```
 
-Require `y`. Halt on anything else.
+Require `y`. Halt on anything else. Skip tenants where `NewCount == 0` (all settings already Applied).
 
-Verify org-scope state:
+### Step 4 — Enable per tenant
+
+For each tenant with gaps, call enable individually:
+
 ```bash
-uip gov compliance-packs state list organization $ORG_ID --output json
+for each tenant with NewCount > 0:
+  uip gov compliance-packs state enable tenant <tenantId> <packId> --output json
 ```
 
-Report for org-scope:
-```
-ISO 42001 settings configured across all tenants in <UIPATH_ORGANIZATION_NAME> ✓
+### Step 5 — Verify
 
-Settings configured: <N> per tenant
-Applied by: <UIPATH_USER from ~/.uipath/.auth>  ·  <UIPATH_ORGANIZATION_NAME>  ·  <date>
+```bash
+for each configured tenant:
+  uip gov compliance-packs state get tenant <tenantId> <packId> --output json
+```
+
+### Report
+
+```
+ISO 42001 settings configured across <N> tenants in <UIPATH_ORGANIZATION_NAME> ✓
+
+┌──────────────────┬──────────────────┐
+│ Tenant           │ Status           │
+├──────────────────┼──────────────────┤
+│ <tenantName1>    │ Applied ✓        │
+│ <tenantName2>    │ Applied ✓        │
+│ <tenantName3>    │ Already Applied  │
+└──────────────────┴──────────────────┘
+
+Applied by: <user>  ·  <date>
 Note: compliance status is determined by your auditor, not this tool.
 ```
 

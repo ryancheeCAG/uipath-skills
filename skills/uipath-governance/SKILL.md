@@ -109,6 +109,7 @@ The canonical ambiguous prompt is *"Block ChatGPT for my finance team using Stud
 - Do NOT skip the post-apply report even if apply partially fails — show what succeeded and what needs manual attention.
 - For compliance pack posture analysis, use `uip gov compliance-packs state coverage` — do NOT use `aops-policy deployed-policy` commands; those are for AOps policy debugging (Branch A), not compliance pack flows.
 - For full pack configuration, use `state enable` — do NOT manually call `aops-policy create` for each product; that path is only for partial/scoped configuration.
+- For org-wide apply, do NOT call `state enable organization` — the backend does not implement org-scope enable. Instead: list tenants with `uip login tenant list`, then call `state enable tenant <id>` for each tenant individually. See [`references/compliance-pack/full-apply/impl.md`](./references/compliance-pack/full-apply/impl.md) § Org-scope deployment.
 - NEVER claim a tenant is "compliant" with a standard — only that recommended settings are configured. Compliance status is determined by the customer's auditor.
 - Do NOT surface policy names, product identifiers (AITrustLayer, Robot, Development), or clause IDs (A.6.2.8) as the main response unit — lead with plain-English control names and clause descriptions. Policy is an internal implementation detail. Clause IDs appear only as secondary reference in parentheses.
 - Do NOT use the word "controls" in user-facing output — use "settings". The UiPath UI uses "settings" for what the standard recommends be configured.
