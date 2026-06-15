@@ -20,7 +20,7 @@
 
 import { readFileSync, writeFileSync, copyFileSync, mkdirSync, readdirSync, existsSync, renameSync, unlinkSync, rmSync } from 'fs'
 import { createConnection } from 'net'
-import { join, dirname, resolve } from 'path'
+import { join, dirname, basename, resolve } from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
 import { execSync } from 'child_process'
 import { createHash } from 'crypto'
@@ -141,7 +141,7 @@ const TIME_RANGE_CONSTANTS = {
 
 const KNOWN_EVENTS = new Set([
   'PREWARM_START', 'PREWARM_DONE', 'PREWARM_FAILED', 'SCAFFOLD_READY', 'ENV_WRITTEN',
-  'WIDGET_READY', 'T3_RETRY', 'T3_FAILED', 'TSC_PASS', 'TSC_FAIL',
+  'WIDGET_READY', 'METRICS_PASS', 'METRICS_RETRY', 'T3_FAILED', 'TSC_PASS', 'TSC_FAIL',
   'BUILD_RESULT', 'PARTIAL_BUILD_DETECTED', 'AUTH_MISSING',
   'HAND_EDIT_DETECTED', 'T2_SCHEMA_ERROR', 'INCREMENTAL_READY',
 ])
@@ -303,6 +303,25 @@ export function waitForPrewarm(projectPath, timeoutMs = 300_000) {
   }
 
   emit('PREWARM_DONE')
+}
+
+/**
+ * Stage A — isolated type-check of the agent-written metric modules, before any
+ * widget is generated. Fast (no React graph) and maps errors directly to the
+ * offending src/metrics/<name>.ts file.
+ * @param {string} projectPath
+ * @returns {{ ok: true } | { ok: false, errors: string[], files: string[] }}
+ */
+export function runMetricsTypecheck(projectPath) {
+  try {
+    execSync('npx tsc -p tsconfig.metrics.json', { cwd: projectPath, stdio: 'pipe' })
+    return { ok: true }
+  } catch (e) {
+    const out = (e.stdout?.toString() ?? '') + (e.stderr?.toString() ?? '')
+    const errors = out.split('\n').filter(l => l.includes('error TS')).slice(0, 20)
+    const files = [...new Set((out.match(/src[/\\]metrics[/\\][\w-]+\.ts/g) ?? []).map(p => p.replace(/\\/g, '/')))]
+    return { ok: false, errors, files }
+  }
 }
 
 // ── Event streaming ────────────────────────────────────────────────────────────
@@ -979,8 +998,29 @@ async function runDashboardBuild(intent, intentPath) {
       )
     }
 
+    // Step 3.6 — Copy agent-authored metric modules into the project and
+    // type-check them in isolation (Stage A) before generating any widget.
+    // A failure here maps directly to a metrics/<name>.ts file — fast, no React.
+    const intentDir = dirname(intentPath)
+    const metricsDestDir = join(P, 'src', 'metrics')
+    mkdirSync(metricsDestDir, { recursive: true })
+    for (const metric of metrics) {
+      const rel = metric.module ?? `metrics/${metric.name}.ts`
+      const fromPath = join(intentDir, rel)
+      if (!existsSync(fromPath)) {
+        fail(`Metric module not found: ${fromPath} — write the data function as metrics/${metric.name}.ts exporting "fetchData"`)
+      }
+      copyFileSync(fromPath, join(metricsDestDir, basename(rel)))
+    }
+    const stageA = runMetricsTypecheck(P)
+    if (!stageA.ok) {
+      emit('METRICS_RETRY', { files: stageA.files, errors: stageA.errors, intentPath })
+      log(`⚠ Metric modules have TypeScript errors. Fix the named files in ${metricsDestDir} and re-run.`)
+      process.exit(2)
+    }
+    emit('METRICS_PASS')
+
     // Step 4 — Resolve + generate widgets
-    const t3Metrics = metrics.filter(m => m.tier === 'T3')
     const widgetHashes = {}
     const widgetMeta = []    // { componentName, template }
     const widgetSpecs = {}   // componentName → view spec (see buildViewSpec); chart widgets only
@@ -988,7 +1028,7 @@ async function runDashboardBuild(intent, intentPath) {
     const total = metrics.length
 
     // All widgets generated together — T1, T2, T3 in one pass (no per-widget tsc)
-    // T3 errors are caught by the single tsc in step 6 below.
+    // Metric-level errors were already caught by Stage A above; Step 6 is the integration backstop.
     for (const metric of metrics) {
       const isT3 = metric.tier === 'T3'
       const { entry } = isT3 ? { entry: null } : resolveMetric(metric)
@@ -1008,7 +1048,7 @@ async function runDashboardBuild(intent, intentPath) {
 
       // intentMetric is persisted so incremental CHANGE/REBUILD can regenerate
       // the widget without the original intent.json (fnBody, title, hints).
-      widgetHashes[componentName] = { hash: hashContent(widgetContent), tier: metric.tier, metric: metric.name, template: displayAs, intentMetric: metric }
+      widgetHashes[componentName] = { hash: hashContent(widgetContent), tier: metric.tier, metric: metric.name, template: displayAs, module: metric.module ?? `metrics/${metric.name}.ts`, intentMetric: metric }
       widgetMeta.push({ componentName, template: displayAs })
 
       // Detail views: only chart widgets emit navigate/ViewAllLink (the shell
@@ -1036,26 +1076,13 @@ async function runDashboardBuild(intent, intentPath) {
     // Step 5b — Only inject routes for widgets that actually have view files
     injectAppRoutes(P, generatedViewNames)
 
-    // Step 6 — Full tsc (catches errors for all tiers including T3)
+    // Step 6 — Full-app tsc backstop. Metric-level errors were already caught by
+    // Stage A; a failure here is an integration/template error, not a metric bug.
     try {
       execSync('npx tsc --noEmit', { cwd: P, stdio: 'pipe' })
       emit('TSC_PASS')
     } catch (e) {
       const tscOut = e.stdout?.toString() ?? ''
-
-      // If T3 widgets are present, identify all that failed and signal the agent to fix them
-      if (t3Metrics.length > 0) {
-        const failingWidgets = t3Metrics
-          .map(m => ({ name: m.name, componentName: toPascalCase(m.name) }))
-          .filter(({ componentName }) => tscOut.includes(componentName))
-        if (failingWidgets.length > 0) {
-          const errors = tscOut.split('\n').filter(l => l.includes('error TS')).slice(0, 10)
-          emit('T3_RETRY', { widgets: failingWidgets.map(w => w.name), errors, intentPath })
-          log(`⚠ ${failingWidgets.length} T3 widget(s) have TypeScript errors. Fix fnBody in ${intentPath} and re-run.`)
-          process.exit(2)
-        }
-      }
-
       const err = tscOut || e.stderr?.toString() || String(e)
       emit('TSC_FAIL', { errors: err.slice(0, 1000) })
       fail(`TypeScript errors:\n${err}`)
