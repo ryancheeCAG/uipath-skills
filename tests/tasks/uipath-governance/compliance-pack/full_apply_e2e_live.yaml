@@ -46,6 +46,7 @@ initial_prompt: |
     }
 
   Also capture all CLI output to output.txt as you go.
+  After running state coverage, also save the raw JSON response to coverage.json in the current working directory (alongside output.txt).
 
   Important:
   - Use --output json on all uip gov commands.
@@ -126,12 +127,6 @@ success_criteria:
       - expression: "length(commands_attempted)"
         operator: gte
         expected: 3
-      - expression: "commands_attempted[0]"
-        operator: contains
-        expected: "catalog get"
-      - expression: "commands_attempted[1]"
-        operator: contains
-        expected: "state coverage"
     weight: 3.0
     pass_threshold: 0.7
 

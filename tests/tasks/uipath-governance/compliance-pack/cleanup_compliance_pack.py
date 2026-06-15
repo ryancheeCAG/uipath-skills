@@ -35,14 +35,34 @@ def run_cli(args: list[str], timeout: int = 30) -> dict | None:
 
 
 def get_tenant_id() -> str | None:
-    auth_file = os.path.expanduser("~/.uipath/.auth")
-    if not os.path.exists(auth_file):
-        return None
-    with open(auth_file) as f:
-        for line in f:
-            if line.startswith("UIPATH_TENANT_ID="):
-                return line.split("=", 1)[1].strip()
-    return os.environ.get("UIPATH_CLI_TENANT_ID")
+    # 1. Explicit env vars (set in some CI configurations)
+    for var in ("UIPATH_CLI_TENANT_ID", "UIPATH_TENANT_ID"):
+        val = os.environ.get(var, "").strip()
+        if val:
+            return val
+
+    # 2. Auth file — check both the Docker mount point (/.uipath/.auth)
+    #    and the default user path (~/.uipath/.auth)
+    for auth_file in ("/.uipath/.auth", os.path.expanduser("~/.uipath/.auth")):
+        if os.path.exists(auth_file):
+            with open(auth_file) as f:
+                for line in f:
+                    if line.startswith("UIPATH_TENANT_ID="):
+                        val = line.split("=", 1)[1].strip()
+                        if val:
+                            return val
+
+    # 3. Last resort: ask uip itself — works whenever the CLI is authenticated
+    #    regardless of how auth was set up (env vars, auth file, or ROPC token)
+    result = run_cli(["login", "status"])
+    if result and result.get("Result") == "Success":
+        data = result.get("Data") or {}
+        tenant_id = data.get("TenantId") or data.get("tenantId")
+        if tenant_id:
+            logger.info("Resolved tenant ID from uip login status: %s", tenant_id)
+            return tenant_id
+
+    return None
 
 
 def main():

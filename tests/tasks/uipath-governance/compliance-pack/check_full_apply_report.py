@@ -58,7 +58,9 @@ if isinstance(not_applied, (int, float)) and not_applied > 0:
             "gaps existed but state enable was not called"
         )
 
-# ── 5. Sequence: commands_attempted[0] = catalog, [1] = coverage ─────────────
+# ── 5. Sequence: catalog must appear before coverage in commands_attempted ────
+# Agent may include pre-flight commands (uip login status, uip --version) before
+# the governance workflow, so check ordering not fixed indices.
 commands = r.get("commands_attempted", [])
 if not isinstance(commands, list):
     failures.append("commands_attempted is not a list")
@@ -68,13 +70,20 @@ else:
             f"commands_attempted has {len(commands)} entries — expected at least 3 "
             "(catalog get, state coverage, state get/enable)"
         )
-    if commands and "catalog" not in str(commands[0]).lower():
+    catalog_idx = next(
+        (i for i, c in enumerate(commands) if "catalog" in str(c).lower()), None
+    )
+    coverage_idx = next(
+        (i for i, c in enumerate(commands) if "coverage" in str(c).lower()), None
+    )
+    if catalog_idx is None:
+        failures.append("commands_attempted has no 'catalog' entry — catalog get not attempted")
+    if coverage_idx is None:
+        failures.append("commands_attempted has no 'coverage' entry — state coverage not attempted")
+    if catalog_idx is not None and coverage_idx is not None and catalog_idx > coverage_idx:
         failures.append(
-            f"commands_attempted[0] does not reference 'catalog': '{commands[0]}'"
-        )
-    if len(commands) > 1 and "coverage" not in str(commands[1]).lower():
-        failures.append(
-            f"commands_attempted[1] does not reference 'coverage': '{commands[1]}'"
+            f"sequence wrong — coverage (idx {coverage_idx}) appears before "
+            f"catalog (idx {catalog_idx}) in commands_attempted"
         )
 
 # ── Report ────────────────────────────────────────────────────────────────────

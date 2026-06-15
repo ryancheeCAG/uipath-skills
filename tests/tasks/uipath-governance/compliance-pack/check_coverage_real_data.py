@@ -16,15 +16,23 @@ Exits 1 on any structural violation.
 import json
 import sys
 
-COVERAGE = "coverage.json"
-
-# Allow running from $SESSION_TEMP directory by also checking $TMPDIR
 import os
-for candidate in (
-    COVERAGE,
+import glob
+
+# Search for coverage.json — agent may save it to SESSION_TEMP, TASK_DIR, or cwd.
+# In Docker CI the sandbox working dir is TASK_DIR; locally it may be SESSION_TEMP.
+_candidates = [
+    "coverage.json",
+    os.path.join(os.environ.get("TASK_DIR", ""), "coverage.json"),
     os.path.join(os.environ.get("SESSION_TEMP", ""), "coverage.json"),
     os.path.join(os.environ.get("TMPDIR", ""), "coverage.json"),
-):
+]
+# Also glob for coverage.json under common temp prefixes created by the agent
+_candidates += glob.glob("/tmp/compliance-*/coverage.json")
+_candidates += glob.glob(os.path.join(os.environ.get("TEMP", ""), "compliance-*", "coverage.json"))
+
+COVERAGE = "coverage.json"
+for candidate in _candidates:
     if candidate and os.path.exists(candidate):
         COVERAGE = candidate
         break

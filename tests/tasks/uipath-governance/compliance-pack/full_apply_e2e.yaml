@@ -110,12 +110,6 @@ success_criteria:
       - expression: "length(commands_attempted)"
         operator: gte
         expected: 4
-      - expression: "commands_attempted[0]"
-        operator: contains
-        expected: "catalog get"
-      - expression: "commands_attempted[1]"
-        operator: contains
-        expected: "state coverage"
     weight: 3.0
     pass_threshold: 0.75
 
