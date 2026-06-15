@@ -18,8 +18,22 @@ Per-project metadata. Read at every build start. Written by build script on succ
   "cloudUrl": "https://alpha.uipath.com",
   "timeRange": "30d",
   "widgets": {
-    "MemoryCallsTrend": { "hash": "a3f7b2c1", "tier": "T1", "metric": "memory-calls-trend", "template": "area-chart", "intentMetric": { "name": "memory-calls-trend", "tier": "T1", "title": "Memory Calls", "fnBody": "..." } },
-    "AgentHealth": { "hash": "c9e1d4f2", "tier": "T1", "metric": "agent-health", "template": "ranked-table", "intentMetric": { "name": "agent-health", "tier": "T1", "title": "Agent Health", "fnBody": "..." } }
+    "MemoryCallsTrend": {
+      "hash": "a3f7b2c1",
+      "tier": "T1",
+      "metric": "memory-calls-trend",
+      "template": "area-chart",
+      "module": "metrics/memory-calls-trend.ts",
+      "intentMetric": { "name": "memory-calls-trend", "tier": "T1", "title": "Memory Calls" }
+    },
+    "AgentHealth": {
+      "hash": "c9e1d4f2",
+      "tier": "T1",
+      "metric": "agent-health",
+      "template": "ranked-table",
+      "module": "metrics/agent-health.ts",
+      "intentMetric": { "name": "agent-health", "tier": "T1", "title": "Agent Health" }
+    }
   },
   "deployment": {
     "systemName": null,
@@ -36,8 +50,10 @@ Per-project metadata. Read at every build start. Written by build script on succ
 
 ## Key rules
 
-1. Every state.json starts at `schemaVersion: 1`.
-2. `widgets` is a map of `{ hash, tier, metric, template, intentMetric }` — not a string array. `intentMetric` is the widget's full intent entry (fnBody, title, hints), persisted so CHANGE/REBUILD can regenerate without the original intent.json.
+1. `schemaVersion` stays at `1` — unchanged in this phase.
+2. `widgets` is a map of `{ hash, tier, metric, template, module, intentMetric }` — not a string array.
+   - `intentMetric` is pure metadata (no `fnBody`) — title, display hints, tier, name. Used by CHANGE/REBUILD to regenerate without the original `intent.json`.
+   - `module` is the relative path to the durable data-fetch code (e.g. `"metrics/agent-health.ts"`). The live source lives at `src/metrics/<name>.ts` in the project.
 3. `routingName` never changes once set. Not even on upgrades.
 4. `hash` used for hand-edit detection — compare to current file before CHANGE/REMOVE.
 5. `deployment.systemName` set by deploy plugin on first deploy.

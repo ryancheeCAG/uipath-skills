@@ -100,8 +100,11 @@ Confirm to build, or tell me what to change:
 
 ### intent.json schema (write to disk in Phase 4 after confirmation)
 
+`intent.json` is **pure metadata** — no `fnBody`, no `detailFnBody`. Data-fetch code lives in `metrics/<name>.ts` modules (sibling folder to `intent.json`).
+
 ```json
 {
+  "schemaVersion": 2,
   "dashboardName": "Operations Health",
   "dashboardDescription": "Job throughput, agent health, and governance posture at a glance.",
   "timeRange": "30d",
@@ -114,7 +117,7 @@ Confirm to build, or tell me what to change:
     { "name": "queue-failure-threshold", "tier": "T2", "params": { "threshold": 20, "direction": "gt" } },
     {
       "name": "custom", "tier": "T3", "title": "...", "displayAs": "ranked-table",
-      "fnBody": "...", "valueField": "count", "valueLabel": "items"
+      "valueField": "count", "valueLabel": "items"
     }
   ]
 }
@@ -124,40 +127,58 @@ Routing name: `<kebab-name>-<4-char-random>`. Set once at plan time. Never chang
 
 ### Presentation fields — make widgets read like a real dashboard
 
-Charts and tables render shallow without these. Set them on each metric (registry fills defaults for cataloged metrics; you set them for T3). All optional except where noted.
+Charts and tables render shallow without these. Set them on each metric in `intent.json` (registry fills defaults for cataloged metrics; you set them for T3). All optional except where noted.
 
 **Chart metrics** (`line-chart`, `area-chart`, `bar-chart`, `donut-chart`):
 - `headlineMode` — how the big number is computed from the series: `sum` (totals — default), `avg` (rates/latency), `latest`, `max`, `min`, `count`. **Never leave a count-trend on the implicit last-point value.**
 - `deltaPolarity` — whether an increase is good or bad, drives the badge colour: `up-good` (e.g. completions), `up-bad` (e.g. errors), `neutral`. The build computes the actual % change.
 - `subtitle` — one line of context (e.g. `"Agent runs — last 24h"`). Omit to auto-fill the time window.
-- `yKey` / `xKey` — the value and axis fields in your `fnBody` rows.
+- `yKey` / `xKey` — the value and axis fields returned by the module's `fetchData`.
 
 **Rate / percentage metric** (`displayAs: "rate-chart"`): for ratios like error rate = faulted ÷ total.
-- `fnBody` returns rows carrying **both** a numerator and denominator per bucket, e.g. `[{ date, faulted, total }]`.
+- `fetchData` returns rows carrying **both** a numerator and denominator per bucket, e.g. `[{ date, faulted, total }]`.
 - `rateNum` / `rateDen` (**required**) — those field names (`"faulted"`, `"total"`). The build plots num/den % per bucket, headline = overall %, delta in `pp`.
 
 **Detail views** (any chart) — the drill-down must show records, not the chart's buckets:
-- `detailFnBody` — a **record-grain** query (the individual rows behind the chart, e.g. each faulted job). Falls back to the chart's `fnBody` if omitted (shows buckets — avoid).
+- `"detail": true` in the intent entry + `export const fetchDetail: MetricFn` in the module — a record-grain query (individual rows behind the chart). Falls back to `fetchData` if absent (shows buckets — avoid for chart metrics).
 - `detailColumns` — array of `{ key, label, align?, format?, color? }`. `format`: `number` | `percent` | `duration` | `timeAgo` | `text`. `color`: `goodHigh` | `goodLow` (threshold colouring). The build compiles these into formatted/coloured cells.
 - `detailSortKey` — raw field to sort on (e.g. an ISO `startTime`), so chronological order is correct even when a column renders a friendly label.
 
 Full detail-view contract (record grain, toRows, anti-patterns): `references/dashboards/primitives/detail-views.md`.
 
-Example T3 chart with full presentation:
+Example T3 chart with full presentation — intent entry:
 
 ```json
 {
   "name": "faulted-jobs-trend", "tier": "T3", "title": "Faulted Jobs",
   "displayAs": "area-chart", "xKey": "date", "yKey": "count",
   "headlineMode": "sum", "deltaPolarity": "up-bad", "subtitle": "Faulted jobs — last 7 days",
-  "fnBody": "const { Jobs } = await import('@uipath/uipath-typescript/jobs')\nconst rows = (await new Jobs(sdk as never).getAll({ filter: \"State eq 'Faulted'\" }))?.items ?? []\nconst byDate: Record<string, number> = {}\nfor (const j of rows) { const d = String(j.createdTime).slice(0,10); byDate[d] = (byDate[d] ?? 0) + 1 }\nreturn Object.entries(byDate).sort().map(([date, count]) => ({ date, count }))",
-  "detailFnBody": "const { Jobs } = await import('@uipath/uipath-typescript/jobs')\nreturn (await new Jobs(sdk as never).getAll({ filter: \"State eq 'Faulted'\", orderby: 'CreationTime desc' }))?.items ?? []",
+  "detail": true,
   "detailColumns": [
     { "key": "processName", "label": "Process" },
     { "key": "state", "label": "State" },
     { "key": "createdTime", "label": "Started", "format": "timeAgo" }
   ],
   "detailSortKey": "createdTime"
+}
+```
+
+Module at `metrics/faulted-jobs-trend.ts`:
+
+```ts
+import type { MetricFn } from '@/lib/metric-contract'
+
+export const fetchData: MetricFn = async (sdk) => {
+  const { Jobs } = await import('@uipath/uipath-typescript/jobs')
+  const rows = (await new Jobs(sdk as never).getAll({ filter: "State eq 'Faulted'" }))?.items ?? []
+  const byDate: Record<string, number> = {}
+  for (const j of rows) { const d = String(j.createdTime).slice(0, 10); byDate[d] = (byDate[d] ?? 0) + 1 }
+  return Object.entries(byDate).sort().map(([date, count]) => ({ date, count }))
+}
+
+export const fetchDetail: MetricFn = async (sdk) => {
+  const { Jobs } = await import('@uipath/uipath-typescript/jobs')
+  return (await new Jobs(sdk as never).getAll({ filter: "State eq 'Faulted'", orderby: 'CreationTime desc' }))?.items ?? []
 }
 ```
 
@@ -215,11 +236,11 @@ If both fail: direct the user to `<CLOUD_URL>/<ORG>/portal_/adminui/#/externalAp
 
 ---
 
-## Phase 3.5 — Cross-check each fnBody against the documented response
+## Phase 3.5 — Cross-check each metric module against the documented response
 
 `tsc` validates the *shape* of a query (do the fields exist?) but never its *meaning* (does this filter actually match the rows the user wants?). A query can compile green and return zero rows — the most common way a dashboard ships empty, because the agent filtered on a plausible-but-wrong field.
 
-You wrote each `fnBody` from the SDK references. Before committing, cross-check every one against the **Example response** and **semantics notes** in the relevant `references/sdk/*.md` file (already loaded in the parallel blast). For each metric, confirm:
+You wrote each `metrics/<name>.ts` module from the SDK references. Before committing, cross-check every one against the **Example response** and **semantics notes** in the relevant `references/sdk/*.md` file (already loaded in the parallel blast). For each metric, confirm:
 
 1. **The field you filter or read on appears in the example response** — with the value you expect. Not just "the field exists in the type" (both `sourceType` and `packageType` exist) — the example shows the real *value*.
 2. **No semantics note warns against your choice.** The references flag the traps types can't express.
@@ -242,7 +263,7 @@ return (await new Jobs(sdk as never).getAll({ filter: "ProcessType eq 'Agent'" }
 
 If a metric's correctness depends on data you genuinely can't determine from the references, prefer a simpler, well-documented query over a guess — and tell the user what you simplified.
 
-**After cross-checking:** the verified `fnBody` strings go into intent.json in Phase 4.
+**After cross-checking:** write the verified `metrics/<name>.ts` modules to disk alongside `intent.json` in Phase 4.
 
 ---
 
@@ -252,7 +273,7 @@ To keep the experience seamless, Phase 4 executes inside a **build subagent** (t
 
 `SKILL_BASE_DIR` is the directory shown in "Base directory for this skill:" from your activation message — it contains `SKILL.md` and ends in `/skills/uipath-coded-apps`.
 
-**Step 1 — Write `intent.json` to disk** (the verified version from Phase 3.5).
+**Step 1 — Write `intent.json` and `metrics/*.ts` modules to disk** (verified in Phase 3.5). `intent.json` is pure metadata (`schemaVersion: 2`, no `fnBody`). Each module file sits sibling to `intent.json` at `metrics/<name>.ts`.
 
 **Step 2 — Show one line, then spawn the build subagent.** Print only:
 
@@ -265,7 +286,7 @@ Then call the `Task` tool with this prompt (substitute the two paths):
 > You are the dashboard build executor. You NEVER surface raw output — your final message is the only thing shown.
 > 1. Read `<SKILL_BASE_DIR>/references/dashboards/plugins/build/impl.md` § "Build subagent — execution" and follow it exactly.
 > 2. Run: `node "<SKILL_BASE_DIR>/assets/scripts/build-dashboard.mjs" "<INTENT_JSON_PATH>"`
-> 3. On `T3_RETRY`, fix the named widgets' `fnBody` in `<INTENT_JSON_PATH>` using the SDK references, then re-run — at most 2 attempts, then drop the widget.
+> 3. On `METRICS_RETRY`, fix the named `src/metrics/*.ts` files using the SDK references and the reported errors, then re-run — at most 2 attempts, then drop the metric.
 > 4. Return ONLY the milestone block defined in § "Build subagent — returns".
 
 **Step 3 — Relay the subagent's returned block verbatim.** Add nothing else — no commentary about the subagent, no raw output.
@@ -295,11 +316,12 @@ Run the build script once. Most events are silent — translate the rest to mile
 
 **Collect into milestones:**
 - `WIDGET_READY:{"name":"X",...}` → a `✓ X` line
+- `METRICS_PASS` → silent; build continues (no milestone needed)
 - `TSC_PASS` → `✓ All code validated`
 - `BUILD_RESULT.previewUrl` → the URL for the return block (the script does NOT start the server — the main thread does that after you return)
 
 **Act on:**
-- `T3_RETRY:{"widgets":[...],"errors":[...]}` → fix each widget's `fnBody` in intent.json (use the SDK references + the tsc errors), re-run. Max 2 attempts; if a widget still fails, remove it from intent.json, re-run, and note it as dropped.
+- `METRICS_RETRY:{"files":[...],"errors":[...]}` → fix the named `src/metrics/<name>.ts` file(s) using the SDK references + reported errors, re-run. Max 2 attempts; if still failing, remove the metric from `intent.json` and its module file, re-run, and note it as dropped.
 - `AUTH_MISSING` → stop; return the auth-missing result so the main thread can complete Phase 3.
 - `PREWARM_FAILED:{"stderr":"..."}` → return a failure result noting dependency install failed.
 - `BUILD_RESULT:{"success":true,...}` → success; assemble the return block.

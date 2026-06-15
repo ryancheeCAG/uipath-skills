@@ -10,22 +10,24 @@ Detects `.dashboard/state.json` at session start or after `BUILD_RESULT`. State 
 
 Write to `<PROJECT_DIR>/edit-intent.json`. **Multiple changes = ONE `ops` batch — never run the script once per change.** The whole batch is validated up front (nothing is written if any op would fail), applied in order, and Dashboard.tsx/index.ts + tsc run once at the end.
 
+`edit-intent.json` carries **metadata only** — no `fnBody` fields. Data-fetch code ships as `metrics/<name>.ts` modules sibling to `edit-intent.json`.
+
 ```json
 {
   "projectDir": "/abs/path",
   "ops": [
-    { "op": "CHANGE", "target": "MemoryCallsTrend", "delta": { "displayAs": "bar-chart", "fnBody": "..." } },
+    { "op": "CHANGE", "target": "MemoryCallsTrend", "delta": { "displayAs": "bar-chart" } },
     { "op": "REMOVE", "target": "AgentConsumption" },
-    { "op": "ADD", "metric": { "name": "agent-health", "tier": "T1", "title": "Agent Health", "fnBody": "..." } }
+    { "op": "ADD", "metric": { "name": "agent-health", "tier": "T1", "title": "Agent Health" } }
   ]
 }
 ```
 
 Op shapes:
-- **ADD** — `metric` is a full intent.json metric (fnBody required)
-- **REMOVE** — `target` is the widget component name from state.json
-- **CHANGE** — `delta` merges over the widget's persisted `intentMetric`
-- **REBUILD** — no fields; regenerates every widget from persisted `intentMetric` (e.g. after template updates)
+- **ADD** — `metric` is a full intent.json metric entry (metadata only, no `fnBody`). Also write `metrics/<name>.ts` module alongside `edit-intent.json` — the build copies it in.
+- **REMOVE** — `target` is the widget component name from state.json. Also delete the corresponding `metrics/<name>.ts` module.
+- **CHANGE** — `delta` merges over the widget's persisted `intentMetric`. Metadata-only changes (e.g. `displayAs`, `title`) leave the existing module in place. Changing query logic requires shipping a new `metrics/<name>.ts` module alongside the op.
+- **REBUILD** — no fields; regenerates every widget from persisted `intentMetric` + the on-disk `metrics/*.ts` modules (e.g. after template updates). No module changes needed unless also updating queries.
 
 A single-op shorthand (`{ "op": "ADD", "projectDir": "...", "metric": ... }`) is also accepted.
 
@@ -37,15 +39,23 @@ node "${SKILL_BASE_DIR}/assets/scripts/build-dashboard.mjs" "${EDIT_INTENT_PATH}
 
 ## CHANGE semantics
 
-Each widget's full intent metric (`intentMetric` — fnBody, title, display hints) is persisted in state.json at build time. CHANGE merges your `delta` over it, so a delta only needs the fields that change.
+Each widget's full intent metric (title, display hints) is persisted in `state.json` at build time. CHANGE merges your `delta` over it, so a delta only needs the fields that change. The data-fetch code lives in the on-disk `src/metrics/<name>.ts` module.
 
-1. **Changing the time window requires a new `fnBody`.** The fnBody references time constants by name (e.g. `THIRTY_DAYS_AGO`) — a `timeRange` delta alone updates the subtitle but not the query window. Always pair `"timeRange"` with an updated `"fnBody"` using the matching constant (`SEVEN_DAYS_AGO` for 7d, etc.).
+1. **Changing the time window requires a new module.** The module imports time constants by name (e.g. `THIRTY_DAYS_AGO`) from `@/lib/time` — a `timeRange` delta alone updates the subtitle but not the query window. Ship an updated `metrics/<name>.ts` using the matching constant (`SEVEN_DAYS_AGO` for 7d, etc.) alongside the delta.
 2. Changing `displayAs` between chart ↔ table/kpi is supported — the build regenerates or removes the detail view accordingly.
-3. **Legacy dashboards** (built before intent persistence) have no stored `intentMetric` — the build fails with a clear message; include the full metric (fnBody, title) in `delta`, or re-run a fresh build.
+3. **Legacy dashboards** (built before intent persistence) have no stored `intentMetric` — the build fails with a clear message; include the full metric (title, display hints) in `delta` and ship a fresh module, or re-run a fresh build.
+
+## Stage A type-check
+
+Before applying any op, the build type-checks all affected `metrics/*.ts` modules in isolation (Stage A).
+- `METRICS_PASS` — silent; batch proceeds.
+- `METRICS_RETRY:{ files: [...], errors: [...] }` — fix the named `src/metrics/<name>.ts` files and re-run. Max 2 attempts; if still failing, drop the metric.
 
 ## Events to watch
 
 - `HAND_EDIT_DETECTED:{"widget":"X"}` — file was hand-edited; the whole batch is rejected before any write. Ask the user (see [customization.md](customization.md)).
+- `METRICS_PASS` — silent; proceed
+- `METRICS_RETRY:{"files":[...],"errors":[...]}` — fix named module files and re-run
 - `TSC_PASS` — edit validated clean
 - `TSC_FAIL:{"errors":"..."}` — surface to user
 - `INCREMENTAL_READY:{"count":N,"ops":[{"op":"ADD","widget":"X"},…]}` — done; the running dev server hot-reloads automatically. If no dev-server background job is running, start one per `plugins/build/impl.md` Phase 4 Step 4 (the script never starts servers).

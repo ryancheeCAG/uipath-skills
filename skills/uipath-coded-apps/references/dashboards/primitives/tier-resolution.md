@@ -1,6 +1,8 @@
 # Tier Resolution — Classifying Metrics
 
-Every metric in `intent.json` requires a `fnBody` that you write based on the SDK documentation. The tier tells the build script where to find display hints — it does not drive code generation.
+Every metric in `intent.json` requires a `metrics/<name>.ts` module that you write based on the SDK documentation. The tier tells the build script where to find display hints — it does not drive code generation.
+
+`intent.json` has `"schemaVersion": 2`. Metric entries are **pure metadata** — no `fnBody`, no `detailFnBody`.
 
 ---
 
@@ -15,17 +17,17 @@ T0 — Check Hard Refuse list (first)
 T1 — Catalog check
   → Name/alias in capability-registry.json?
     → YES: registry provides display hints (template, xKey, yKey, icon)
-           You still write the fnBody from SDK docs
+           You still write the metrics/<name>.ts module from SDK docs
   ↓
 T2 — Parametric check
   → Known metric with user-supplied filter?
-    → YES: registry provides hints + you incorporate params into fnBody
+    → YES: registry provides hints + you incorporate params into the module
   ↓
 T3 — Custom
-  → Not in catalog: you provide everything (fnBody + displayAs + hints)
+  → Not in catalog: you provide all display config and write the module entirely from SDK docs
 ```
 
-**Every tier requires `fnBody`.** The registry never generates code — it only describes what template and keys to use.
+**Every tier requires a `metrics/<name>.ts` module.** The registry never generates code — it only describes what template and keys to use.
 
 ---
 
@@ -39,38 +41,61 @@ For every requested metric, before writing it into the plan:
 
 > If a metric is feasible but requires a method that may not be in the installed SDK version (e.g. a newly released Insights endpoint), include it in the plan with a note: "relies on `Agents.methodName` — will verify after install." `tsc` catches a missing method before build.
 
-After the plan is confirmed, **Phase 3.5 cross-checks each `fnBody` against the example response + semantics notes in `references/sdk/*.md`** — the example shows real field *values*, not just that a field exists. (E.g. an agent job is `packageType === 'Agent'` / OData `ProcessType eq 'Agent'` — `sourceType` is the trigger origin, not the agent discriminator.)
+After the plan is confirmed, **Phase 3.5 cross-checks each metric module against the example response + semantics notes in `references/sdk/*.md`** — the example shows real field *values*, not just that a field exists. (E.g. an agent job is `packageType === 'Agent'` / OData `ProcessType eq 'Agent'` — `sourceType` is the trigger origin, not the agent discriminator.)
 
 ---
 
-## Writing fnBody
+## Writing a metric module
 
-The agent reads the SDK service reference (this file, loaded in the parallel blast) to find the right service and method. The `fnBody` must:
+Write each metric's data-fetch code as a real TypeScript module at `metrics/<metric-name>.ts` (a `metrics/` folder sibling to `intent.json`). The build copies these files into `src/metrics/` and type-checks them.
 
-- Return a **flat array of row objects** — SDK-typed arrays are accepted directly (the harness signature is `Promise<any[]>`). `return result?.items ?? []` is correct as-is; **never add `as unknown as Record<string, unknown>[]` casts** — they're noise from an old harness signature
+### Module contract
+
+```ts
+import type { MetricFn } from '@/lib/metric-contract'
+import { THIRTY_DAYS_AGO, NOW } from '@/lib/time'
+
+export const fetchData: MetricFn = async (sdk) => {
+  const { AgentMemory } = await import('@uipath/uipath-typescript/agent-memory')
+  return await new AgentMemory(sdk as never).getTimeline({ startTime: THIRTY_DAYS_AGO, endTime: NOW })
+}
+```
+
+`MetricFn` is `(sdk: any, getToken: () => Promise<string>) => Promise<any[]>`.
+
+**Rules:**
+- Export `fetchData` (required). Export `fetchDetail` (optional, same `MetricFn` signature) for record-grain drill-downs.
+- Return a **flat array of row objects** — SDK-typed arrays accepted directly. Never add `as unknown as Record<string,unknown>[]` casts.
 - Use dynamic import: `const { ServiceClass } = await import('@uipath/uipath-typescript/...')`
 - Use constructor injection: `new ServiceClass(sdk as never)`
-- The build script passes the returned array directly to the chart/table
-- **Read methods ONLY.** Dashboards display data; they never mutate. Allowed: `getAll`, `getById`, `getAllRecords`, `queryRecordsById`, `getIncidents`. Never call `create`, `complete`, `assign`, `start`, `stop`, `resume`, `restart`, `insert*`, `update*`, `delete*`, `upload*` — even though the shared `sdk/*.md` references document them for the app-building modes.
-- **Full listings: use the scaffold's `fetchAll` helper — never hand-write the cursor loop.** Every list call returns one server-capped page; to list everything:
-  ```typescript
-  const { fetchAll } = await import('@/lib/paginate')
+- **Read methods ONLY.** Allowed: `getAll`, `getById`, `getAllRecords`, `queryRecordsById`, `getIncidents`. Never call `create`, `complete`, `assign`, `start`, `stop`, `resume`, `restart`, `insert*`, `update*`, `delete*`, `upload*`.
+- **Full listings: use `fetchAll` — never hand-write the cursor loop.**
+  ```ts
+  import { fetchAll } from '@/lib/paginate'
   return await fetchAll(cursor => svc.getAll({ pageSize: 200, cursor }))
   ```
-  Never write `let page: any` or copy a `hasNextPage`/`nextCursor` while-loop into a fnBody.
+- **Don't add your own request caching.** The scaffold wraps `fetch` (`src/lib/fetch-cache.ts`) so identical GET requests share one network call, cached ~15s. Call the SDK normally.
 
-**Presentation matters as much as the query.** A chart with the wrong headline or an empty subtitle reads as broken. For every chart metric set `headlineMode` + `deltaPolarity` + `subtitle`, and give it a record-grain `detailFnBody` + `detailColumns` so the drill-down shows real records, not the chart's buckets. For ratios (error rate, success rate) use `displayAs: "rate-chart"` with `rateNum`/`rateDen`. See `plugins/build/impl.md § Presentation fields` for the full schema and an example.
+### Time constants
 
-**Don't add your own request caching.** The scaffold wraps `fetch` (`src/lib/fetch-cache.ts`) so identical GET requests across all widgets share one network call and are cached ~15s — this prevents 429s when many widgets mount at once. Just call the SDK normally; results may be up to 15s stale, which is fine for a dashboard.
+Import from `@/lib/time` — do NOT redeclare them:
+`NOW`, `ONE_DAY_AGO`, `SEVEN_DAYS_AGO`, `THIRTY_DAYS_AGO`, `NINETY_DAYS_AGO` (all `Date` objects).
 
-Time constants (all `Date` objects, injected by build script):
-`NOW`, `ONE_DAY_AGO`, `SEVEN_DAYS_AGO`, `THIRTY_DAYS_AGO`, `NINETY_DAYS_AGO`
+### Drill-down detail
+
+For record-grain drill-downs: export `fetchDetail: MetricFn` in the same module AND set `"detail": true` on the metric in `intent.json`. If `detail` is absent, the detail view reuses `fetchData` (shows the chart's buckets — avoid for chart metrics).
+
+### Build type-check loop
+
+The build type-checks all `metrics/*.ts` modules in isolation (Stage A) before generating widgets.
+- `METRICS_PASS` — silent; build continues.
+- `METRICS_RETRY:{ files: [...], errors: [...] }` — fix the named `src/metrics/<name>.ts` file(s) and re-run. Max 2 attempts; if still failing, drop the metric. (This replaces any older retry mechanism — there is no `T3_RETRY`.)
 
 ---
 
 ## T1 — Catalog metrics with display hints
 
-The registry entry describes the metric and the expected SDK call. Use it as your guide, then write the correct `fnBody` from the SDK documentation.
+The registry entry describes the metric and expected SDK call. Use it as your guide, then write the correct `metrics/<name>.ts` module from the SDK documentation.
 
 | Metric name | What it shows | Registry template | SDK hint (≥ 1.4.0) |
 |-------------|--------------|-------------------|--------------------|
@@ -85,21 +110,34 @@ The registry entry describes the metric and the expected SDK call. Use it as you
 | `job-failures` | Faulted jobs | `data-table` | `new Jobs(sdk).getAll({ filter: "State eq 'Faulted'" })` → `{ items: [{processName, state, createdTime}] }` |
 | `job-completion-trend` | Completed jobs | `data-table` | `new Jobs(sdk).getAll({ filter: "State eq 'Successful'" })` → `{ items: [{processName, state, endTime}] }` |
 
-### T1 intent format
+### T1 intent entry (pure metadata)
 
 ```json
 {
   "name": "agent-memory-timeline",
   "tier": "T1",
-  "title": "Agent Memory",
-  "fnBody": "const { AgentMemory } = await import('@uipath/uipath-typescript/agent-memory')\nreturn await new AgentMemory(sdk as never).getTimeline({ startTime: THIRTY_DAYS_AGO, endTime: NOW })"
+  "title": "Agent Memory"
 }
 ```
 
 The registry fills in: `template: "area-chart"`, `xKey: "timeSlice"`, `yKey: "totalCount"`, `title` default, `icon`, `headlineMode`, `deltaPolarity`.
-You can override any of these in the intent.
+Override any of these in the intent entry.
+
+Corresponding module at `metrics/agent-memory-timeline.ts`:
+
+```ts
+import type { MetricFn } from '@/lib/metric-contract'
+import { THIRTY_DAYS_AGO, NOW } from '@/lib/time'
+
+export const fetchData: MetricFn = async (sdk) => {
+  const { AgentMemory } = await import('@uipath/uipath-typescript/agent-memory')
+  return await new AgentMemory(sdk as never).getTimeline({ startTime: THIRTY_DAYS_AGO, endTime: NOW })
+}
+```
 
 ### T1 kpi-card example (active agents)
+
+Intent entry:
 
 ```json
 {
@@ -108,8 +146,21 @@ You can override any of these in the intent.
   "title": "Active Agents",
   "displayAs": "kpi-card",
   "valueField": "count",
-  "valueLabel": "active agents",
-  "fnBody": "const { Agents } = await import('@uipath/uipath-typescript/agents')\nconst svc = new Agents(sdk as never)\nconst result = await svc.getAll(THIRTY_DAYS_AGO, NOW)\nreturn [{ count: result?.items?.length ?? 0 }]"
+  "valueLabel": "active agents"
+}
+```
+
+Module at `metrics/active-agents-kpi.ts`:
+
+```ts
+import type { MetricFn } from '@/lib/metric-contract'
+import { THIRTY_DAYS_AGO, NOW } from '@/lib/time'
+
+export const fetchData: MetricFn = async (sdk) => {
+  const { Agents } = await import('@uipath/uipath-typescript/agents')
+  const svc = new Agents(sdk as never)
+  const result = await svc.getAll(THIRTY_DAYS_AGO, NOW)
+  return [{ count: result?.items?.length ?? 0 }]
 }
 ```
 
@@ -117,7 +168,7 @@ You can override any of these in the intent.
 
 ## T2 — Parametric metrics (catalog with user filter)
 
-The agent incorporates the user's filter parameters directly into the `fnBody`.
+Incorporate user's filter parameters directly into the module.
 
 | Metric name | What it does | Params |
 |-------------|-------------|--------|
@@ -126,7 +177,7 @@ The agent incorporates the user's filter parameters directly into the `fnBody`.
 | `tasks-by-status` | Tasks by status | `{ value: "Pending" \| "Completed" }` |
 | `cases-running-above` | Cases exceeding threshold | `{ threshold: number, direction: "gt" }` |
 
-### T2 intent format
+### T2 intent entry (pure metadata)
 
 ```json
 {
@@ -135,20 +186,33 @@ The agent incorporates the user's filter parameters directly into the `fnBody`.
   "title": "Faulted Jobs",
   "params": { "value": "Faulted" },
   "displayAs": "data-table",
-  "columns": "[{key:\"processName\",label:\"Process\"},{key:\"state\",label:\"State\"},{key:\"createdTime\",label:\"Started\"}]",
-  "fnBody": "const { Jobs } = await import('@uipath/uipath-typescript/jobs')\nconst svc = new Jobs(sdk as never)\nreturn (await svc.getAll({ filter: \"State eq 'Faulted'\" }))?.items ?? []"
+  "columns": "[{key:\"processName\",label:\"Process\"},{key:\"state\",label:\"State\"},{key:\"createdTime\",label:\"Started\"}]"
 }
 ```
 
-The `params` field is documentation — the actual filter logic is in `fnBody`.
+`params` is documentation — the actual filter logic lives in the module.
+
+Module at `metrics/jobs-by-state.ts`:
+
+```ts
+import type { MetricFn } from '@/lib/metric-contract'
+
+export const fetchData: MetricFn = async (sdk) => {
+  const { Jobs } = await import('@uipath/uipath-typescript/jobs')
+  const svc = new Jobs(sdk as never)
+  return (await svc.getAll({ filter: "State eq 'Faulted'" }))?.items ?? []
+}
+```
 
 ---
 
 ## T3 — Custom metrics
 
-For any metric not in the catalog. You provide all display config and write the `fnBody` entirely from SDK documentation.
+For any metric not in the catalog. Provide all display config in the intent entry and write the module entirely from SDK documentation.
 
 ### T3 area chart from SDK data
+
+Intent entry:
 
 ```json
 {
@@ -157,12 +221,31 @@ For any metric not in the catalog. You provide all display config and write the 
   "title": "Faulted Jobs Over Time",
   "displayAs": "area-chart",
   "xKey": "date",
-  "yKey": "count",
-  "fnBody": "const { Jobs } = await import('@uipath/uipath-typescript/jobs')\nconst svc = new Jobs(sdk as never)\nconst result = await svc.getAll({ filter: \"State eq 'Faulted'\" })\nconst byDate: Record<string, number> = {}\nfor (const j of result?.items ?? []) {\n  const date = String(j.createdTime).slice(0, 10)\n  byDate[date] = (byDate[date] ?? 0) + 1\n}\nreturn Object.entries(byDate).sort().map(([date, count]) => ({ date, count }))"
+  "yKey": "count"
+}
+```
+
+Module at `metrics/faulted-jobs-trend.ts`:
+
+```ts
+import type { MetricFn } from '@/lib/metric-contract'
+
+export const fetchData: MetricFn = async (sdk) => {
+  const { Jobs } = await import('@uipath/uipath-typescript/jobs')
+  const svc = new Jobs(sdk as never)
+  const result = await svc.getAll({ filter: "State eq 'Faulted'" })
+  const byDate: Record<string, number> = {}
+  for (const j of result?.items ?? []) {
+    const date = String(j.createdTime).slice(0, 10)
+    byDate[date] = (byDate[date] ?? 0) + 1
+  }
+  return Object.entries(byDate).sort().map(([date, count]) => ({ date, count }))
 }
 ```
 
 ### T3 ranked table from Insights (governance denials grouped by actor)
+
+Intent entry:
 
 ```json
 {
@@ -170,12 +253,31 @@ For any metric not in the catalog. You provide all display config and write the 
   "tier": "T3",
   "title": "Denials by Actor",
   "displayAs": "ranked-table",
-  "columns": "[{key:\"name\",label:\"Actor\"},{key:\"count\",label:\"Denials\",align:\"right\" as const}]",
-  "fnBody": "const { Governance, PolicyEvaluationResult } = await import('@uipath/uipath-typescript/governance')\nconst result = await new Governance(sdk as never).getPolicyTraces(THIRTY_DAYS_AGO, { evaluationResult: [PolicyEvaluationResult.Deny] })\nconst byActor: Record<string, number> = {}\nfor (const t of result?.items ?? []) {\n  const actor = t.actorProcessId ?? 'unknown'\n  byActor[actor] = (byActor[actor] ?? 0) + 1\n}\nreturn Object.entries(byActor).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)"
+  "columns": "[{key:\"name\",label:\"Actor\"},{key:\"count\",label:\"Denials\",align:\"right\" as const}]"
+}
+```
+
+Module at `metrics/denials-by-actor.ts`:
+
+```ts
+import type { MetricFn } from '@/lib/metric-contract'
+import { THIRTY_DAYS_AGO } from '@/lib/time'
+
+export const fetchData: MetricFn = async (sdk) => {
+  const { Governance, PolicyEvaluationResult } = await import('@uipath/uipath-typescript/governance')
+  const result = await new Governance(sdk as never).getPolicyTraces(THIRTY_DAYS_AGO, { evaluationResult: [PolicyEvaluationResult.Deny] })
+  const byActor: Record<string, number> = {}
+  for (const t of result?.items ?? []) {
+    const actor = t.actorProcessId ?? 'unknown'
+    byActor[actor] = (byActor[actor] ?? 0) + 1
+  }
+  return Object.entries(byActor).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
 }
 ```
 
 ### T3 kpi-card
+
+Intent entry:
 
 ```json
 {
@@ -184,8 +286,64 @@ For any metric not in the catalog. You provide all display config and write the 
   "title": "Running Jobs",
   "displayAs": "kpi-card",
   "valueField": "count",
-  "valueLabel": "running jobs",
-  "fnBody": "const { Jobs } = await import('@uipath/uipath-typescript/jobs')\nconst svc = new Jobs(sdk as never)\nconst result = await svc.getAll({ filter: \"State eq 'Running'\" })\nreturn [{ count: result?.items?.length ?? 0 }]"
+  "valueLabel": "running jobs"
+}
+```
+
+Module at `metrics/running-jobs-count.ts`:
+
+```ts
+import type { MetricFn } from '@/lib/metric-contract'
+
+export const fetchData: MetricFn = async (sdk) => {
+  const { Jobs } = await import('@uipath/uipath-typescript/jobs')
+  const svc = new Jobs(sdk as never)
+  const result = await svc.getAll({ filter: "State eq 'Running'" })
+  return [{ count: result?.items?.length ?? 0 }]
+}
+```
+
+### T3 chart with drill-down detail
+
+Intent entry (note `"detail": true`):
+
+```json
+{
+  "name": "faulted-jobs-trend",
+  "tier": "T3",
+  "title": "Faulted Jobs",
+  "displayAs": "area-chart",
+  "xKey": "date",
+  "yKey": "count",
+  "headlineMode": "sum",
+  "deltaPolarity": "up-bad",
+  "subtitle": "Faulted jobs — last 7 days",
+  "detail": true,
+  "detailColumns": [
+    { "key": "processName", "label": "Process" },
+    { "key": "state", "label": "State" },
+    { "key": "createdTime", "label": "Started", "format": "timeAgo" }
+  ],
+  "detailSortKey": "createdTime"
+}
+```
+
+Module at `metrics/faulted-jobs-trend.ts` (exports both `fetchData` and `fetchDetail`):
+
+```ts
+import type { MetricFn } from '@/lib/metric-contract'
+
+export const fetchData: MetricFn = async (sdk) => {
+  const { Jobs } = await import('@uipath/uipath-typescript/jobs')
+  const rows = (await new Jobs(sdk as never).getAll({ filter: "State eq 'Faulted'" }))?.items ?? []
+  const byDate: Record<string, number> = {}
+  for (const j of rows) { const d = String(j.createdTime).slice(0, 10); byDate[d] = (byDate[d] ?? 0) + 1 }
+  return Object.entries(byDate).sort().map(([date, count]) => ({ date, count }))
+}
+
+export const fetchDetail: MetricFn = async (sdk) => {
+  const { Jobs } = await import('@uipath/uipath-typescript/jobs')
+  return (await new Jobs(sdk as never).getAll({ filter: "State eq 'Faulted'", orderby: 'CreationTime desc' }))?.items ?? []
 }
 ```
 
@@ -225,6 +383,6 @@ Full method signatures, response types, and field names live in `references/sdk/
 **Three calling conventions — don't mix them up:**
 - `Agents.getAll(startTime, endTime, options?)` — positional `Date` args, rows on `.items`
 - `AgentMemory.getTimeline({ startTime?, endTime?, … })` — ONE options object, dates inside, returns a **bare array**
-- `Governance.getPolicyTraces(startTime, options?)` — required positional `startTime`, rest in options, rows on `.items`; `getOperationSummary` returns a **single object** (wrap into rows in `fnBody`)
+- `Governance.getPolicyTraces(startTime, options?)` — required positional `startTime`, rest in options, rows on `.items`; `getOperationSummary` returns a **single object** (wrap into rows in the module)
 
 **Non-Insights services:** access items via `result?.items ?? result?.value ?? []`
