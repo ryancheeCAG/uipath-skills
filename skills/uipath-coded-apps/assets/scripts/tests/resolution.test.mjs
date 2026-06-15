@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { validateIntent, resolveMetric, buildWidgetFile, generateViewFile, compileColumns, emit, parseEvent, classifyEditIntent, resolveChangeMetric, widgetLayoutGroup, VALID_DISPLAY_TYPES, metricModuleSpecifier } from '../build-dashboard.mjs'
+import { validateIntent, resolveMetric, buildWidgetFile, generateViewFile, buildViewSpec, compileColumns, emit, parseEvent, classifyEditIntent, resolveChangeMetric, widgetLayoutGroup, VALID_DISPLAY_TYPES, metricModuleSpecifier } from '../build-dashboard.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REGISTRY_PATH = resolve(__dirname, '../capability-registry.json')
@@ -551,12 +551,13 @@ test('buildWidgetFile: every chart type generates with no leftover placeholders 
   }
 })
 
-test('generateViewFile: uses record-grain detailFnBody + compiled detailColumns', () => {
+test('generateViewFile: imports metric module and uses compiled detailColumns', () => {
   const view = generateViewFile({
     componentName: 'FaultedJobs',
     title: 'Faulted Jobs',
     subtitle: 'Last 30 days',
-    detailFnBody: "const { Jobs } = await import('@uipath/uipath-typescript/jobs')\nreturn (await new Jobs(sdk as never).getAll({ filter: \"State eq 'Faulted'\" }))?.items ?? []",
+    moduleSpecifier: '@/metrics/faulted-jobs',
+    detailExport: 'fetchData',
     detailColumns: compileColumns([
       { key: 'processName', label: 'Process' },
       { key: 'startTime', label: 'Started', format: 'timeAgo' },
@@ -564,7 +565,9 @@ test('generateViewFile: uses record-grain detailFnBody + compiled detailColumns'
     defaultSortKey: 'startTime',
   })
   assert.ok(view.includes('FaultedJobsView'))
-  assert.ok(view.includes('getAll'), 'record-grain fnBody not embedded')
+  assert.ok(view.includes("import { fetchData } from '@/metrics/faulted-jobs'"), 'metric import not present')
+  assert.ok(view.includes('useWidgetData(fetchData, [])'), 'useWidgetData call not present')
+  assert.ok(!view.includes('const customDataFn = async'), 'customDataFn must not appear')
   assert.ok(view.includes('fmtTimeAgo(String(v))'), 'formatted column not embedded')
   assert.ok(view.includes('defaultSortKey={"startTime"}'), 'explicit sort key not used')
   assert.ok(!view.includes('autoColumns(rows)') || view.includes('function autoColumns'), 'autoColumns only as fallback definition')
@@ -573,7 +576,9 @@ test('generateViewFile: uses record-grain detailFnBody + compiled detailColumns'
 test('generateViewFile: falls back to autoColumns when no detailColumns', () => {
   const view = generateViewFile({
     componentName: 'Trend', title: 'Trend', subtitle: '',
-    detailFnBody: 'return []', detailColumns: null,
+    moduleSpecifier: '@/metrics/trend',
+    detailExport: 'fetchData',
+    detailColumns: null,
   })
   assert.ok(view.includes('const columns = autoColumns(rows)'))
 })
@@ -645,13 +650,17 @@ test('harness: shell widget imports fetchData from metric module (no embedded cu
   assert.ok(!content.includes('const customDataFn = async'), 'shell must not embed customDataFn')
 })
 
-test('harness: detail view customDataFn signature accepts SDK-typed arrays', () => {
+test('harness: detail view imports metric module (no customDataFn, no Promise<any[]> wrapper)', () => {
   const view = generateViewFile({
     componentName: 'X', title: 'X', subtitle: '',
-    detailFnBody: 'return []', detailColumns: null,
+    moduleSpecifier: '@/metrics/x',
+    detailExport: 'fetchData',
+    detailColumns: null,
   })
-  assert.ok(view.includes('Promise<any[]>'))
-  assert.ok(!view.includes('Promise<Row[]>'))
+  assert.ok(view.includes("import { fetchData } from '@/metrics/x'"), 'metric import not present')
+  assert.ok(view.includes('useWidgetData(fetchData, [])'), 'useWidgetData call not present')
+  assert.ok(!view.includes('const customDataFn = async'), 'customDataFn must not appear')
+  assert.ok(!view.includes('Promise<any[]>'), 'old Promise<any[]> wrapper must be gone')
 })
 
 // ── Incremental edit: change-merge + layout grouping ──────────────────────────
@@ -743,5 +752,14 @@ test('buildWidgetFile (kpi/table) imports fetchData and has no embedded customDa
   )
   assert.match(out, /import \{ fetchData \} from '@\/metrics\/job-failures'/)
   assert.match(out, /fetchData\(sdk, getToken\)/)
+  assert.doesNotMatch(out, /const customDataFn = async/)
+})
+
+test('generateViewFile imports the metric module detail/data export', () => {
+  const spec = buildViewSpec('MemoryCallsTrend',
+    { name: 'memory-calls-trend', tier: 'T1', title: 'Memory Calls', displayAs: 'area-chart' },
+    null, '30d')
+  const out = generateViewFile(spec)
+  assert.match(out, /import \{ (fetchData|fetchDetail) \} from '@\/metrics\/memory-calls-trend'/)
   assert.doesNotMatch(out, /const customDataFn = async/)
 })

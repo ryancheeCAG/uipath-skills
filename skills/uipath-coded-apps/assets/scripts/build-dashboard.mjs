@@ -139,13 +139,6 @@ const TIME_RANGE_CONSTANTS = {
   '90d': 'NINETY_DAYS_AGO',
 }
 
-const TIME_CONSTANTS = `const NOW = new Date()
-const ONE_DAY_AGO = new Date(Date.now() - 86_400_000)
-const SEVEN_DAYS_AGO = new Date(Date.now() - 604_800_000)
-const THIRTY_DAYS_AGO = new Date(Date.now() - 2_592_000_000)
-const NINETY_DAYS_AGO = new Date(Date.now() - 7_776_000_000)
-`
-
 const KNOWN_EVENTS = new Set([
   'PREWARM_START', 'PREWARM_DONE', 'PREWARM_FAILED', 'SCAFFOLD_READY', 'ENV_WRITTEN',
   'WIDGET_READY', 'T3_RETRY', 'T3_FAILED', 'TSC_PASS', 'TSC_FAIL',
@@ -387,13 +380,12 @@ function applyTemplate(templateName, subs) {
  * `defaultSortKey` keys the initial sort on the raw field (e.g. an ISO timestamp)
  * so chronological order is correct even when a column renders a friendly label.
  *
- * @param {{ componentName: string, title: string, subtitle?: string, detailFnBody: string, detailColumns?: string|null, defaultSortKey?: string }} widget
+ * @param {{ componentName: string, title: string, subtitle?: string, moduleSpecifier: string, detailExport: string, detailColumns?: string|null, defaultSortKey?: string }} widget
  * @returns {string} Full TypeScript file content
  */
 export function generateViewFile(widget) {
-  const { componentName, title, subtitle = '', detailFnBody, detailColumns, defaultSortKey } = widget
+  const { componentName, title, subtitle = '', moduleSpecifier, detailExport, detailColumns, defaultSortKey } = widget
 
-  const indentedFn = detailFnBody.split('\n').map(l => '  ' + l).join('\n')
   const columnsExpr = detailColumns ? detailColumns : 'autoColumns(rows)'
   const sortKeyExpr = defaultSortKey ? JSON.stringify(defaultSortKey) : '(columns[0]?.key as string)'
 
@@ -404,17 +396,9 @@ import { useWidgetData } from '@/hooks/useWidgetData'
 import { LoadingState, EmptyState } from '@/dashboard/chrome'
 import { fmtNumber, fmtPercent, fmtDuration, fmtTimeAgo } from '@/lib/format'
 import { toneClass } from '@/lib/widget'
-
-${TIME_CONSTANTS.trimEnd()}
+import { ${detailExport} } from '${moduleSpecifier}'
 
 type Row = Record<string, unknown>
-
-// ── Detail data function (record grain — individual records behind the chart) ──
-// Promise<any[]>: SDK response interfaces lack index signatures — see widget shell.
-const customDataFn = async (sdk: any, getToken: () => Promise<string>): Promise<any[]> => {
-${indentedFn}
-}
-// ─────────────────────────────────────────────────────────────────────────────
 
 /** Auto-detect columns from the first row when explicit detailColumns aren't given. */
 function autoColumns(rows: Row[]): ColumnDef<Row>[] {
@@ -429,7 +413,7 @@ function autoColumns(rows: Row[]): ColumnDef<Row>[] {
 }
 
 export function ${componentName}View() {
-  const { data, loading, error } = useWidgetData(customDataFn, [])
+  const { data, loading, error } = useWidgetData(${detailExport}, [])
 
   /** Safely extract a row array from any response shape */
   function toRows(raw: unknown): Row[] {
@@ -723,7 +707,8 @@ export function buildViewSpec(componentName, metric, entry, timeRange) {
     componentName,
     title: metric.title ?? entry?.defaults?.title ?? componentName,
     subtitle: autoSubtitle(metric, entry?.defaults ?? {}, timeRange),
-    detailFnBody: metric.detailFnBody ?? metric.fnBody,
+    moduleSpecifier: metricModuleSpecifier(metric),
+    detailExport: metric.detail === true ? 'fetchDetail' : 'fetchData',
     detailColumns: metric.detailColumns ? compileColumns(metric.detailColumns) : null,
     defaultSortKey: metric.detailSortKey,
   }
