@@ -363,17 +363,6 @@ function applyTemplate(templateName, subs) {
     content = content.split(`<${key}>`).join(value)
   }
 
-  // Inject time constants after the last import line
-  const lines = content.split('\n')
-  let lastImportIdx = -1
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].startsWith('import ')) lastImportIdx = i
-  }
-  if (lastImportIdx >= 0) {
-    lines.splice(lastImportIdx + 1, 0, '', TIME_CONSTANTS.trimEnd())
-    content = lines.join('\n')
-  }
-
   // Detect unresolved placeholders — a remaining <UPPER_CASE> token means a
   // placeholder was in the template but not supplied in the substitution map.
   // Fail loudly now rather than generating broken TypeScript that confuses tsc.
