@@ -583,14 +583,14 @@ export function injectAppRoutes(projectPath, viewWidgetNames) {
  */
 export function validateIntent(intent) {
   const errors = []
+  if (intent.schemaVersion !== 2) errors.push('intent.json must have "schemaVersion": 2')
   if (!intent.dashboardName || typeof intent.dashboardName !== 'string') errors.push('dashboardName must be a non-empty string')
   if (!['1d', '7d', '30d', '90d'].includes(intent.timeRange)) errors.push(`timeRange must be one of: 1d, 7d, 30d, 90d`)
   if (!Array.isArray(intent.metrics) || intent.metrics.length === 0) errors.push('metrics must be a non-empty array')
   for (const m of (intent.metrics ?? [])) {
-    if (!m.name) errors.push('metric missing name')
+    if (!m.name) errors.push(`metric ${JSON.stringify(m.title ?? m)} missing name (needed to resolve its metrics/<name>.ts module)`)
     if (!['T1', 'T2', 'T3'].includes(m.tier)) errors.push(`metric "${m.name}" has invalid tier: ${m.tier}`)
     if (m.tier === 'T1' || m.tier === 'T2') {
-      if (!m.fnBody) errors.push(`${m.tier} metric "${m.name}" missing fnBody — agent must write the SDK call from documentation`)
       if (!m.title)  errors.push(`${m.tier} metric "${m.name}" missing title`)
     }
     if (m.tier === 'T2') {
@@ -600,8 +600,7 @@ export function validateIntent(intent) {
     }
     if (m.tier === 'T3') {
       if (!m.title) errors.push(`T3 metric "${m.name}" missing title`)
-      if (!m.fnBody) errors.push(`T3 metric "${m.name}" missing fnBody — write an async function body using SDK service classes`)
-      if (!m.displayAs) errors.push(`T3 metric "${m.name}" with fnBody needs displayAs — valid values: ${VALID_DISPLAY_TYPES.join(', ')}`)
+      if (!m.displayAs) errors.push(`T3 metric "${m.name}" needs displayAs — valid values: ${VALID_DISPLAY_TYPES.join(', ')}`)
       else if (!VALID_DISPLAY_TYPES.includes(m.displayAs)) {
         errors.push(`T3 metric "${m.name}" has unsupported displayAs "${m.displayAs}". Valid: ${VALID_DISPLAY_TYPES.join(', ')}`)
       }
@@ -626,6 +625,18 @@ export function validateIntent(intent) {
     }
   }
   return errors
+}
+
+/**
+ * The module specifier a generated widget imports its data function from.
+ * Default convention: metrics/<metric-name>.ts → '@/metrics/<metric-name>'.
+ * An explicit `module` field (e.g. "metrics/custom.ts") overrides; the .ts is stripped.
+ * @param {{ name: string, module?: string }} metric
+ * @returns {string}
+ */
+export function metricModuleSpecifier(metric) {
+  const rel = metric.module ?? `metrics/${metric.name}.ts`
+  return '@/' + rel.replace(/\.ts$/, '')
 }
 
 /**

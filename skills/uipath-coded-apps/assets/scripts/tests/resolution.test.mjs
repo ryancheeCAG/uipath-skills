@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { validateIntent, resolveMetric, buildWidgetFile, generateViewFile, compileColumns, emit, parseEvent, classifyEditIntent, resolveChangeMetric, widgetLayoutGroup, VALID_DISPLAY_TYPES } from '../build-dashboard.mjs'
+import { validateIntent, resolveMetric, buildWidgetFile, generateViewFile, compileColumns, emit, parseEvent, classifyEditIntent, resolveChangeMetric, widgetLayoutGroup, VALID_DISPLAY_TYPES, metricModuleSpecifier } from '../build-dashboard.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REGISTRY_PATH = resolve(__dirname, '../capability-registry.json')
@@ -119,55 +119,55 @@ test('hardRefuse does not collide with valid T1 aliases', () => {
 
 test('validateIntent: valid T1 intent passes', () => {
   const errors = validateIntent({
-    dashboardName: 'My Dashboard',
+    schemaVersion: 2, dashboardName: 'My Dashboard',
     timeRange: '30d',
-    metrics: [{ name: 'agent-memory-timeline', tier: 'T1', title: 'Agent Memory', fnBody: 'return []' }]
+    metrics: [{ name: 'agent-memory-timeline', tier: 'T1', title: 'Agent Memory' }]
   })
   assert.deepEqual(errors, [])
 })
 
-test('validateIntent: rejects T1 metric without fnBody', () => {
+test('validateIntent: T1 metric without fnBody is valid (fnBody no longer required in v2)', () => {
   const errors = validateIntent({
-    dashboardName: 'x', timeRange: '30d',
+    schemaVersion: 2, dashboardName: 'x', timeRange: '30d',
     metrics: [{ name: 'agent-memory-timeline', tier: 'T1', title: 'Agent Memory' }]
   })
-  assert.ok(errors.some(e => e.includes('T1') && e.includes('fnBody')))
+  assert.deepEqual(errors, [])
 })
 
 test('validateIntent: rejects T1 metric without title', () => {
   const errors = validateIntent({
-    dashboardName: 'x', timeRange: '30d',
-    metrics: [{ name: 'agent-memory-timeline', tier: 'T1', fnBody: 'return []' }]
+    schemaVersion: 2, dashboardName: 'x', timeRange: '30d',
+    metrics: [{ name: 'agent-memory-timeline', tier: 'T1' }]
   })
   assert.ok(errors.some(e => e.includes('T1') && e.includes('title')))
 })
 
-test('validateIntent: rejects T2 metric without fnBody', () => {
+test('validateIntent: T2 metric without fnBody is valid (fnBody no longer required in v2)', () => {
   const errors = validateIntent({
-    dashboardName: 'x', timeRange: '7d',
+    schemaVersion: 2, dashboardName: 'x', timeRange: '7d',
     metrics: [{ name: 'jobs-by-state', tier: 'T2', title: 'Jobs', params: { value: 'Faulted' } }]
   })
-  assert.ok(errors.some(e => e.includes('T2') && e.includes('fnBody')))
+  assert.deepEqual(errors, [])
 })
 
 test('validateIntent: rejects missing dashboardName', () => {
-  const errors = validateIntent({ timeRange: '30d', metrics: [{ name: 'x', tier: 'T1' }] })
+  const errors = validateIntent({ schemaVersion: 2, timeRange: '30d', metrics: [{ name: 'x', tier: 'T1' }] })
   assert.ok(errors.some(e => e.includes('dashboardName')))
 })
 
 test('validateIntent: rejects invalid timeRange', () => {
-  const errors = validateIntent({ dashboardName: 'x', timeRange: '2w', metrics: [{ name: 'x', tier: 'T1' }] })
+  const errors = validateIntent({ schemaVersion: 2, dashboardName: 'x', timeRange: '2w', metrics: [{ name: 'x', tier: 'T1' }] })
   assert.ok(errors.some(e => e.includes('timeRange')))
 })
 
 test('validateIntent: rejects T2 metric without params', () => {
-  const errors = validateIntent({ dashboardName: 'x', timeRange: '7d', metrics: [{ name: 'queue-failure-threshold', tier: 'T2' }] })
+  const errors = validateIntent({ schemaVersion: 2, dashboardName: 'x', timeRange: '7d', metrics: [{ name: 'queue-failure-threshold', tier: 'T2' }] })
   assert.ok(errors.some(e => e.includes('T2') && e.includes('params')))
 })
 
-test('validateIntent: rejects T3 metric without fnBody', () => {
-  const errors = validateIntent({ dashboardName: 'x', timeRange: '7d', metrics: [{ name: 'custom', tier: 'T3', displayAs: 'ranked-table', title: 'Custom' }] })
-  assert.ok(errors.some(e => e.includes('T3') && e.includes('fnBody')))
+test('validateIntent: T3 metric without fnBody is valid when displayAs and title present (v2 contract)', () => {
+  const errors = validateIntent({ schemaVersion: 2, dashboardName: 'x', timeRange: '7d', metrics: [{ name: 'custom', tier: 'T3', displayAs: 'ranked-table', title: 'Custom' }] })
+  assert.deepEqual(errors, [])
 })
 
 // ── resolveMetric tests ───────────────────────────────────────────────────────
@@ -413,8 +413,8 @@ test('VALID_DISPLAY_TYPES includes all chart and table types', () => {
 test('validateIntent: accepts T3-SDK with chart displayAs (area-chart, line-chart, bar-chart, donut-chart)', () => {
   for (const chartType of ['area-chart', 'line-chart', 'bar-chart', 'donut-chart']) {
     const errors = validateIntent({
-      dashboardName: 'x', timeRange: '7d',
-      metrics: [{ name: 'custom', tier: 'T3', title: 'X', fnBody: 'return []', displayAs: chartType }]
+      schemaVersion: 2, dashboardName: 'x', timeRange: '7d',
+      metrics: [{ name: 'custom', tier: 'T3', title: 'X', displayAs: chartType }]
     })
     assert.deepEqual(errors, [], `${chartType} should be valid for T3-SDK`)
   }
@@ -422,16 +422,16 @@ test('validateIntent: accepts T3-SDK with chart displayAs (area-chart, line-char
 
 test('validateIntent: rejects T3-SDK with truly unsupported displayAs', () => {
   const errors = validateIntent({
-    dashboardName: 'x', timeRange: '7d',
-    metrics: [{ name: 'custom', tier: 'T3', title: 'X', fnBody: 'return []', displayAs: 'unknown-widget' }]
+    schemaVersion: 2, dashboardName: 'x', timeRange: '7d',
+    metrics: [{ name: 'custom', tier: 'T3', title: 'X', displayAs: 'unknown-widget' }]
   })
   assert.ok(errors.some(e => e.includes('unsupported displayAs')))
 })
 
 test('validateIntent: accepts T3-SDK with ranked-table displayAs', () => {
   const errors = validateIntent({
-    dashboardName: 'x', timeRange: '7d',
-    metrics: [{ name: 'custom', tier: 'T3', title: 'X', fnBody: 'return []', displayAs: 'ranked-table' }]
+    schemaVersion: 2, dashboardName: 'x', timeRange: '7d',
+    metrics: [{ name: 'custom', tier: 'T3', title: 'X', displayAs: 'ranked-table' }]
   })
   assert.deepEqual(errors, [])
 })
@@ -500,40 +500,40 @@ test('compileColumns: compiles an array with format/color into render fns', () =
 
 test('validateIntent: rejects invalid headlineMode', () => {
   const errors = validateIntent({
-    dashboardName: 'x', timeRange: '7d',
-    metrics: [{ name: 'm', tier: 'T3', title: 'M', displayAs: 'line-chart', fnBody: 'return []', headlineMode: 'median' }],
+    schemaVersion: 2, dashboardName: 'x', timeRange: '7d',
+    metrics: [{ name: 'm', tier: 'T3', title: 'M', displayAs: 'line-chart', headlineMode: 'median' }],
   })
   assert.ok(errors.some(e => e.includes('headlineMode')))
 })
 
 test('validateIntent: rejects invalid deltaPolarity', () => {
   const errors = validateIntent({
-    dashboardName: 'x', timeRange: '7d',
-    metrics: [{ name: 'm', tier: 'T3', title: 'M', displayAs: 'line-chart', fnBody: 'return []', deltaPolarity: 'sideways' }],
+    schemaVersion: 2, dashboardName: 'x', timeRange: '7d',
+    metrics: [{ name: 'm', tier: 'T3', title: 'M', displayAs: 'line-chart', deltaPolarity: 'sideways' }],
   })
   assert.ok(errors.some(e => e.includes('deltaPolarity')))
 })
 
 test('validateIntent: rate-chart requires rateNum + rateDen', () => {
   const errors = validateIntent({
-    dashboardName: 'x', timeRange: '7d',
-    metrics: [{ name: 'm', tier: 'T3', title: 'M', displayAs: 'rate-chart', fnBody: 'return []' }],
+    schemaVersion: 2, dashboardName: 'x', timeRange: '7d',
+    metrics: [{ name: 'm', tier: 'T3', title: 'M', displayAs: 'rate-chart' }],
   })
   assert.ok(errors.some(e => e.includes('rateNum')))
 })
 
 test('validateIntent: accepts valid presentation hints', () => {
   const errors = validateIntent({
-    dashboardName: 'x', timeRange: '30d',
-    metrics: [{ name: 'm', tier: 'T3', title: 'M', displayAs: 'line-chart', fnBody: 'return []', headlineMode: 'avg', deltaPolarity: 'up-bad' }],
+    schemaVersion: 2, dashboardName: 'x', timeRange: '30d',
+    metrics: [{ name: 'm', tier: 'T3', title: 'M', displayAs: 'line-chart', headlineMode: 'avg', deltaPolarity: 'up-bad' }],
   })
   assert.deepEqual(errors, [])
 })
 
 test('validateIntent: rejects detailColumns entry with bad format', () => {
   const errors = validateIntent({
-    dashboardName: 'x', timeRange: '30d',
-    metrics: [{ name: 'm', tier: 'T3', title: 'M', displayAs: 'line-chart', fnBody: 'return []', detailColumns: [{ key: 'd', label: 'D', format: 'bogus' }] }],
+    schemaVersion: 2, dashboardName: 'x', timeRange: '30d',
+    metrics: [{ name: 'm', tier: 'T3', title: 'M', displayAs: 'line-chart', detailColumns: [{ key: 'd', label: 'D', format: 'bogus' }] }],
   })
   assert.ok(errors.some(e => e.includes('invalid format')))
 })
@@ -692,4 +692,30 @@ test('1.4.0: governance-verdicts donut uses name/value keys from defaults', () =
   )
   assert.ok(content.includes('dataKey="value"'))
   assert.ok(content.includes('nameKey="name"'))
+})
+
+// ── metricModuleSpecifier tests ───────────────────────────────────────────────
+
+test('metricModuleSpecifier derives @/metrics/<name> by default', () => {
+  assert.equal(metricModuleSpecifier({ name: 'agent-health' }), '@/metrics/agent-health')
+})
+
+test('metricModuleSpecifier honors explicit module field and strips .ts', () => {
+  assert.equal(metricModuleSpecifier({ name: 'x', module: 'metrics/custom-thing.ts' }), '@/metrics/custom-thing')
+})
+
+test('validateIntent accepts a metadata-only metric (no fnBody)', () => {
+  const errors = validateIntent({
+    schemaVersion: 2, dashboardName: 'D', timeRange: '30d',
+    metrics: [{ name: 'agent-health', tier: 'T1', title: 'Agent Health', displayAs: 'ranked-table' }],
+  })
+  assert.deepEqual(errors, [])
+})
+
+test('validateIntent rejects intent missing schemaVersion 2', () => {
+  const errors = validateIntent({
+    dashboardName: 'D', timeRange: '30d',
+    metrics: [{ name: 'm', tier: 'T3', title: 'M', displayAs: 'kpi-card' }],
+  })
+  assert.ok(errors.some(e => /schemaVersion/.test(e)))
 })
