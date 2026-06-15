@@ -1144,9 +1144,10 @@ export function classifyEditIntent(editIntent) {
 
 /**
  * Build the metric used to regenerate a widget for a CHANGE op.
- * Starts from the persisted intentMetric (full fnBody/title/hints) and merges
+ * Starts from the persisted intentMetric (full metadata: title/displayAs/hints) and merges
  * the delta on top. Falls back to a minimal ref for legacy state files that
- * predate intentMetric persistence — then the delta itself must carry fnBody + title.
+ * predate intentMetric persistence — then the delta itself must carry title + displayAs.
+ * The data-fetch code lives in the metric module on disk (resolved by name); it is not part of this ref.
  * @param {object|undefined} stored - state.widgets[target]
  * @param {string} target - widget component name
  * @param {object|undefined} delta - fields to change
@@ -1155,6 +1156,25 @@ export function classifyEditIntent(editIntent) {
 export function resolveChangeMetric(stored, target, delta) {
   const base = stored?.intentMetric ?? { name: stored?.metric ?? target.toLowerCase(), tier: stored?.tier ?? 'T1' }
   return { ...base, ...(delta ?? {}) }
+}
+
+/**
+ * Copy a metric's module file from the edit's sibling `metrics/` dir into the
+ * project's `src/metrics/`. Returns true if a file was copied, false if the edit
+ * supplied none (CHANGE may legitimately supply none — the existing module stays).
+ * @param {string} intentDir - directory containing the edit-intent.json
+ * @param {string} projectPath
+ * @param {{ name: string, module?: string }} metric
+ * @returns {boolean}
+ */
+function copyMetricModule(intentDir, projectPath, metric) {
+  const rel = metric.module ?? `metrics/${metric.name}.ts`
+  const fromPath = join(intentDir, rel)
+  if (!existsSync(fromPath)) return false
+  const destDir = join(projectPath, 'src', 'metrics')
+  mkdirSync(destDir, { recursive: true })
+  copyFileSync(fromPath, join(destDir, basename(rel)))
+  return true
 }
 
 /**
@@ -1170,6 +1190,7 @@ async function runIncrementalEdit(editIntent, intentPath) {
   const { projectDir } = editIntent
   if (!projectDir) fail('edit-intent.projectDir is required')
   const P = resolve(projectDir)
+  const intentDir = dirname(intentPath)
   const statePath = join(P, '.dashboard', 'state.json')
   if (!existsSync(statePath)) fail('No .dashboard/state.json found. Run a fresh build first.')
   const state = JSON.parse(readFileSync(statePath, 'utf8'))
@@ -1193,14 +1214,21 @@ async function runIncrementalEdit(editIntent, intentPath) {
       }
       if (o.op === 'CHANGE') {
         const metricRef = resolveChangeMetric(stored, o.target, o.delta)
-        if (!metricRef.fnBody) {
-          violations.push(`ops[${i}] CHANGE "${o.target}": no fnBody available — include the full metric (fnBody, title) in the delta, or re-run a fresh build`)
+        const rel = metricRef.module ?? `metrics/${metricRef.name}.ts`
+        const provided = existsSync(join(intentDir, rel))
+        const existing = existsSync(join(P, 'src', 'metrics', basename(rel)))
+        if (!provided && !existing) {
+          violations.push(`ops[${i}] CHANGE "${o.target}": no metric module found — provide metrics/${metricRef.name}.ts in the edit, or re-run a fresh build`)
         }
       }
     }
     if (o.op === 'ADD') {
       if (!o.metric?.name) { violations.push(`ops[${i}] ADD: missing metric`); continue }
       try { resolveMetric(o.metric) } catch (e) { violations.push(`ops[${i}] ADD "${o.metric.name}": ${e.message}`) }
+      const rel = o.metric.module ?? `metrics/${o.metric.name}.ts`
+      if (!existsSync(join(intentDir, rel))) {
+        violations.push(`ops[${i}] ADD "${o.metric.name}": metric module not found — write ${rel} exporting "fetchData"`)
+      }
     }
   }
   if (violations.length > 0) {
@@ -1214,12 +1242,13 @@ async function runIncrementalEdit(editIntent, intentPath) {
   if (op === 'ADD') {
     const { tier, entry } = resolveMetric(metric)
     const componentName = metric.componentName ?? toPascalCase(metric.name)
+    copyMetricModule(intentDir, P, metric)
     const widgetContent = buildWidgetFile(metric, entry, timeRange)
     const addTemplate = metric.displayAs ?? entry?.template ?? 'data-table'
     const widgetPath = join(P, 'src', 'dashboard', 'widgets', `${componentName}.tsx`)
     writeAtomic(widgetPath, widgetContent)
     state.widgets = state.widgets ?? {}
-    state.widgets[componentName] = { hash: hashContent(widgetContent), tier, metric: metric.name, template: addTemplate, intentMetric: metric }
+    state.widgets[componentName] = { hash: hashContent(widgetContent), tier, metric: metric.name, template: addTemplate, module: metric.module ?? `metrics/${metric.name}.ts`, intentMetric: metric }
     // Chart widgets emit a drill-down link — generate the detail view so the route resolves
     if (widgetLayoutGroup(addTemplate) === 'chart') {
       const viewContent = generateViewFile(buildViewSpec(componentName, metric, entry, timeRange))
@@ -1227,22 +1256,27 @@ async function runIncrementalEdit(editIntent, intentPath) {
     }
 
   } else if (op === 'REMOVE') {
+    const stored = state.widgets?.[target]
     const widgetPath = join(P, 'src', 'dashboard', 'widgets', `${target}.tsx`)
     if (existsSync(widgetPath)) unlinkSync(widgetPath)
     const viewPath = join(P, 'src', 'dashboard', 'views', `${target}View.tsx`)
     if (existsSync(viewPath)) unlinkSync(viewPath)
+    const moduleRel = stored?.module ?? `metrics/${stored?.metric ?? target.toLowerCase()}.ts`
+    const modulePath = join(P, 'src', 'metrics', basename(moduleRel))
+    if (existsSync(modulePath)) unlinkSync(modulePath)
     if (state.widgets) delete state.widgets[target]
 
   } else if (op === 'CHANGE') {
     const widgetPath = join(P, 'src', 'dashboard', 'widgets', `${target}.tsx`)
     const stored = state.widgets?.[target]
     const metricRef = resolveChangeMetric(stored, target, delta)
+    copyMetricModule(intentDir, P, metricRef)
     const tier = metricRef.tier ?? stored?.tier ?? 'T1'
     const { entry } = resolveMetric(metricRef)
     const widgetContent = buildWidgetFile(metricRef, entry, delta?.timeRange ?? timeRange)
     writeAtomic(widgetPath, widgetContent)
     const changeTemplate = metricRef.displayAs ?? entry?.template ?? stored?.template ?? 'data-table'
-    if (state.widgets) state.widgets[target] = { hash: hashContent(widgetContent), tier, metric: metricRef.name, template: changeTemplate, intentMetric: metricRef }
+    if (state.widgets) state.widgets[target] = { hash: hashContent(widgetContent), tier, metric: metricRef.name, template: changeTemplate, module: metricRef.module ?? `metrics/${metricRef.name}.ts`, intentMetric: metricRef }
     // Keep the detail view in sync: regenerate for charts, drop it if no longer a chart
     const changeViewPath = join(P, 'src', 'dashboard', 'views', `${target}View.tsx`)
     if (widgetLayoutGroup(changeTemplate) === 'chart') {
@@ -1257,7 +1291,7 @@ async function runIncrementalEdit(editIntent, intentPath) {
     // Useful after scaffold/template updates. Legacy entries without intentMetric are skipped.
     for (const [componentName, info] of Object.entries(state.widgets ?? {})) {
       const m = info.intentMetric
-      if (!m?.fnBody) {
+      if (!m) {
         log(`⚠ Cannot rebuild "${componentName}" — built before intent persistence. Re-run a fresh build to refresh it.`)
         continue
       }
@@ -1289,6 +1323,14 @@ async function runIncrementalEdit(editIntent, intentPath) {
     existsSync(join(P, 'src', 'dashboard', 'views', `${name}View.tsx`))
   )
   injectAppRoutes(P, viewNames)
+
+  // Stage A — re-type-check metric modules in isolation after the batch.
+  const stageA = runMetricsTypecheck(P)
+  if (!stageA.ok) {
+    emit('METRICS_RETRY', { files: stageA.files, errors: stageA.errors, intentPath })
+    log(`⚠ Metric modules have TypeScript errors. Fix the named files in ${join(P, 'src', 'metrics')} and re-run.`)
+    process.exit(2)
+  }
 
   // tsc validate
   try {

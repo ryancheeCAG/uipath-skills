@@ -665,28 +665,30 @@ test('harness: detail view imports metric module (no customDataFn, no Promise<an
 
 // ── Incremental edit: change-merge + layout grouping ──────────────────────────
 
-test('resolveChangeMetric: timeRange-only delta keeps persisted fnBody/title', () => {
+test('resolveChangeMetric: timeRange-only delta keeps persisted metadata', () => {
   const stored = {
     tier: 'T1', metric: 'memory-calls-trend', template: 'area-chart',
-    intentMetric: { name: 'memory-calls-trend', tier: 'T1', title: 'Memory Calls', fnBody: 'return await x()' },
+    intentMetric: { name: 'memory-calls-trend', tier: 'T1', title: 'Memory Calls', displayAs: 'area-chart' },
   }
   const merged = resolveChangeMetric(stored, 'MemoryCallsTrend', { timeRange: '7d' })
-  assert.equal(merged.fnBody, 'return await x()')
   assert.equal(merged.title, 'Memory Calls')
+  assert.equal(merged.displayAs, 'area-chart')
   assert.equal(merged.timeRange, '7d')
 })
 
 test('resolveChangeMetric: delta fields override persisted intentMetric', () => {
-  const stored = { intentMetric: { name: 'm', tier: 'T3', title: 'Old', displayAs: 'area-chart', fnBody: 'old' } }
-  const merged = resolveChangeMetric(stored, 'M', { fnBody: 'new', displayAs: 'data-table' })
-  assert.equal(merged.fnBody, 'new')
+  const stored = { intentMetric: { name: 'm', tier: 'T3', title: 'Old', displayAs: 'area-chart' } }
+  const merged = resolveChangeMetric(stored, 'M', { displayAs: 'data-table', module: 'metrics/m.ts' })
   assert.equal(merged.displayAs, 'data-table')
+  assert.equal(merged.module, 'metrics/m.ts')
   assert.equal(merged.title, 'Old')
 })
 
-test('resolveChangeMetric: legacy state without intentMetric yields no fnBody', () => {
+test('resolveChangeMetric: legacy state without intentMetric yields a minimal ref', () => {
   const merged = resolveChangeMetric({ tier: 'T1', metric: 'job-failures' }, 'JobFailures', { timeRange: '7d' })
-  assert.equal(merged.fnBody, undefined)
+  assert.equal(merged.name, 'job-failures')
+  assert.equal(merged.tier, 'T1')
+  assert.equal(merged.title, undefined)
 })
 
 test('widgetLayoutGroup: classifies only buildable types', () => {
@@ -762,4 +764,14 @@ test('generateViewFile imports the metric module detail/data export', () => {
   const out = generateViewFile(spec)
   assert.match(out, /import \{ (fetchData|fetchDetail) \} from '@\/metrics\/memory-calls-trend'/)
   assert.doesNotMatch(out, /const customDataFn = async/)
+})
+
+test('classifyEditIntent ADD carries metric metadata without fnBody', () => {
+  const plan = classifyEditIntent({
+    projectDir: '/p',
+    ops: [{ op: 'ADD', metric: { name: 'agent-health', tier: 'T1', title: 'Agent Health', displayAs: 'ranked-table' } }],
+  })
+  assert.equal(plan.ops[0].op, 'ADD')
+  assert.equal(plan.ops[0].metric.name, 'agent-health')
+  assert.equal(plan.ops[0].metric.fnBody, undefined)
 })
