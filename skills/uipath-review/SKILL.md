@@ -32,7 +32,7 @@ Review UiPath solutions and individual artifacts for structural validity, qualit
 10. **Rule findings are authoritative as emitted.** Carry review-CLI findings (`Data.Issues[]`) into the report verbatim — `RuleId`, `Severity`, `Description`, `File`, `SuggestedFix` unchanged. For the judgment catalog, use its `rule_id`, `severity`, `trigger`, and `suggested_fix` verbatim. Map severity to the report's bands: `error` → Critical, `warning` → Warning, `info` → Info. `judgment` severity rows default to Warning; the agent may escalate or de-escalate with reasoning logged in the finding's `description`. Do not re-rank otherwise.
 11. **Report rules that could not be applied** (missing tooling, missing file, review CLI unavailable, `status: deferred`) in a dedicated "Rules Skipped" subsection of the report — never silently skip.
 12. **Never invent `rule_id` values.** Every `rule_id` cited in the report MUST appear verbatim in EITHER a loaded judgment-catalog file (`references/agents/agents-*-rules.md`) OR the `uip agent review` / `uip codedagent review` JSON output. `rule_id` is a stable contract identifier — consumers grep for it, dashboards aggregate by it, audits trace it. An invented identifier looks authoritative but cannot be looked up, doesn't aggregate, and produces a different name for the same observation on the next run. If you observe a real issue covered by neither source, the finding is still valid — report it as a normal Critical / Warning / Info finding **without** a `rule_id` (no `` `RULE_ID` `` backtick token in the line). **Before emitting the report, scan every cited `rule_id` and confirm it appears verbatim in a loaded catalog file or the review-CLI output; demote any that don't to `rule_id`-less findings.**
-13. **Grade every agent project by the rubric — derived, never asserted.** For **agent projects** (phase 1), produce a letter grade (`A`/`B`/`C`/`D`/`F`, no `+`/`-`) per agent and overall, computed in Step 4.5 as `min(G_det, G_jud)`. G_det comes from deterministic findings (Step 2 `agent validate` + 2.5a review CLI); G_jud from judgment (architecture scores + Step 2.5b + Step 3). Classify each finding to exactly one sub-grade — never both. Show the binding constraint for every grade; a grade with no shown derivation is invalid. A security or data-integrity Critical forces **F** regardless of design quality (hard gate, not a blend). When `uip agent review` / `uip codedagent review` returns `Data.Grade`, report it alongside — never overwrite it with the skill grade. Do **not** grade non-agent projects (RPA, flows, coded apps) — that rubric is a future phase. See [references/agents/agent-grading-rubric.md](references/agents/agent-grading-rubric.md).
+13. **Grade every agent project by the rubric — derived, never asserted.** For **agent projects** (phase 1), produce a letter grade (`A`/`B`/`C`/`D`/`F`, no `+`/`-`) per agent and overall, computed in Step 4.5 as `min(G_det, G_jud)`. **G_det is read from the review CLI's `Data.Grade` (Step 2.5a) — do not recompute it from finding counts.** G_jud you compute from judgment (architecture scores + Step 2.5b + Step 3). CLI findings already shaped `Data.Grade`; only judgment findings feed G_jud, so each finding lands in exactly one sub-grade. Show the binding constraint for every grade; a grade with no shown derivation is invalid. A security or data-integrity judgment Critical forces **F** regardless of design quality (hard gate, not a blend). The skill grade is always ≤ `Data.Grade` (min only lowers) — report both, never overwrite the CLI grade. Do **not** grade non-agent projects (RPA, flows, coded apps) — that rubric is a future phase. See [references/agents/agent-grading-rubric.md](references/agents/agent-grading-rubric.md).
 
 ## Review Workflow
 
@@ -447,32 +447,22 @@ Read [references/architecture-assessment-guide.md](references/architecture-asses
 
 ### Step 4.5 — Compute the Agent Letter Grade (A–F)
 
-**Agent projects only** (phase 1) — matching the Step 2.5 judgment catalog, which is agent-only today. Grade every **agent** project, and (for a multi-agent solution) the agent set overall, on an A–F scale. Non-agent projects are **not** graded yet (RPA, flows, coded apps are future phases) — report their findings without a grade. The grade is **derived** from Steps 2–4 — never a fresh judgment. Compute two sub-grades independently, then take the worse:
+**Agent projects only** (phase 1) — matching the Step 2.5 judgment catalog, which is agent-only today. Grade every **agent** project, and (for a multi-agent solution) the agent set overall, on an A–F scale. Non-agent projects are **not** graded yet (RPA, flows, coded apps are future phases) — report their findings without a grade. The grade is **derived** — never a fresh judgment. Take the worse of two sub-grades: G_det is **read from the review CLI**, G_jud you compute from judgment:
 
 ```
-Final grade = min(G_det, G_jud)
+Final grade = min(G_det, G_jud)        where G_det = <review CLI>.Data.Grade
 ```
 
-- **G_det (deterministic)** — from objective findings only: `uip agent validate` (Step 2) + `uip agent review` / `uip codedagent review` (Step 2.5a). Byte-reproducible.
-- **G_jud (non-deterministic)** — from judgment: the architecture-principle scores (1–5) in [architecture-assessment-guide.md §4](references/architecture-assessment-guide.md) + judgment-catalog (2.5b) + manual agent-checklist (Step 3) findings.
+- **G_det (deterministic)** — **read it from the review CLI; do not recompute.** `uip agent review` / `uip codedagent review` (Step 2.5a) returns `Data.Grade` — that letter **is** G_det. (`Data.Issues[]` are still reported verbatim, but the grade comes from `Data.Grade`, not from tallying them.)
+- **G_jud (non-deterministic)** — the only sub-grade you compute: the architecture-principle scores (1–5) in [architecture-assessment-guide.md §4](references/architecture-assessment-guide.md) + judgment-catalog (2.5b) + manual agent-checklist (Step 3) findings.
 
-**Classify each finding by source** so it feeds exactly one sub-grade (no double-counting): Step 2 + 2.5a findings → G_det; Step 2.5b + Step 3 findings + architecture scores → G_jud.
-
-**G_det band:**
-
-| Deterministic findings | G_det |
-|---|---|
-| 0 Critical, `agent validate` clean, 0–1 Warnings | A |
-| 0 Critical, 2–3 Warnings | B |
-| 0 Critical, 4–7 Warnings | C |
-| 1 Critical (clear non-security fix), OR 8+ Warnings | D |
-| ≥2 Criticals, OR any security/data-integrity Critical, OR `agent validate` fails | F |
+CLI findings already shaped `Data.Grade` (G_det); only **judgment** findings feed G_jud — so each finding lands in exactly one sub-grade.
 
 **G_jud band** — average the applicable architecture-principle scores (Scalability is usually N/A for a single agent — exclude it and any other that does not apply, state which): `4.5–5.0`→A, `3.5–4.49`→B, `2.5–3.49`→C, `1.5–2.49`→D, `1.0–1.49`→F. Then cap: any unmitigated judgment Critical → at most D; security/data-integrity judgment Critical → F.
 
 **Overall Agent Grade:** single agent → its grade. Multiple agents → the **worst** per-agent grade. Never average grades.
 
-Report the **binding constraint** in one line (e.g. "B — gated by G_det, 3 Warnings; design strong (G_jud A)"). When the review CLI returns `Data.Grade`, report it alongside the skill grade — never overwrite it.
+Report the **binding constraint** in one line (e.g. "B — gated by G_det = CLI Data.Grade B; design strong (G_jud A)"). Since the skill grade is `min(Data.Grade, G_jud)`, it is always ≤ `Data.Grade` — report both; never overwrite the CLI grade.
 
 Full rubric, agent-principle scoring, edge cases (no-PDD / CLI-unavailable / no-eval-set), CLI-grade alignment, and worked examples: [references/agents/agent-grading-rubric.md](references/agents/agent-grading-rubric.md).
 
@@ -613,7 +603,7 @@ Route each fix to the appropriate skill:
 | **C** / **D** | Needs Improvement |
 | **F** | Critical Issues |
 
-This maps the letter to the verdict word only. The bands that **produce** each letter (G_det / G_jud) live solely in Step 4.5 — do not restate them here. The agent grade is the `min(G_det, G_jud)` computed in Step 4.5.
+This maps the letter to the verdict word only. The agent grade is `min(G_det, G_jud)` from Step 4.5, where **G_det is the review CLI's `Data.Grade`** and the G_jud band lives in Step 4.5 — do not restate either here.
 
 ## Task Navigation
 
