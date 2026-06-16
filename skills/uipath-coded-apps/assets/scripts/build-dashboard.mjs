@@ -143,7 +143,7 @@ const KNOWN_EVENTS = new Set([
   'PREWARM_START', 'PREWARM_DONE', 'PREWARM_FAILED', 'SCAFFOLD_READY', 'ENV_WRITTEN',
   'WIDGET_READY', 'METRICS_PASS', 'METRICS_RETRY', 'T3_FAILED', 'TSC_PASS', 'TSC_FAIL',
   'BUILD_RESULT', 'PARTIAL_BUILD_DETECTED', 'AUTH_MISSING',
-  'HAND_EDIT_DETECTED', 'T2_SCHEMA_ERROR', 'INCREMENTAL_READY',
+  'HAND_EDIT_DETECTED', 'T2_SCHEMA_ERROR', 'INCREMENTAL_READY', 'UPGRADE_AVAILABLE', 'UPGRADE_DONE',
 ])
 
 const VALID_EDIT_OPS = ['ADD', 'REMOVE', 'CHANGE', 'REBUILD']
@@ -173,6 +173,20 @@ export const VALID_COLUMN_FORMATS = ['number', 'percent', 'duration', 'timeAgo',
  * surfaces as cryptic tsc "module not found" failures mid-build.
  */
 export const MIN_SDK_VERSION = '1.4.0'
+
+export const SKILL_VERSION = '2.0.0'        // compiler-architecture era; bump per skill release
+export const SCAFFOLD_VERSION = '1.0.0'     // Phase 3 will source this from scaffold.manifest.json
+export const INTENT_SCHEMA_VERSION = 2
+export const STATE_SCHEMA_VERSION = 2
+
+/**
+ * The version block stamped into state.json so a dashboard knows what it was
+ * built against (drives offer-on-detect upgrade + future migrations).
+ * @param {string|null} [sdkVersion]
+ */
+export function buildVersions(sdkVersion = null) {
+  return { skill: SKILL_VERSION, scaffold: SCAFFOLD_VERSION, intentSchema: INTENT_SCHEMA_VERSION, sdk: sdkVersion }
+}
 
 /**
  * Check the installed @uipath/uipath-typescript version in a project.
@@ -962,7 +976,8 @@ async function runDashboardBuild(intent, intentPath) {
     const statePath = join(stateDir, 'state.json')
     const existingState = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : {}
     const partialState = {
-      schemaVersion: 1,
+      schemaVersion: STATE_SCHEMA_VERSION,
+      versions: buildVersions(null),
       app: { name: dashboardName, routingName, semver: existingState.app?.semver ?? '1.0.0', description: dashboardDescription },
       env: cloudUrl.includes('alpha') ? 'alpha' : cloudUrl.includes('staging') ? 'staging' : 'prod',
       org: orgName, tenant: tenantName, cloudUrl,
@@ -1090,7 +1105,8 @@ async function runDashboardBuild(intent, intentPath) {
 
     // Step 7 — Write final state.json (upgrade partial → complete)
     const newState = {
-      schemaVersion: 1,
+      schemaVersion: STATE_SCHEMA_VERSION,
+      versions: buildVersions(sdkCheck.version),
       app: { name: dashboardName, routingName, semver: existingState.app?.semver ?? '1.0.0', description: dashboardDescription },
       env: cloudUrl.includes('alpha') ? 'alpha' : cloudUrl.includes('staging') ? 'staging' : 'prod',
       org: orgName, tenant: tenantName, cloudUrl,
@@ -1342,6 +1358,8 @@ async function runIncrementalEdit(editIntent, intentPath) {
     fail(`TypeScript errors after edit:\n${err}`)
   }
 
+  state.schemaVersion = STATE_SCHEMA_VERSION
+  state.versions = buildVersions(checkSdkVersion(P).version)
   writeAtomic(statePath, JSON.stringify(state, null, 2))
   emit('INCREMENTAL_READY', { count: applied.length, ops: applied })
 }

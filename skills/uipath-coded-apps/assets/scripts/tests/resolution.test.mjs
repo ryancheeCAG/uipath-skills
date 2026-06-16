@@ -3,12 +3,29 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { validateIntent, resolveMetric, buildWidgetFile, generateViewFile, buildViewSpec, compileColumns, emit, parseEvent, classifyEditIntent, resolveChangeMetric, widgetLayoutGroup, VALID_DISPLAY_TYPES, metricModuleSpecifier } from '../build-dashboard.mjs'
+import { validateIntent, resolveMetric, buildWidgetFile, generateViewFile, buildViewSpec, compileColumns, emit, parseEvent, classifyEditIntent, resolveChangeMetric, widgetLayoutGroup, VALID_DISPLAY_TYPES, metricModuleSpecifier, buildVersions, SCAFFOLD_VERSION, INTENT_SCHEMA_VERSION, STATE_SCHEMA_VERSION } from '../build-dashboard.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REGISTRY_PATH = resolve(__dirname, '../capability-registry.json')
 
 const registry = JSON.parse(readFileSync(REGISTRY_PATH, 'utf8'))
+
+// ── Phase 2: version stamps ───────────────────────────────────────────────────
+test('buildVersions stamps skill/scaffold/intentSchema/sdk', () => {
+  const v = buildVersions('1.4.0')
+  assert.equal(v.scaffold, SCAFFOLD_VERSION)
+  assert.equal(v.intentSchema, INTENT_SCHEMA_VERSION)
+  assert.equal(v.sdk, '1.4.0')
+  assert.ok(typeof v.skill === 'string' && v.skill.length > 0)
+})
+
+test('buildVersions tolerates a missing sdk version', () => {
+  assert.equal(buildVersions().sdk, null)
+})
+
+test('STATE_SCHEMA_VERSION is 2', () => {
+  assert.equal(STATE_SCHEMA_VERSION, 2)
+})
 
 function resolveT1(metricName) {
   const entry = registry.t1[metricName]
