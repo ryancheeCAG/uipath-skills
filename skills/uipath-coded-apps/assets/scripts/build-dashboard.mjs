@@ -24,11 +24,11 @@ import { join, dirname, basename, resolve } from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
 import { execSync } from 'child_process'
 import { createHash } from 'crypto'
+import { unzipTo } from './lib/zip.mjs'
 
 // ── Path constants ─────────────────────────────────────────────────────────────
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const SCAFFOLD_DIR = resolve(__dirname, '../templates/dashboard/scaffold')
 const WIDGETS_DIR = resolve(__dirname, '../templates/dashboard/widgets')
 const T3_SHELL_TEMPLATE_PATH = resolve(__dirname, '../templates/dashboard/widgets/t3-shell.tsx.template')
 
@@ -175,7 +175,12 @@ export const VALID_COLUMN_FORMATS = ['number', 'percent', 'duration', 'timeAgo',
 export const MIN_SDK_VERSION = '1.4.0'
 
 export const SKILL_VERSION = '2.0.0'        // compiler-architecture era; bump per skill release
-export const SCAFFOLD_VERSION = '1.0.0'     // Phase 3 will source this from scaffold.manifest.json
+const SCAFFOLD_MANIFEST_PATH = resolve(__dirname, '../fixtures/governance-dashboard-starter-kit.manifest.json')
+const FIXTURE_ZIP_PATH = resolve(__dirname, '../fixtures/governance-dashboard-starter-kit.zip')
+function readScaffoldVersion() {
+  try { return JSON.parse(readFileSync(SCAFFOLD_MANIFEST_PATH, 'utf8')).version ?? '1.0.0' } catch { return '1.0.0' }
+}
+export const SCAFFOLD_VERSION = readScaffoldVersion()  // sourced from the starter-kit manifest
 export const INTENT_SCHEMA_VERSION = 2
 export const STATE_SCHEMA_VERSION = 2
 
@@ -253,7 +258,7 @@ export function rebuildAllWidgets(P, state, timeRange) {
  * framework, migrate intent.json, regenerate widgets/views from durable intent +
  * on-disk metric modules, re-validate, and re-stamp versions. The durable set
  * (intent.json, src/metrics, .dashboard, .env.local, uipath.json's clientId) is
- * preserved. Phase 3 will replace copyDir(SCAFFOLD_DIR) with zip-extraction.
+ * preserved. The framework refresh extracts the starter-kit archive (see lib/zip.mjs).
  * @param {string} P  resolved project dir
  * @param {object} state  parsed state.json
  * @param {string} intentPath  edit-intent path (for the migrations dir + retry signal)
@@ -265,11 +270,12 @@ async function runUpgrade(P, state, intentPath) {
     if (dirty) log('⚠ Project has uncommitted changes — upgrade regenerates disposable files (your intent.json + src/metrics are preserved).')
   } catch { /* not a git repo — nothing to check */ }
 
-  // 1. Refresh the disposable scaffold framework (Phase 3: extract the zip instead),
-  //    preserving the deploy clientId in uipath.json (the scaffold ships a template one).
+  // 1. Refresh the disposable scaffold framework by extracting the current
+  //    starter-kit archive, preserving the deploy clientId in uipath.json
+  //    (the scaffold ships a template one).
   const uipathJsonPath = join(P, 'uipath.json')
   const prevClientId = existsSync(uipathJsonPath) ? (JSON.parse(readFileSync(uipathJsonPath, 'utf8')).clientId ?? null) : null
-  copyDir(SCAFFOLD_DIR, P)
+  extractFixture(P)
   try { rmSync(join(P, 'node_modules'), { recursive: true, force: true }) } catch { /* ignore */ }
   if (prevClientId && existsSync(uipathJsonPath)) {
     const uj = JSON.parse(readFileSync(uipathJsonPath, 'utf8'))
@@ -348,17 +354,11 @@ function log(msg) {
 }
 
 /** Recursive directory copy — Node.js only, no cp -r, works on Windows */
-function copyDir(src, dest) {
-  mkdirSync(dest, { recursive: true })
-  for (const entry of readdirSync(src, { withFileTypes: true })) {
-    const srcPath = join(src, entry.name)
-    const destPath = join(dest, entry.name)
-    if (entry.isDirectory()) {
-      copyDir(srcPath, destPath)
-    } else {
-      copyFileSync(srcPath, destPath)
-    }
-  }
+/** Extract the committed starter-kit archive into a project dir (replaces the
+ *  loose-directory copy). Dependency-free + cross-platform — see lib/zip.mjs. */
+function extractFixture(projectPath) {
+  if (!existsSync(FIXTURE_ZIP_PATH)) fail(`Starter-kit archive not found at ${FIXTURE_ZIP_PATH} — run pack-scaffold.mjs`)
+  unzipTo(readFileSync(FIXTURE_ZIP_PATH), projectPath)
 }
 
 /** Atomic file write — write to .tmp then rename on success */
@@ -1054,8 +1054,7 @@ async function runDashboardBuild(intent, intentPath) {
   try {
     // Step 1 — Scaffold (skip if already exists)
     if (!existsSync(join(P, 'package.json'))) {
-      if (!existsSync(SCAFFOLD_DIR)) fail(`Scaffold not found at ${SCAFFOLD_DIR}`)
-      copyDir(SCAFFOLD_DIR, P)
+      extractFixture(P)
       try { rmSync(join(P, 'node_modules'), { recursive: true, force: true }) } catch { /* ignore */ }
     }
     emit('SCAFFOLD_READY')
@@ -1482,18 +1481,14 @@ async function runIncrementalEdit(editIntent, intentPath) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
 
-  // --prewarm <routingName> mode: copy scaffold + run npm ci, then exit
+  // --prewarm <routingName> mode: extract the starter-kit archive + run npm ci, then exit
   // Creates the project under <cwd>/<routingName>.
   if (process.argv[2] === '--prewarm' && process.argv[3]) {
     const routingName = process.argv[3]
     const prewarmDir  = join(process.cwd(), routingName)
     if (!existsSync(join(prewarmDir, 'package.json'))) {
-      if (!existsSync(SCAFFOLD_DIR)) {
-        process.stderr.write(`ERROR: Scaffold not found at ${SCAFFOLD_DIR}\n`)
-        process.exit(1)
-      }
       mkdirSync(prewarmDir, { recursive: true })
-      copyDir(SCAFFOLD_DIR, prewarmDir)
+      extractFixture(prewarmDir)
       try { rmSync(join(prewarmDir, 'node_modules'), { recursive: true, force: true }) } catch { /* ignore */ }
     }
     await runPrewarm(prewarmDir)
