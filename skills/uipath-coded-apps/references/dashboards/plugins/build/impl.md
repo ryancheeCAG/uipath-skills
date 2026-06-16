@@ -273,6 +273,12 @@ If a build or edit against an existing project emits `UPGRADE_AVAILABLE:{from,to
 
 ---
 
+## Maintaining the starter-kit archive
+
+The build extracts a committed, versioned archive (`assets/fixtures/governance-dashboard-starter-kit.zip`) into each new dashboard instead of copying the loose `scaffold/` directory; the loose `templates/dashboard/scaffold/` stays the editable source of truth. After changing the scaffold (or the widget templates), re-pack and commit the refreshed archive: `node assets/scripts/pack-scaffold.mjs --version <x.y.z>`. CI / pre-commit runs `pack-scaffold.mjs --check` to fail if the scaffold changed without re-packing. Extraction uses a dependency-free pure-Node helper (`assets/scripts/lib/zip.mjs`) — no system `unzip`/`tar`/PowerShell — so any coding agent on any OS extracts it identically.
+
+---
+
 ## Phase 4 — Build (runs in a build subagent)
 
 To keep the experience seamless, Phase 4 executes inside a **build subagent** (the `Task` tool). The subagent **authors `intent.json` and the metric modules**, runs the build script, handles the type-error retry loop, and returns one short milestone block. Every file write, the bash command, the raw event stream, tsc/npm output, and retries stay inside the subagent — none surface in the main thread. **The user sees only your one-line "Building…" and the final milestone — never the `intent.json` or `metrics/*.ts` writes.**

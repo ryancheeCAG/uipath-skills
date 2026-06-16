@@ -99,6 +99,12 @@ test('contentHash is stable for identical content and changes when content chang
   }
 })
 
+test('committed starter-kit archive matches the loose scaffold (re-pack to refresh)', () => {
+  const scaffoldDir = resolve(__dirname, '../../templates/dashboard/scaffold')
+  const manifest = JSON.parse(readFileSync(resolve(__dirname, '../../fixtures/governance-dashboard-starter-kit.manifest.json'), 'utf8'))
+  assert.equal(contentHash(scaffoldDir), manifest.sha256, 'Scaffold changed but archive not re-packed — run pack-scaffold.mjs and commit the refreshed zip + manifest')
+})
+
 function resolveT1(metricName) {
   const entry = registry.t1[metricName]
   if (!entry) return null
