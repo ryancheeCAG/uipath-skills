@@ -105,6 +105,33 @@ test('committed starter-kit archive matches the loose scaffold (re-pack to refre
   assert.equal(contentHash(scaffoldDir), manifest.sha256, 'Scaffold changed but archive not re-packed — run pack-scaffold.mjs and commit the refreshed zip + manifest')
 })
 
+// Build a single stored-entry zip with an arbitrary (possibly malicious) name.
+function makeZipWithName(name) {
+  const nameBuf = Buffer.from(name, 'utf8')
+  const local = Buffer.alloc(30)
+  local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(0, 8)
+  local.writeUInt16LE(nameBuf.length, 26)
+  const cen = Buffer.alloc(46)
+  cen.writeUInt32LE(0x02014b50, 0); cen.writeUInt16LE(20, 4); cen.writeUInt16LE(20, 6)
+  cen.writeUInt16LE(0, 10); cen.writeUInt16LE(nameBuf.length, 28); cen.writeUInt32LE(0, 42)
+  const localPart = Buffer.concat([local, nameBuf])
+  const cenPart = Buffer.concat([cen, nameBuf])
+  const eocd = Buffer.alloc(22)
+  eocd.writeUInt32LE(0x06054b50, 0); eocd.writeUInt16LE(1, 8); eocd.writeUInt16LE(1, 10)
+  eocd.writeUInt32LE(cenPart.length, 12); eocd.writeUInt32LE(localPart.length, 16)
+  return Buffer.concat([localPart, cenPart, eocd])
+}
+
+test('unzipTo rejects zip-slip entries that escape destDir', () => {
+  const dst = mkdtempSync(join(tmpdir(), 'zslip-'))
+  try {
+    assert.throws(() => unzipTo(makeZipWithName('../escape.txt'), dst), /escape|unsafe/)
+    assert.throws(() => unzipTo(makeZipWithName('a/../../escape.txt'), dst), /escape|unsafe/)
+  } finally {
+    rmSync(dst, { recursive: true, force: true })
+  }
+})
+
 function resolveT1(metricName) {
   const entry = registry.t1[metricName]
   if (!entry) return null

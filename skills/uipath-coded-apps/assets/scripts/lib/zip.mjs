@@ -4,7 +4,7 @@
 // gets identical behavior.
 
 import { readdirSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
-import { join, dirname, relative, sep } from 'node:path'
+import { join, dirname, relative, sep, resolve } from 'node:path'
 import { deflateRawSync, inflateRawSync } from 'node:zlib'
 import { createHash } from 'node:crypto'
 
@@ -149,12 +149,22 @@ export function unzipTo(buffer, destDir) {
     p += 46 + nameLen + extraLen + commentLen
 
     if (name.endsWith('/')) continue // directory entry
+    // Zip-slip guard: never let an entry escape destDir. The shipped archive is
+    // trusted, but unzipTo is a general helper — reject absolute paths, `..`
+    // segments, backslashes, and anything that resolves outside the root.
+    if (name.startsWith('/') || name.includes('\\') || name.split('/').includes('..')) {
+      throw new Error(`unzipTo: unsafe entry path: ${name}`)
+    }
+    const dest = resolve(destDir, name)
+    const root = resolve(destDir)
+    if (dest !== root && !dest.startsWith(root + sep)) {
+      throw new Error(`unzipTo: entry escapes destDir: ${name}`)
+    }
     const lNameLen = buffer.readUInt16LE(localOff + 26)
     const lExtraLen = buffer.readUInt16LE(localOff + 28)
     const dataStart = localOff + 30 + lNameLen + lExtraLen
     const raw = buffer.subarray(dataStart, dataStart + compSize)
     const data = method === 8 ? inflateRawSync(raw) : Buffer.from(raw)
-    const dest = join(destDir, name)
     mkdirSync(dirname(dest), { recursive: true })
     writeFileSync(dest, data)
   }
