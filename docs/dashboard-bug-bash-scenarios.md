@@ -1,55 +1,49 @@
-# UiPath Dashboard Skill — Bug Bash Scenarios
+# UiPath Dashboard Bug Bash Scenarios
 
-Manual test scenarios for the `uipath-coded-apps` natural-language **dashboard** capability (compiler architecture: metric modules + two-stage compile + versioning). Designed for an internal bug bash — work through each row, mark pass/fail, and log anything odd in the **Defects** column.
+Manual test scenarios for the UiPath dashboard skill (the one that builds live React dashboards from a plain English prompt using the TypeScript SDK). Use this for an internal bug bash: work through each row, decide pass or fail, and note anything odd in the Defects column.
 
-> The three tables below paste straight into Confluence (Confluence auto-converts a Markdown table). Steps and outcomes use line breaks within the cell.
+Each row describes what to do and what you should see. Prompts you can type are shown in code formatting so you can copy them directly. The tables paste straight into Confluence.
 
-### Prerequisites (do once before starting)
+### Before you start
 
-- A coding agent (Claude Code / Codex / Gemini CLI) with the **uipath-coded-apps** skill loaded from the `feat/dashboard-compiler-arch` branch.
-- Logged in to a **UiPath tenant that has some agent + job data** (via the `uip` CLI).
-- Able to **create an external OAuth app** (or have a non-confidential `clientId` handy) — needed for live data in the browser.
-- **Node 20+** and network access (the build runs `npm ci`).
-- Unless a scenario says otherwise: start each one in a **fresh agent session**. "Build" scenarios use an **empty working folder**; "edit/upgrade" scenarios **reuse a folder that already has a built dashboard**.
-- Record tester name + date at the top of the Confluence page.
+You will need:
 
----
+- A coding agent (Claude Code, Codex, or Gemini CLI) with the UiPath dashboard skill loaded from the `feat/dashboard-compiler-arch` branch.
+- A UiPath tenant that has some agent and job data, signed in through the `uip` CLI.
+- The ability to create an external OAuth app, or a non confidential client ID ready to paste, so the dashboard can show live data in the browser.
+- Node 20 or newer and a working internet connection (the build installs packages the first time).
 
-### 1. Happy Path
+Start each scenario in a fresh agent session. Build scenarios use an empty folder; edit and upgrade scenarios reuse a folder that already has a built dashboard. Please add your name and the date at the top of the Confluence page.
 
-| Scenario | Steps | Expected Outcome | Defects |
-|----------|-------|------------------|---------|
-| **H1 — Build a dashboard from a prompt** | 1. New agent session in an empty folder.<br>2. Prompt: *"Build me a UiPath agent operations dashboard: active agents, faulted agent jobs, agent memory entries over the last 30 days, and agent failure rate %."*<br>3. Read the plan the agent presents.<br>4. Approve it (e.g. *"looks good, build it"*).<br>5. When asked about auth, let it create the OAuth app (or paste a client ID). | Agent shows a **plain-text plan** (widget list + time ranges, refused items called out) — **no code, no JSON, no file dumps**.<br>After approval you see only `Building …` then a **milestone block** (`✓ <widget>` lines, `✓ All code validated`) and a `http://localhost:57173` link.<br>**You do NOT see a flood of `Write(intent.json)` / `Write(metrics/*.ts)` messages.**<br>Build finishes with no errors. | |
-| **H2 — View live data** | 1. After H1, open `http://localhost:57173`.<br>2. Complete the OAuth sign-in.<br>3. Inspect each widget. | Dashboard renders. KPI cards show a number + label; charts show a headline value, a delta badge, and a plotted series; tables show rows with **readable column headers and formatted values** (dates, durations, percentages).<br>No blank/empty widgets, no literal `undefined`/`NaN`, no error that blocks the page. | |
-| **H3 — Drill into a chart** | 1. On the dashboard, click a **chart** widget (e.g. the memory/area chart).<br>2. Review the detail view.<br>3. Use the back link. | Navigates to a **detail page with record-grain rows** (individual records, not the chart's aggregated buckets), sortable, with sensible columns.<br>Back link returns to the dashboard. | |
-| **H4 — Add a widget (incremental)** | 1. In the project folder, prompt: *"Add a widget for the top 10 memory spaces."*<br>2. Approve if asked.<br>3. Refresh `localhost:57173`. | Agent makes a **single incremental edit** (not a full rebuild).<br>The new widget appears after hot-reload; **existing widgets are unchanged**.<br>Again, no flood of file-edit messages. | |
-| **H5 — Change a widget** | 1. Prompt: *"Change the agent failure-rate chart to cover the last 7 days"* (or *"make the faulted-jobs widget a bar chart"*).<br>2. Refresh. | Only that widget updates — the new time window is reflected in the subtitle **and** the data (or the new chart type renders). Other widgets untouched; app still compiles. | |
-| **H6 — Upgrade an existing dashboard** *(needs a version gap — e.g. after a skill update that bumps the scaffold)* | 1. Open / edit a dashboard whose `.dashboard/state.json` `versions.scaffold` is **older** than the shipped version.<br>2. Note the agent's message.<br>3. Confirm the upgrade. | Agent tells you a **newer dashboard scaffold is available** (shows from → to) and **offers** — it never upgrades silently.<br>On confirm, the app is regenerated, **your metrics/widgets are preserved**, the app still compiles, and `state.json` `versions.scaffold` is updated to current. | |
+### Happy Path
 
----
+| Scenario | Steps and Expected Outcome | Defects |
+|----------|----------------------------|---------|
+| **Build a dashboard from a prompt** | In a new agent session inside an empty folder, ask the agent `Build me a UiPath agent operations dashboard: active agents, faulted agent jobs, agent memory entries over the last 30 days, and agent failure rate %`. Read the plan it shows you, approve it (for example by saying "looks good, build it"), and when it asks about authentication let it create the OAuth app or paste a client ID. You should see a plain English plan listing the widgets and time ranges, with any unsupported items clearly called out, and no code, JSON, or file contents in the chat. After you approve, the only things you should see are a short "Building..." line and a milestone summary (a tick for each widget, then "All code validated") followed by a `http://localhost:57173` link. You should not see a stream of file write messages for intent.json or the metric files. | |
+| **See the live data** | After the build finishes, open `http://localhost:57173`, sign in through the OAuth prompt, and look at every widget. The dashboard should render fully: KPI cards show a number and a label, charts show a headline value, a change badge, and a plotted line or set of bars, and tables show rows with readable headers and nicely formatted values like dates and percentages. Nothing should be blank, show the word "undefined", or fail to load. | |
+| **Drill into a chart** | On the dashboard, click one of the chart widgets (for example the memory chart), look at the detail page, then use the back link. The detail page should show individual records rather than the chart's summary buckets, in a sortable table with sensible columns, and the back link should return you to the dashboard. | |
+| **Add a widget** | In the project folder, ask the agent `Add a widget for the top 10 memory spaces`, approve if it asks, then refresh the browser. The agent should make a quick focused edit rather than rebuilding everything, the new widget should appear after the page reloads, and your existing widgets should be unchanged. | |
+| **Change a widget** | Ask the agent `Change the agent failure rate chart to cover the last 7 days` (or `make the faulted jobs widget a bar chart`), then refresh. Only that one widget should change, the new time window should show in both the subtitle and the data (or the new chart type should render), everything else should stay the same, and the app should still load cleanly. | |
+| **Upgrade an older dashboard** (only when a newer version has shipped) | Open or edit a dashboard that was built against an older version of the skill than the one currently installed. The agent should tell you a newer dashboard version is available and offer to upgrade it, never doing this silently. When you confirm, it should regenerate the app while keeping all your widgets and metrics intact, the dashboard should still load, and the stored version should update to the current one. | |
 
-### 2. Negative Scenarios
+### Negative Scenarios
 
-| Scenario | Steps | Expected Outcome | Defects |
-|----------|-------|------------------|---------|
-| **N1 — Unsupported metric mixed with valid ones** | 1. Prompt: *"Build a dashboard with agent latency over time, agent cost in dollars, and faulted jobs."*<br>2. Read the plan. | The **unsupported** metrics (agent latency timeline, dollar cost) are **refused inline** (struck through / flagged) with a **suggested alternative**, while the valid metric (faulted jobs) is still planned and built.<br>The whole dashboard is **not** abandoned because of the unsupported items. | |
-| **N2 — Build with no OAuth client (auth missing)** | 1. Build a dashboard but **decline** to create/provide a client ID (*"skip auth for now"*).<br>2. Let it build.<br>3. Open `localhost:57173`. | Build still **completes** (compiles + serves), but the agent **clearly warns** auth won't work without a client ID, and the browser shows a **clear auth/config message** — not a blank white screen or a cryptic stack trace. | |
-| **N3 — Ambiguous prompt** | 1. Prompt something vague: *"show me agent errors."*<br>2. Observe. | Agent asks **one focused clarifying question** (e.g. faulted agent jobs vs governance denials) rather than guessing and building the wrong thing. A free-text answer is accepted. | |
-| **N4 — Edit a widget that doesn't exist** | 1. On an existing dashboard, prompt: *"Remove the revenue widget"* (one that isn't there).<br>2. Observe. | Agent reports the widget **isn't present** with a clear message, makes **no destructive change**, and the dashboard is untouched. No crash, no half-applied edit. | |
+| Scenario | Steps and Expected Outcome | Defects |
+|----------|----------------------------|---------|
+| **Ask for something we cannot show** | Ask for a mix of supported and unsupported metrics, for example `Build a dashboard with agent latency over time, agent cost in dollars, and faulted jobs`. The agent should refuse the unsupported items (agent latency over time, and cost in dollars) right in the plan and suggest an alternative for each, while still planning and building the supported one (faulted jobs). It should not abandon the whole dashboard just because some metrics are unavailable. | |
+| **Build without an OAuth client** | Build a dashboard but decline to create or provide a client ID, saying something like "skip auth for now", let it finish, then open the browser. The build should still complete and serve the app, but the agent should clearly warn you that sign in will not work without a client ID, and the browser should show a clear message about the missing configuration rather than a blank white screen or a confusing error. | |
+| **Give a vague request** | Ask something unclear like `show me agent errors`. The agent should ask you a short focused question to clarify what you mean (for example, faulted agent jobs versus governance denials) instead of guessing and building the wrong thing. A plainly typed answer should be accepted. | |
+| **Edit a widget that is not there** | On an existing dashboard, ask the agent to `remove the revenue widget` when no such widget exists. The agent should tell you the widget is not present, make no changes, and leave the dashboard exactly as it was, with no crash and no half finished edit. | |
 
----
+### Monkey Testing
 
-### 3. Monkey Testing (chaos / unexpected input)
+| Scenario | Steps and Expected Outcome | Defects |
+|----------|----------------------------|---------|
+| **Completely vague prompt** | Ask only `build me a dashboard` with no details. The agent should either ask what you want to track or propose a sensible default set of widgets for you to approve. It should not quietly build an empty or random dashboard. | |
+| **Ask for far too much** | Ask for a huge dashboard, for example `Build a dashboard with 15 widgets covering every agent, job, memory and governance metric you can`. The agent should come back with a coherent plan (it may trim or group things and tell you what it left out and why), and the build should finish without hanging or producing broken or empty widgets. Anything it cannot support should be called out, not silently skipped or faked. | |
+| **Off topic request** | In a session where the dashboard skill could pick up, ask for something unrelated like `write me a poem about robots` or `build me a login form`. The dashboard skill should not take over the request or try to turn it into a UiPath dashboard. It should either stay out of the way or politely explain that it builds UiPath data dashboards. | |
+| **Conflicting edits at once** | On an existing dashboard, send several conflicting edits in one message, for example `add a faulted jobs widget, then remove it, then change all charts to bar charts`. The agent should handle the edits together and end in a sensible final state, with no leftover or duplicate widget, no broken layout, and no dead drill into links, and the app should still load. | |
 
-| Scenario | Steps | Expected Outcome | Defects |
-|----------|-------|------------------|---------|
-| **M1 — Totally vague prompt** | 1. Prompt only: *"build me a dashboard"* (no specifics).<br>2. Observe. | Agent **asks what to track** or **proposes a sensible default set** with a plan for approval. It does **not** silently build an empty or random dashboard. | |
-| **M2 — Oversized request** | 1. Prompt: *"Build a dashboard with 15 widgets covering every agent, job, memory and governance metric you can."*<br>2. Review the plan, then the build. | Agent produces a **coherent plan** (it may trim/group and say what it dropped and why). Build **completes without timing out** and without broken/empty widgets. Refused metrics are **called out**, not silently dropped or faked. | |
-| **M3 — Off-topic request** | 1. In a session where the skill could load, prompt: *"Write me a poem about robots"* or *"Build me a login form."*<br>2. Observe. | The dashboard skill **does not hijack** the request or try to build a UiPath dashboard for it. Either it doesn't trigger, or it declines and clarifies it builds UiPath **data dashboards**. | |
-| **M4 — Contradictory / rapid edits in one message** | 1. On an existing dashboard, prompt: *"Add a faulted-jobs widget, then remove it, then change all charts to bar charts"* — all in one message.<br>2. Observe + refresh. | Agent batches the edits sanely (ideally one run). **End state is consistent** — no leftover/orphan widget, no duplicate, no broken layout or dangling drill-down route — and the app still compiles. | |
+### Logging a defect
 
----
-
-### How to log a defect
-
-In the **Defects** column, note: what you did, what you expected, what actually happened, and (if visible) any error text or screenshot link. Mark the row **PASS** / **FAIL** / **PARTIAL**. Keep `intent.json`, the `metrics/` folder, and `.dashboard/state.json` from a failing run — they're the fastest way for us to reproduce.
+In the Defects column, write what you did, what you expected, and what actually happened, along with any error text or a screenshot link, and mark the row Pass, Fail, or Partial. If something fails, please keep the generated intent.json file, the metrics folder, and the .dashboard/state.json file from that run so we can reproduce it quickly.
