@@ -27,46 +27,32 @@ initial_prompt: |
   entity `CodingAgentsEvalEntity`. The workflow must contain these activities
   in order:
 
-    1. Create a new record with `Title` set to `'Risky Op'` and `Score` set
-       to `50`. Bind the created record to a workflow variable (e.g.
-       `createdRecord`).
+    1. Create a new record with a sample Title and a sample Score. Bind
+       the created record to a workflow variable, and reference it
+       consistently downstream.
 
     2. Wrap the next steps in a `TryCatch` activity:
 
        Try block (runs if no exception is thrown by step 2a):
-         a. Update the record by `createdRecord.Id`, setting `Score` to `999`.
-            Do NOT set ContinueOnError — failures must propagate to the
-            Catch block.
+         a. Update the record by the created record's Id, setting `Score`
+            to `999`. The update must NOT swallow failures — they must
+            propagate to the Catch block.
          b. After the update succeeds, query all records in the entity where
             `Score` equals `999`. Bind the matching records to a workflow
             variable.
 
        Catch block (runs only if step 2a throws):
-         - Catch a typed `System.Exception` (or more specific exception
+         - Catch a typed `System.Exception` (or a more specific exception
            type). Inside the catch block, log the error message and then
-           delete the original record by `createdRecord.Id` as cleanup.
-         - The Delete activity in the Catch block must NOT set
-           ContinueOnError — failures here are unrelated to the rolled-back
-           transaction.
+           delete the original record by the created record's Id as
+           cleanup.
+         - The Delete in the Catch block must NOT swallow its own failures
+           — failures here are unrelated to the rolled-back transaction.
 
-  The output of step 1 must flow into step 2a's `RecordId` and step 2c's
-  Delete `RecordId` — do not re-derive the ID from any other source.
+  The created record's Id must flow into step 2a's Update and the Catch
+  block's Delete — do not re-derive it from any other source.
 
-  Sandbox setup (already in place — do not modify):
-    - `./NuGet.Config` declares a local NuGet source at `./local-feed/`
-    - `./local-feed/` hosts `UiPath.DataService.Activities` version `23.1.4-dev`,
-      which is the version you must pin in your project dependencies (this
-      package version is not available on any public feed)
-
-  Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
-  connected Data Service tenant — install both into the project.
-
-  For the entity install step — equivalent of `uip rpa data-fabric-entities
-  install` in the skill docs — run the rpa-tool source directly:
-
-      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir "<PROJECT_DIR>" --verbose --format json
-
-  All other commands use the standard `uip rpa` CLI as documented in the skill.
+  Sandbox + entity install: read `./EVAL_SANDBOX.md` and follow it.
 
 success_criteria:
   - type: file_exists

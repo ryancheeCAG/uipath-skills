@@ -28,43 +28,28 @@ initial_prompt: |
   separate output variable.
 
   Query A — return all records where ALL of the following hold:
-    - `Status` equals `'Active'`
+    - `Status` equals a sample string value
     - `Notes` is empty
     - `IsActive` is true
-    - `Tags` includes any of `'frontend'`, `'backend'`
+    - `Tags` includes any of a sample multi-value list
 
   Query B — return all records where ALL of the following hold:
-    - `Score` is greater than `50`
-    - `Price` is less than `20`
-    - `EventDate` is between `'2026-01-01'` and `'2026-12-31'` (inclusive on
-      both ends)
-    - EITHER `ScheduledAt` is after `'2026-04-01T00:00:00Z'` OR `Status`
-      equals `'Priority'`
+    - `Score` is greater than a sample numeric threshold
+    - `Price` is less than a sample numeric threshold
+    - `EventDate` is between two dates (inclusive on both ends)
+    - EITHER `ScheduledAt` is after a sample datetime OR `Status` equals a
+      sample string value
 
   Query C — return all records where ALL of the following hold:
-    - `Title` contains `'Invoice'`
-    - `Title` starts with `'INV'`
-    - `Status` ends with `'ed'`
-    - `Status` does not equal `'Closed'`
-    - `Title` does not contain `'DRAFT'`
-    - `Category` equals `'Urgent'`
-    - `EventDate` equals `'2026-04-18'`
+    - `Title` contains a sample substring
+    - `Title` starts with a sample prefix
+    - `Status` ends with a sample suffix
+    - `Status` does not equal a sample value
+    - `Title` does not contain a sample substring
+    - `Category` equals a sample ChoiceSet value
+    - `EventDate` equals a specific date
 
-  Sandbox setup (already in place — do not modify):
-    - `./NuGet.Config` declares a local NuGet source at `./local-feed/`
-    - `./local-feed/` hosts `UiPath.DataService.Activities` version `23.1.4-dev`,
-      which is the version you must pin in your project dependencies (this
-      package version is not available on any public feed)
-
-  Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
-  connected Data Service tenant — install both into the project.
-
-  For the entity install step — equivalent of `uip rpa data-fabric-entities
-  install` in the skill docs — run the rpa-tool source directly:
-
-      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir "<PROJECT_DIR>" --verbose --format json
-
-  All other commands use the standard `uip rpa` CLI as documented in the skill.
+  Sandbox + entity install: read `./EVAL_SANDBOX.md` and follow it.
 
 success_criteria:
   - type: file_exists

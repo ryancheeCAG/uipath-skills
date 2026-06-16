@@ -27,48 +27,32 @@ initial_prompt: |
   entity `CodingAgentsEvalFileEntity`. The workflow must contain these
   activities in order:
 
-    1. Create a new record with `Title` set to `'Contract Doc'`. Bind the
-       created record to a workflow variable (e.g. `createdRecord`).
+    1. Create a new record with a sample Title. Bind the created record to
+       a workflow variable, and reference it consistently downstream.
 
-    2. Upload the file at `'C:\contracts\final.pdf'` to the `Contract` field
-       of the newly-created record by `createdRecord.Id`. Use the file-path
-       upload mode (pass the path string, not a file resource object).
+    2. Upload a local file (path of your choice) to the `Contract` field of
+       the newly-created record by the created record's Id. Upload by file
+       path (string), not by file-resource handle.
 
-    3. Update the same record by `createdRecord.Id`, setting only the
-       `Title` field to `'Signed Contract'`. Leave every other field on the
-       record unchanged.
+    3. Update the same record by the same Id, touching only the Title field
+       and leaving every other field unchanged.
 
-    4. Fetch the record back by `createdRecord.Id`. Bind the fetched record
-       to a separate workflow variable (e.g. `fetchedRecord`).
+    4. Fetch the record back by the same Id. Bind the fetched record to a
+       separate workflow variable.
 
     5. Download the file from the `Contract` field of the same record by
-       `createdRecord.Id`. Save it to `'C:\contracts\downloaded.pdf'` AND
-       also bind the downloaded resource to a workflow variable (e.g.
-       `downloadedResource`). After the download, log the resource's
-       `.LocalPath` to the output.
+       the same Id. Save it to an explicit local path AND bind the
+       downloaded resource to a workflow variable. After the download,
+       consume the resource downstream (e.g. log its local-path property).
 
-    6. Delete the file from the `Contract` field of the same record by
-       `createdRecord.Id`. Bind the updated entity state to a variable (e.g.
-       `finalState`). Set the activity to continue on error.
+    6. Delete the file from the `Contract` field of the same record by the
+       same Id. Bind the updated entity state to a variable. DeleteFile
+       must not block the workflow on failure.
 
-  The output of step 1 must flow into steps 2, 3, 4, 5, and 6 as the record
-  ID — do not re-derive the ID from any other source.
+  The created record's Id must flow into steps 2–6 — do not re-derive it
+  from any other source.
 
-  Sandbox setup (already in place — do not modify):
-    - `./NuGet.Config` declares a local NuGet source at `./local-feed/`
-    - `./local-feed/` hosts `UiPath.DataService.Activities` version `23.1.4-dev`,
-      which is the version you must pin in your project dependencies (this
-      package version is not available on any public feed)
-
-  Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
-  connected Data Service tenant — install both into the project.
-
-  For the entity install step — equivalent of `uip rpa data-fabric-entities
-  install` in the skill docs — run the rpa-tool source directly:
-
-      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir "<PROJECT_DIR>" --verbose --format json
-
-  All other commands use the standard `uip rpa` CLI as documented in the skill.
+  Sandbox + entity install: read `./EVAL_SANDBOX.md` and follow it.
 
 success_criteria:
   - type: file_exists
@@ -122,11 +106,11 @@ success_criteria:
     weight: 2.0
     pass_threshold: 1.0
 
-  - type: file_contains
-    description: "Downloaded resource's .LocalPath is accessed downstream"
-    path: DataServiceEval/Main.xaml
-    includes:
-      - '.LocalPath'
+  - type: run_command
+    description: "Downloaded resource variable is consumed somewhere downstream"
+    command: 'python "%TASK_DIR%/check_i_file_lifecycle_downstream.py" DataServiceEval/Main.xaml'
+    timeout: 15
+    expected_exit_code: 0
     weight: 1.5
     pass_threshold: 1.0
 

@@ -26,33 +26,18 @@ initial_prompt: |
   contain these activities in order:
 
     1. Query all records from `CodingAgentsEvalFileEntity` where the related
-       `Owner` entity's `Title` field contains `'Admin'`. Use dot notation
-       (`Owner.Title`) in the filter. Bind the results to a workflow variable
-       (e.g. `ownedFiles`).
+       `Owner` entity's `Title` field contains a sample substring. Use
+       dot notation (`Owner.Title`) in the filter. Bind the results to a
+       workflow variable.
 
     2. For the first matched record from step 1, fetch the related Owner
-       entity by ID from `CodingAgentsEvalEntity`. Bind the fetched record
-       to a separate workflow variable (e.g. `ownerRecord`) and log
-       `ownerRecord.Title` to the output.
+       entity by Id from `CodingAgentsEvalEntity`. Bind the fetched record
+       to a separate workflow variable and log its Title.
 
-  The Owner ID for step 2 must come from step 1's output collection — do not
-  derive it from any other source.
+  The Owner Id for step 2 must come from step 1's output collection — do
+  not derive it from any other source.
 
-  Sandbox setup (already in place — do not modify):
-    - `./NuGet.Config` declares a local NuGet source at `./local-feed/`
-    - `./local-feed/` hosts `UiPath.DataService.Activities` version `23.1.4-dev`,
-      which is the version you must pin in your project dependencies (this
-      package version is not available on any public feed)
-
-  Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
-  connected Data Service tenant — install both into the project.
-
-  For the entity install step — equivalent of `uip rpa data-fabric-entities
-  install` in the skill docs — run the rpa-tool source directly:
-
-      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir "<PROJECT_DIR>" --verbose --format json
-
-  All other commands use the standard `uip rpa` CLI as documented in the skill.
+  Sandbox + entity install: read `./EVAL_SANDBOX.md` and follow it.
 
 success_criteria:
   - type: file_exists

@@ -28,57 +28,41 @@ initial_prompt: |
   `CodingAgentsEvalEntity`. The workflow must contain these activities in
   order:
 
-    1. Create 10 records in a single batch operation with `Title` values
-       `'BATCH-01'` through `'BATCH-10'` and `Score` values that vary so some
-       will match the query in step 2. Set the batch to stop immediately if
-       any record fails. Bind the created records to a variable (e.g.
-       `createdRecords`) and capture failed creates with their error messages
-       into a separate variable (e.g. `failedCreates`).
+    1. Create 10 records in a single batch operation, with `Score` values
+       that vary so some will match the query in step 2. The batch must
+       fail-fast — abort on the first record failure. Bind the created
+       records to a variable, and capture failed creates with their error
+       messages into a separate variable.
 
     2. Query the entity for records where ALL of the following hold:
          - `Score` is greater than `50`
          - `IsActive` is true
        Sort the results by `Score` descending and return at most 10 records.
-       Bind the matching records to a variable (e.g. `highScoreRecords`) and
-       the total matching count to a separate variable (e.g. `totalMatches`).
+       Bind the matching records to a variable and the total matching count
+       to a separate variable.
 
     3. Update every record from step 2's results in a single batch operation,
-       setting `Status` to `'Processed'`. Each entity in the batch input must
-       carry its `Id` (so the service knows which record to update). Set the
-       batch to stop immediately if any update fails. Capture failed updates
-       with their error messages into a variable (e.g. `failedUpdates`).
-       After the update completes, iterate over `failedUpdates` and log each
-       failure's error message together with the failed record's `Title`.
+       setting `Status`. Each entity in the batch input must carry its `Id`
+       so the service knows which record to update. Fail-fast on update
+       failures. Capture failed updates with their error messages into a
+       variable. After the update completes, iterate over that variable and
+       log each failure's error message together with the failed record's
+       `Title`.
 
-    4. If step 3 produced any failed updates (`failedUpdates.Count > 0`),
-       retry only the failed records by extracting the entity objects from
-       `failedUpdates` and calling a second batch update.
+    4. If step 3 produced any failed updates, retry only the failed records
+       by extracting the entity objects from step 3's failed-updates
+       variable and calling a second batch update.
 
     5. Delete every record from step 2's results in a single batch operation
-       — pass the record IDs (`Guid` values) extracted from `highScoreRecords`,
-       not the entity objects themselves. Set the batch to stop immediately
-       if any deletion fails. Capture failed deletions as IDs into a variable
-       (e.g. `failedDeleteIds`).
+       — pass record IDs (Guid values) extracted from step 2's results, not
+       the entity objects themselves. Fail-fast on deletion failures.
+       Capture failed deletions as IDs into a variable.
 
-  The output of step 2 must flow into steps 3 and 5, and step 3's
-  `failedUpdates` must flow into step 4 — do not re-derive IDs or re-query
-  records from any other source.
+  Step 2's output must flow into steps 3 and 5, and step 3's failed-updates
+  variable must flow into step 4 — do not re-derive IDs or re-query records
+  from any other source.
 
-  Sandbox setup (already in place — do not modify):
-    - `./NuGet.Config` declares a local NuGet source at `./local-feed/`
-    - `./local-feed/` hosts `UiPath.DataService.Activities` version `23.1.4-dev`,
-      which is the version you must pin in your project dependencies (this
-      package version is not available on any public feed)
-
-  Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
-  connected Data Service tenant — install both into the project.
-
-  For the entity install step — equivalent of `uip rpa data-fabric-entities
-  install` in the skill docs — run the rpa-tool source directly:
-
-      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir "<PROJECT_DIR>" --verbose --format json
-
-  All other commands use the standard `uip rpa` CLI as documented in the skill.
+  Sandbox + entity install: read `./EVAL_SANDBOX.md` and follow it.
 
 success_criteria:
   - type: file_exists

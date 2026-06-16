@@ -27,57 +27,33 @@ initial_prompt: |
   entity `CodingAgentsEvalEntity`. The workflow must contain these activities
   in order:
 
-    1. Create a new record populating all seven scalar fields:
-         - `Title` (required) = `'Lifecycle Test'`
-         - `Notes` = `'Initial notes'`
-         - `Score` = `42`
-         - `Price` = `9.99`
-         - `IsActive` = `true`
-         - `EventDate` = `'2026-04-18'`
-         - `ScheduledAt` = `'2026-04-18T09:00:00+05:30'`
-       Set the activity to continue on error and bind the created record to
-       a workflow variable (e.g. `createdRecord`).
+    1. Create a new record populating all seven scalar fields (Title — the
+       required one — plus Notes, Score, Price, IsActive, EventDate,
+       ScheduledAt) with sample type-appropriate values. Create must not
+       block downstream steps on failure. Bind the created record to a
+       workflow variable, and reference it consistently downstream.
 
     2. Conditionally proceed only if step 1 produced a record (null guard).
        Inside the guard:
 
-       a. Fetch the record by `createdRecord.Id` with related-entity
-          expansion depth set to 1. Bind the fetched record to a separate
-          variable (e.g. `fetchedRecord`). Log `fetchedRecord.Title` to the
-          output.
+       a. Fetch the record by the created record's Id, with related-entity
+          expansion depth of 1. Bind the fetched record to a separate
+          variable and log its Title.
 
-       b. Update the same record by `createdRecord.Id`, setting these four
-          fields and leaving every other field on the record unchanged:
-            - `Title` = `''` (empty string — intentional clear)
-            - `Score` = `99`
-            - `Price` = `19.99`
-            - `IsActive` = `false`
-          Set the activity to continue on error.
+       b. Update the same record by the created record's Id, touching only
+          Title, Score, Price, and IsActive (and leaving every other field
+          unchanged). Update must not block subsequent steps on failure.
 
-       c. Fetch the record again by `createdRecord.Id`. Bind the result to a
-          third variable (e.g. `verifiedRecord`).
+       c. Fetch the record again by the same Id and bind it to a third
+          variable.
 
-       d. Delete the record by `createdRecord.Id`. Set the activity to
-          continue on error.
+       d. Delete the record by the same Id. Delete must not block the
+          workflow on failure.
 
-  The output of step 1 must flow into steps 2a, 2b, 2c, and 2d as the record
-  ID — do not re-derive the ID from any other source.
+  The created record's Id must flow into steps 2a–2d — do not re-derive it
+  from any other source.
 
-  Sandbox setup (already in place — do not modify):
-    - `./NuGet.Config` declares a local NuGet source at `./local-feed/`
-    - `./local-feed/` hosts `UiPath.DataService.Activities` version `23.1.4-dev`,
-      which is the version you must pin in your project dependencies (this
-      package version is not available on any public feed)
-
-  Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
-  connected Data Service tenant — install both into the project.
-
-  For the entity install step — equivalent of `uip rpa data-fabric-entities
-  install` in the skill docs — run the rpa-tool source directly:
-
-      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir "<PROJECT_DIR>" --verbose --format json
-
-  All other commands use the standard `uip rpa` CLI as documented in the skill.
+  Sandbox + entity install: read `./EVAL_SANDBOX.md` and follow it.
 
 success_criteria:
   - type: file_exists

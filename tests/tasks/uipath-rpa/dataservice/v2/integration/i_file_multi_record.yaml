@@ -28,53 +28,38 @@ initial_prompt: |
   entity `CodingAgentsEvalFileEntity`. The workflow must contain these
   activities in order:
 
-    1. Create 3 records in a single batch operation with Titles
-       `'Contract-A'`, `'Contract-B'`, `'Contract-C'`. Bind the created
-       records to a workflow variable (e.g. `createdRecords`).
+    1. Create 3 records in a single batch operation with distinct sample
+       Titles. Bind the created records to a workflow variable.
 
-    2. For the first created record (Contract-A):
-       a. Upload the file at `'C:\docs\a.pdf'` to the `Attachment` field by
-          record ID. Use the file-path upload mode (pass the path string).
-       b. Download the file from the `Attachment` field by record ID, saving
-          it to `'C:\docs\downloaded-a.pdf'`. Bind the downloaded resource
-          to a workflow variable.
-       c. Delete the file from the `Attachment` field by record ID.
+    2. For the first created record:
+       a. Upload a local file (path of your choice) to the `Attachment`
+          field by record Id. Upload by file path (string).
+       b. Download the file from the `Attachment` field by record Id,
+          saving it to an explicit local path AND binding the downloaded
+          resource to a workflow variable for reuse in step 3.
+       c. Delete the file from the `Attachment` field by record Id.
 
-    3. For the second created record (Contract-B):
-       a. Upload a file resource (already available in workflow variable
-          `fileRes`) to the `Report` field by record ID. Use the file-resource
-          upload mode (pass the resource object, NOT a path string).
-       b. Download the file from the `Report` field by record ID. Do NOT
-          set a file path — bind only the downloaded resource to a workflow
-          variable for further processing.
-       c. Delete the file from the `Report` field by record ID.
+    3. For the second created record:
+       a. Upload the file-resource variable from step 2b to the `Report`
+          field by record Id. Upload by file-resource handle (NOT by path
+          string).
+       b. Download the file from the `Report` field by record Id. Do NOT
+          set a file path — bind only the downloaded resource.
+       c. Delete the file from the `Report` field by record Id.
 
-    4. For the third created record (Contract-C):
-       a. Upload the file at `'C:\docs\c.pdf'` to the field named
+    4. For the third created record:
+       a. Upload a local file (path of your choice) to the field named
           `attachmentFile` (camelCase — preserve this name exactly) by
-          record ID. Use the file-path upload mode.
-       b. Download the file from the `attachmentFile` field by record ID.
+          record Id. Upload by file path (string).
+       b. Download the file from the `attachmentFile` field by record Id.
           Bind only the downloaded resource (no file path).
-       c. Delete the file from the `attachmentFile` field by record ID.
+       c. Delete the file from the `attachmentFile` field by record Id.
 
-  Each file-activity `RecordId` must come from the corresponding entry in
-  `createdRecords` — do not re-derive IDs from any other source.
+  Each file-activity's `RecordId` must come from the corresponding entry in
+  step 1's created-records collection — do not re-derive IDs from any other
+  source.
 
-  Sandbox setup (already in place — do not modify):
-    - `./NuGet.Config` declares a local NuGet source at `./local-feed/`
-    - `./local-feed/` hosts `UiPath.DataService.Activities` version `23.1.4-dev`,
-      which is the version you must pin in your project dependencies (this
-      package version is not available on any public feed)
-
-  Both `CodingAgentsEvalEntity` and `CodingAgentsEvalFileEntity` exist on the
-  connected Data Service tenant — install both into the project.
-
-  For the entity install step — equivalent of `uip rpa data-fabric-entities
-  install` in the skill docs — run the rpa-tool source directly:
-
-      bun C:\Users\suphalathlur\Studio\RpaTool\rpa-tool\src\index.ts install-data-fabric-entities --add SystemUser,CodingAgentsEvalEntity,CodingAgentsEvalFileEntity --project-dir "<PROJECT_DIR>" --verbose --format json
-
-  All other commands use the standard `uip rpa` CLI as documented in the skill.
+  Sandbox + entity install: read `./EVAL_SANDBOX.md` and follow it.
 
 success_criteria:
   - type: file_exists
