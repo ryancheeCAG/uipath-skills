@@ -1,10 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { readFileSync, mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
 import { validateIntent, resolveMetric, buildWidgetFile, generateViewFile, buildViewSpec, compileColumns, emit, parseEvent, classifyEditIntent, resolveChangeMetric, widgetLayoutGroup, VALID_DISPLAY_TYPES, metricModuleSpecifier, buildVersions, SCAFFOLD_VERSION, INTENT_SCHEMA_VERSION, STATE_SCHEMA_VERSION, scaffoldDrift, runIntentMigrations, VALID_EDIT_OPS } from '../build-dashboard.mjs'
+import { zipDir, unzipTo, contentHash } from '../lib/zip.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REGISTRY_PATH = resolve(__dirname, '../capability-registry.json')
@@ -64,6 +65,38 @@ test('VALID_EDIT_OPS includes UPGRADE', () => {
 test('classifyEditIntent accepts a no-target UPGRADE op', () => {
   const plan = classifyEditIntent({ projectDir: '/p', op: 'UPGRADE' })
   assert.equal(plan.ops[0].op, 'UPGRADE')
+})
+
+// ── Phase 3: zip library ──────────────────────────────────────────────────────
+test('zip round-trip preserves files and bytes (incl. nested dirs)', () => {
+  const src = mkdtempSync(join(tmpdir(), 'zsrc-'))
+  const dst = mkdtempSync(join(tmpdir(), 'zdst-'))
+  writeFileSync(join(src, 'a.txt'), 'hello')
+  mkdirSync(join(src, 'sub'), { recursive: true })
+  writeFileSync(join(src, 'sub', 'b.ts'), 'export const x = 1\n')
+  try {
+    unzipTo(zipDir(src), dst)
+    assert.equal(readFileSync(join(dst, 'a.txt'), 'utf8'), 'hello')
+    assert.equal(readFileSync(join(dst, 'sub', 'b.ts'), 'utf8'), 'export const x = 1\n')
+  } finally {
+    rmSync(src, { recursive: true, force: true })
+    rmSync(dst, { recursive: true, force: true })
+  }
+})
+
+test('contentHash is stable for identical content and changes when content changes', () => {
+  const a = mkdtempSync(join(tmpdir(), 'zha-'))
+  const b = mkdtempSync(join(tmpdir(), 'zhb-'))
+  writeFileSync(join(a, 'f.txt'), 'same')
+  writeFileSync(join(b, 'f.txt'), 'same')
+  try {
+    assert.equal(contentHash(a), contentHash(b))
+    writeFileSync(join(b, 'f.txt'), 'different')
+    assert.notEqual(contentHash(a), contentHash(b))
+  } finally {
+    rmSync(a, { recursive: true, force: true })
+    rmSync(b, { recursive: true, force: true })
+  }
 })
 
 function resolveT1(metricName) {
