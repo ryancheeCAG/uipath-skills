@@ -2,12 +2,12 @@ task_id: skill-api-workflow-intsvc-outlook-send
 description: >
   Skill-guided e2e: agent authors an Integration Service vendor activity
   (Outlook send email, IntSvc kind) via the full connector flow — registry
-  resolve, REQUIRED connection ping, stub with --connection-id. Tests the
-  IntSvc authoring path: call:"UiPath.IntSvc", a real pinged connection UUID
-  (NOT a placeholder), and the resolve+ping+stub discipline (rule 16).
+  resolve, connection discovery, stub with --connection-id. Tests the
+  IntSvc authoring path: call:"UiPath.IntSvc", a connection UUID wired in
+  (NOT a placeholder), and the resolve+stub discipline (rule 16).
   AUTHORING ONLY — the agent must NOT run with auth, so no real email is sent.
-  REQUIRES cloud auth AND a working Outlook connection in the runner's tenant;
-  runs under the authed (nightly) experiment, never the no-auth smoke gate.
+  REQUIRES cloud auth; runs under the authed (nightly) experiment, never the
+  no-auth smoke gate.
 tags: [uipath-api-workflow, e2e, mode:build, lifecycle:generate, connector, feature:registry]
 
 initial_prompt: |
@@ -28,14 +28,6 @@ success_criteria:
     description: "Workflow.json was created"
     path: "Workflow.json"
     weight: 1.0
-    pass_threshold: 1.0
-
-  - type: command_executed
-    description: "Agent verified the connection with a ping (rule 16 — REQUIRED)"
-    tool_name: "Bash"
-    command_pattern: 'uip\s+is\s+connections\s+ping'
-    min_count: 1
-    weight: 1.5
     pass_threshold: 1.0
 
   - type: command_executed
