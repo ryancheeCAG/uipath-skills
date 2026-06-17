@@ -1,6 +1,6 @@
 # Governance (Insights RTM) Reference
 
-> Requires `@uipath/uipath-typescript` **≥ 1.4.0**. Scopes: `Insights Insights.RealTimeData`. Governance endpoints expect an **elevated (org-admin) caller** — `fullOrganization: true` returns 403 without org-admin rights; if a tenant-scoped call 403s, tell the user their account lacks governance access.
+> Requires `@uipath/uipath-typescript` **≥ 1.4.1**. Scopes: `Insights Insights.RealTimeData`. Governance endpoints expect an **elevated (org-admin) caller** — `fullOrganization: true` returns 403 without org-admin rights; if a tenant-scoped call 403s, tell the user their account lacks governance access.
 
 ```typescript
 import { Governance, PolicyEvaluationResult } from '@uipath/uipath-typescript/governance';

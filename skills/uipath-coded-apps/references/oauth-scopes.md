@@ -209,19 +209,19 @@ Combined scopes required: `OR.Execution` · `OR.Folders` · `OR.Jobs` · `Conver
 
 ---
 
-## Agents — Insights RTM (SDK ≥ 1.4.0)
+## Agents — Insights RTM (SDK ≥ 1.4.1)
 
 | Method | Required Scope |
 |--------|----------------|
 | `Agents.getAll()` | `Insights` and `Insights.RealTimeData` |
 
-## Agent Memory (SDK ≥ 1.4.0)
+## Agent Memory (SDK ≥ 1.4.1)
 
 | Method | Required Scope |
 |--------|----------------|
 | `AgentMemory.getTimeline()` / `getCallsTimeline()` / `getTopSpaces()` | `Insights` and `Insights.RealTimeData` |
 
-## Governance (SDK ≥ 1.4.0)
+## Governance (SDK ≥ 1.4.1)
 
 | Method | Required Scope |
 |--------|----------------|

@@ -97,7 +97,7 @@ The build type-checks all `metrics/*.ts` modules in isolation (Stage A) before g
 
 The registry entry describes the metric and expected SDK call. Use it as your guide, then write the correct `metrics/<name>.ts` module from the SDK documentation.
 
-| Metric name | What it shows | Registry template | SDK hint (≥ 1.4.0) |
+| Metric name | What it shows | Registry template | SDK hint (≥ 1.4.1) |
 |-------------|--------------|-------------------|--------------------|
 | `active-agents-kpi` | Count of active agents | `kpi-card` | `Agents.getAll(start, end)` → `{ items }`; return `[{ count: items.length }]` |
 | `agent-consumption` | Agents ranked by AGU/PLTU | `ranked-table` | `Agents.getAll(start, end, { orderBy: { column: AgentListSortColumn.QuantityAGU, desc: true } })` → `{ items }` |
@@ -355,7 +355,7 @@ export const fetchDetail: MetricFn = async (sdk) => {
 
 | User asks for | Why impossible | Suggest instead |
 |--------------|----------------|-----------------|
-| Agent error / latency / consumption **timelines** | SDK 1.4.0 Agents service has only `getAll` (list + health + consumption totals) — no time-series endpoints | `agent-health` / `agent-consumption` (per-agent totals), or T3 Jobs trend with `ProcessType eq 'Agent'` |
+| Agent error / latency / consumption **timelines** | SDK 1.4.1 Agents service has only `getAll` (list + health + consumption totals) — no time-series endpoints | `agent-health` / `agent-consumption` (per-agent totals), or T3 Jobs trend with `ProcessType eq 'Agent'` |
 | Agent cost in dollars | Platform tracks AGU/PLTU units, not currency | `agent-consumption` for per-agent unit totals |
 | CPU/RAM per agent | Not exposed by any API ("Agent Memory" = memory entries, not RAM) | `agent-health`; or `agent-memory-timeline` if they meant the Memory feature |
 | Who triggered a job | Job records have no end-user identity | `job-completion-trend` grouped by process; `policy-denials` includes `actorIdentityId` for governance events |
@@ -371,8 +371,8 @@ Full method signatures, response types, and field names live in `references/sdk/
 
 | Domain | Reference file | Key service classes |
 |--------|---------------|---------------------|
-| Agents + Agent Memory (Insights RTM, ≥ 1.4.0) | `sdk/agents.md` *(from skill root)* | `Agents`, `AgentMemory` |
-| Governance (Insights RTM, ≥ 1.4.0) | `sdk/governance.md` *(from skill root)* | `Governance` |
+| Agents + Agent Memory (Insights RTM, ≥ 1.4.1) | `sdk/agents.md` *(from skill root)* | `Agents`, `AgentMemory` |
+| Governance (Insights RTM, ≥ 1.4.1) | `sdk/governance.md` *(from skill root)* | `Governance` |
 | Jobs, Queues, Processes, Assets | `sdk/orchestrator.md` *(from skill root)* | `Jobs`, `Queues`, `Processes`, `Assets` |
 | Tasks | `sdk/action-center.md` *(from skill root)* | `Tasks` |
 | Cases, Process Instances | `sdk/maestro.md` *(from skill root)* | `Cases`, `CaseInstances` |

@@ -49,7 +49,7 @@ Fire all of these simultaneously. Use multiple tool calls in one response — do
 | `references/dashboards/aesthetic/layout-patterns.md` *(from skill root)* | Layout rules |
 | `references/dashboards/aesthetic/charting.md` *(from skill root)* | Chart-type selection, colour tokens, delta polarity |
 | `assets/scripts/capability-registry.json` *(from skill root)* | Metric catalog (T1/T2 display hints) |
-| `references/sdk/agents.md` *(from skill root)* | Agents + Agent Memory (Insights RTM, SDK ≥ 1.4.0) — validate agent/memory metrics |
+| `references/sdk/agents.md` *(from skill root)* | Agents + Agent Memory (Insights RTM, SDK ≥ 1.4.1) — validate agent/memory metrics |
 | `references/sdk/orchestrator.md` *(from skill root)* | Jobs/Queues/Processes methods — validate job/process metrics |
 
 **Conditional reads (add to the same parallel message if the request mentions these):**

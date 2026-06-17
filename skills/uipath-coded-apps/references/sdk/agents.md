@@ -1,6 +1,6 @@
 # Agents & Agent Memory (Insights RTM) Reference
 
-> Requires `@uipath/uipath-typescript` **≥ 1.4.0**. Scopes: `Insights Insights.RealTimeData`.
+> Requires `@uipath/uipath-typescript` **≥ 1.4.1**. Scopes: `Insights Insights.RealTimeData`.
 
 Two services, **two different calling conventions** — do not mix them up:
 
@@ -52,7 +52,7 @@ The agent list with consumption + health metadata aggregated over the window. Re
 }
 ```
 
-> **Semantics:** this is the ONLY Agents method in SDK 1.4.0. There is **no error timeline, latency timeline, consumption timeline, or top-errored endpoint** — do not invent `getErrorsTimeline` / `getConsumptionTimeline` / `getLatencyTimeline` / `getTopErroredAgents`. Per-agent totals (`quantityAGU`, `healthScore`) support KPIs and ranked tables, not time-series charts. For agent run/error *trends*, use the Jobs SDK with `ProcessType eq 'Agent'` (see `sdk/orchestrator.md § Job classification`).
+> **Semantics:** this is the ONLY Agents method in SDK 1.4.1. There is **no error timeline, latency timeline, consumption timeline, or top-errored endpoint** — do not invent `getErrorsTimeline` / `getConsumptionTimeline` / `getLatencyTimeline` / `getTopErroredAgents`. Per-agent totals (`quantityAGU`, `healthScore`) support KPIs and ranked tables, not time-series charts. For agent run/error *trends*, use the Jobs SDK with `ProcessType eq 'Agent'` (see `sdk/orchestrator.md § Job classification`).
 
 ### fnBody patterns
 

@@ -14,10 +14,10 @@ const registry = JSON.parse(readFileSync(REGISTRY_PATH, 'utf8'))
 
 // ── Phase 2: version stamps ───────────────────────────────────────────────────
 test('buildVersions stamps skill/scaffold/intentSchema/sdk', () => {
-  const v = buildVersions('1.4.0')
+  const v = buildVersions('1.4.1')
   assert.equal(v.scaffold, SCAFFOLD_VERSION)
   assert.equal(v.intentSchema, INTENT_SCHEMA_VERSION)
-  assert.equal(v.sdk, '1.4.0')
+  assert.equal(v.sdk, '1.4.1')
   assert.ok(typeof v.skill === 'string' && v.skill.length > 0)
 })
 
@@ -705,9 +705,9 @@ test('generateViewFile: falls back to autoColumns when no detailColumns', () => 
   assert.ok(view.includes('const columns = autoColumns(rows)'))
 })
 
-// ── SDK 1.4.0: agent / memory / governance metrics ────────────────────────────
+// ── SDK 1.4.1: agent / memory / governance metrics ────────────────────────────
 
-test('1.4.0: previously-refused agent metrics now resolve as T1', () => {
+test('1.4.1: previously-refused agent metrics now resolve as T1', () => {
   for (const [text, expected] of [
     ['show active agents', 'active-agents-kpi'],
     ['agu consumption by agent', 'agent-consumption'],
@@ -723,19 +723,19 @@ test('1.4.0: previously-refused agent metrics now resolve as T1', () => {
   }
 })
 
-test('1.4.0: timeline metrics the SDK lacks are still hard-refused', () => {
+test('1.4.1: timeline metrics the SDK lacks are still hard-refused', () => {
   for (const text of ['invocation volume over time', 'consumption timeline', 'agent latency p95', 'agent error rate trend']) {
     const refused = registry.hardRefuse.some(e => new RegExp(e.pattern).test(text))
-    assert.ok(refused, `"${text}" should be hard-refused (no SDK 1.4.0 endpoint)`)
+    assert.ok(refused, `"${text}" should be hard-refused (no SDK 1.4.1 endpoint)`)
     assert.equal(resolveAlias(text)?.key?.startsWith('agent-memory') ?? false, false)
   }
 })
 
-test('1.4.0: t1_unavailable section is gone (stale PR #438 entries removed)', () => {
+test('1.4.1: t1_unavailable section is gone (stale PR #438 entries removed)', () => {
   assert.equal(registry.t1_unavailable, undefined)
 })
 
-test('1.4.0: agent-health shell build compiles formatted/colored columnDefs', () => {
+test('1.4.1: agent-health shell build compiles formatted/colored columnDefs', () => {
   const entry = registry.t1['agent-health']
   const content = buildWidgetFile(
     { name: 'agent-health', tier: 'T1', title: 'Agent Health', displayAs: 'ranked-table', fnBody: 'return []' },
@@ -821,7 +821,7 @@ test('widgetLayoutGroup: classifies only buildable types', () => {
   assert.equal(widgetLayoutGroup('area-chart'), 'chart')
 })
 
-test('1.4.0: governance-verdicts donut uses name/value keys from defaults', () => {
+test('1.4.1: governance-verdicts donut uses name/value keys from defaults', () => {
   const entry = registry.t1['governance-verdicts']
   const content = buildWidgetFile(
     { name: 'governance-verdicts', tier: 'T1', title: 'Governance Verdicts', displayAs: 'donut-chart', fnBody: 'return []' },

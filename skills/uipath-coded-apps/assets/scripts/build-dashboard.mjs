@@ -169,10 +169,10 @@ export const VALID_COLUMN_FORMATS = ['number', 'percent', 'duration', 'timeAgo',
 
 /**
  * Minimum SDK version the catalog metrics require — the agent-memory and
- * governance subpaths ship in 1.4.0. A stale lockfile/registry otherwise
+ * governance subpaths ship in 1.4.1. A stale lockfile/registry otherwise
  * surfaces as cryptic tsc "module not found" failures mid-build.
  */
-export const MIN_SDK_VERSION = '1.4.0'
+export const MIN_SDK_VERSION = '1.4.1'
 
 export const SKILL_VERSION = '2.0.0'        // compiler-architecture era; bump per skill release
 const SCAFFOLD_MANIFEST_PATH = resolve(__dirname, '../fixtures/governance-dashboard-starter-kit.manifest.json')

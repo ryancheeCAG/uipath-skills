@@ -7,7 +7,7 @@ Per-project metadata. Read at every build start. Written by build script on succ
 ```json
 {
   "schemaVersion": 2,
-  "versions": { "skill": "2.0.0", "scaffold": "1.0.0", "intentSchema": 2, "sdk": "1.4.0" },
+  "versions": { "skill": "2.0.0", "scaffold": "1.0.0", "intentSchema": 2, "sdk": "1.4.1" },
   "app": {
     "name": "Operations Health Dashboard",
     "routingName": "operations-health-x7k2",
