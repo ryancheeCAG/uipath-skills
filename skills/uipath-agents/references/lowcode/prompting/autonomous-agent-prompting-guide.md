@@ -1,10 +1,8 @@
-# Agent Prompting Guide
+# Autonomous Agents Prompting Guide
 
-Robust prompts for low-code agents. This guide owns prompt **quality**; [agent-definition.md](agent-definition.md#contenttokens-construction) owns the `contentTokens` **mechanics** (keep `content` ↔ `contentTokens` in sync after every edit here).
+This is the prompting guide for low-code autonomous agents.
 
 "Coding-agent-centric" = the prompt makes the embedded agent behave like a disciplined tool-using agent: explicit tool-call criteria, stop conditions, structured output. Maps to the agent's `tool` artifact ports and `outputSchema`.
-
-> Default scaffolds ship toy prompts ("You are an agentic assistant" / "What is the current date?"). Replace them. A placeholder system prompt is the single biggest quality gap in a scaffolded agent.
 
 ## 1. System-prompt skeleton
 
@@ -54,10 +52,10 @@ The user message carries the task and the data — not the role.
 
 Token form depends on context:
 
-- **Inline-in-flow agents** reference upstream flow nodes: `{{ $vars.<flowNodeId>.output[.<field>] }}`. See the [uipath-maestro-flow inline-agent prompt-wiring guide](../../../uipath-maestro-flow/references/author/references/plugins/inline-agent/impl.md#wiring-flow-variables-into-agent-prompts).
+- **Inline-in-flow agents** reference upstream flow nodes: `{{ $vars.<flowNodeId>.output[.<field>] }}`. See the [uipath-maestro-flow inline-agent prompt-wiring guide](../../../../uipath-maestro-flow/references/author/references/plugins/inline-agent/impl.md#wiring-flow-variables-into-agent-prompts).
 - **Standalone agents** reference declared inputs: `{{input.<field>}}`.
 
-Mirror every `{{ ... }}` in `contentTokens[]` per [agent-definition.md § contentTokens Construction](agent-definition.md#contenttokens-construction).
+Mirror every `{{ ... }}` in `contentTokens[]` per [agent-definition.md § contentTokens Construction](../agent-definition.md#contenttokens-construction).
 
 ## 3. Grounding in wired data
 
@@ -70,7 +68,7 @@ Realistic inline-in-flow agent. Note the **structured `outputSchema`**, not a ba
 **Before (toy):**
 
 ```json
-"settings": { "model": "gpt-4o-2024-11-20" },
+"settings": { "model": "gpt-5.4" },
 "outputSchema": { "type": "object", "properties": { "content": { "type": "string" } } },
 "messages": [
   { "role": "system", "content": "You are an assistant." },
@@ -134,13 +132,13 @@ A robust agent is more than its prompt. Each field: default, and when to change.
 | `outputSchema` | Scaffold gives a single `content` string | **Almost always** — define typed fields a downstream node can consume. Bare `content` forces brittle string-parsing. |
 | `settings.temperature` | `0` | Keep `0` for extraction/classification/judgment. Raise only when output *variation* is wanted (drafting, brainstorming). |
 | `settings.maxIterations` | `25` | Lower (≤5) for single-shot classification. Higher for multi-tool research loops. |
-| `settings.maxTokens` | Scaffold value | Set ≤ the model's `MaxTokens` cap — see [model-selection-guide.md](model-selection-guide.md#1-discover-primary-path). |
-| `settings.model` | `gpt-4o-2024-11-20` | **Always override** — discover + select per [model-selection-guide.md](model-selection-guide.md). |
-| `guardrails` | `[]` | Add input/output policy enforcement (PII, content, escalation). See [capabilities/guardrails/guardrails.md](capabilities/guardrails/guardrails.md). |
+| `settings.maxTokens` | Scaffold value | Set ≤ the model's `MaxTokens` cap — see [model-selection-guide.md](../model-selection-guide.md#1-discover-primary-path). |
+| `settings.model` | `gpt-5.4` | **Always override** — discover + select per [model-selection-guide.md](../model-selection-guide.md). |
+| `guardrails` | `[]` | Add input/output policy enforcement (PII, content, escalation). See [capabilities/guardrails/guardrails.md](../capabilities/guardrails/guardrails.md). |
 
 ## Anti-patterns
 
-- **Vague role** — "You are an assistant." Name the role and bound the scope.
+- **Vague role** — "You are a helpful agentic assistant." Name the role and bound the scope.
 - **No output contract** — agent free-forms prose; downstream nodes can't parse it.
 - **Bare `content` output** — a single string where typed fields belong. Define `outputSchema`.
 - **No tool-call criteria** — agent over-calls tools or loops to `maxIterations`.
