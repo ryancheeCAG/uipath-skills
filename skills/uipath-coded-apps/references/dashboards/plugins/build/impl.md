@@ -211,12 +211,15 @@ export const fetchDetail: MetricFn = async (sdk) => {
 
 Never re-ask for anything the user already provided. The same pattern applies to deploy (see `plugins/deploy/impl.md`): present the deploy plan as text → free-text confirm → then the pin question only if the confirmation didn't already settle it.
 
-**Creating the OAuth app:** Run this single command:
+**Creating the OAuth app:** Run this single command. `--redirect-uri` takes **comma-separated** values — register BOTH the local dev server and the org portal base, so login works in dev and after deploy:
+
+- `http://localhost:57173` — local dev server
+- `<CLOUD_URL>/<ORG>/portal_` — deployed app base; `<CLOUD_URL>` and `<ORG>` are the `cloudUrl` (`Data.BaseUrl`) and `orgName` (`Data.Organization`) extracted in Phase 1, so they track the logged-in environment (e.g. `https://alpha.uipath.com/acme/portal_`)
 
 ```bash
 uip admin external-apps create "UiPath Dashboard - <DASHBOARD_NAME>" \
   --non-confidential \
-  --redirect-uri "http://localhost:57173" \
+  --redirect-uri "http://localhost:57173,<CLOUD_URL>/<ORG>/portal_" \
   --user-scope "OR.Assets,OR.Jobs,OR.Folders,OR.Buckets,OR.Execution,OR.Tasks,OR.Queues,OR.Users,Insights,Insights.RealTimeData" \
   --output json
 ```
@@ -228,7 +231,7 @@ Read `ClientId` from the JSON response and carry it as the plan's `clientId` (th
 ```bash
 uip admin external-apps create "UiPath Dashboard - <DASHBOARD_NAME>" \
   --non-confidential \
-  --redirect-uri "http://localhost:57173" \
+  --redirect-uri "http://localhost:57173,<CLOUD_URL>/<ORG>/portal_" \
   --user-scope "OR.Assets,OR.Jobs,OR.Folders,OR.Buckets,OR.Execution,OR.Tasks,OR.Queues,OR.Users" \
   --output json
 ```
