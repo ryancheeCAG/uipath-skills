@@ -41,6 +41,108 @@
         ]
       }
     },
+    "agent-error-timeline": {
+      "aliases": ["agent error", "error timeline", "errors over time", "agent errors over time", "error trend", "error rate trend", "agent error rate", "error spike", "errors by day"],
+      "template": "area-chart",
+      "description": "Agent error counts over time (total across agents). SDK: `new Agents(sdk as never).getErrorsTimeline(startTime, endTime, { limit })` (positional Dates) → BARE array `[{ name (agent), value (count), date }]`. Module aggregates per date — sum `value` grouped by `date` → `[{ date, value }]`. Import from @uipath/uipath-typescript/agents.",
+      "defaults": {
+        "title": "Agent Errors Over Time",
+        "description": "Error volume across agents",
+        "icon": "TriangleAlert",
+        "xKey": "date",
+        "yKey": "value",
+        "headlineMode": "sum",
+        "deltaPolarity": "up-bad"
+      }
+    },
+    "agent-latency-timeline": {
+      "aliases": ["agent latency", "latency timeline", "latency over time", "p95 latency", "p50 latency", "latency trend", "agent latency p95", "response time over time"],
+      "template": "multi-line-chart",
+      "description": "Agent latency percentiles over time. SDK: `new Agents(sdk as never).getLatencyTimeline(startTime, endTime)` (positional Dates) → BARE array `[{ name ('P50'|'P95'), value (ms), date }]`. Module pivots long→wide per date — `[{ date, P50, P95 }]`. xKey: date; series plots P50/P95.",
+      "defaults": {
+        "title": "Agent Latency",
+        "description": "P50 / P95 latency over time (ms)",
+        "icon": "Gauge",
+        "xKey": "date",
+        "series": "[{key:\"P50\",color:\"hsl(var(--chart-1))\"},{key:\"P95\",color:\"hsl(var(--chart-2))\"}]",
+        "headlineMode": "latest",
+        "deltaPolarity": "up-bad"
+      }
+    },
+    "agent-consumption-timeline": {
+      "aliases": ["consumption timeline", "consumption over time", "consumption trend", "agu over time", "units consumed over time"],
+      "template": "area-chart",
+      "description": "AGU consumption over time. SDK: `new Agents(sdk as never).getConsumptionTimeline(startTime, endTime)` (positional Dates) → BARE array `[{ timeSlice, aguConsumption }]` (native chart shape — return as-is).",
+      "defaults": {
+        "title": "AGU Consumption Over Time",
+        "description": "Agent Units consumed over time",
+        "icon": "Activity",
+        "xKey": "timeSlice",
+        "yKey": "aguConsumption",
+        "headlineMode": "sum",
+        "deltaPolarity": "neutral"
+      }
+    },
+    "agent-errors": {
+      "aliases": ["agent error breakdown", "errors by type", "top errors", "error types", "most common errors", "error classes", "ranked errors", "error breakdown"],
+      "template": "ranked-table",
+      "description": "Agent error classes ranked by occurrence. SDK: `new Agents(sdk as never).getErrors(startTime, endTime, { orderBy: { column: AgentErrorSortColumn.ExecutionCount, desc: true } })` → `{ items: AgentError[] }`. Import AgentErrorSortColumn from the same subpath. Rows on `.items`.",
+      "defaults": {
+        "title": "Top Agent Errors",
+        "description": "Error classes ranked by occurrence",
+        "icon": "TriangleAlert",
+        "columnDefs": [
+          { "key": "type", "label": "Type" },
+          { "key": "description", "label": "Error" },
+          { "key": "agentName", "label": "Agent" },
+          { "key": "count", "label": "Count", "align": "right", "format": "number" }
+        ]
+      }
+    },
+    "trace-error-timeline": {
+      "aliases": ["trace errors", "trace error timeline", "errors by trace", "trace level errors", "errors grouped by name", "error name timeline"],
+      "template": "area-chart",
+      "description": "Trace-level error counts over time (grouped by error name; module sums per date for a total trend). SDK: `new AgentTraces(sdk as never).getErrorsTimeline({ startTime, endTime })` (options object) → BARE array `[{ name (error name), value, date }]`. Subpath: @uipath/uipath-typescript/traces.",
+      "defaults": {
+        "title": "Trace Errors Over Time",
+        "description": "Errors observed across agent traces",
+        "icon": "TriangleAlert",
+        "xKey": "date",
+        "yKey": "value",
+        "headlineMode": "sum",
+        "deltaPolarity": "up-bad"
+      }
+    },
+    "trace-latency-timeline": {
+      "aliases": ["trace latency", "trace latency timeline", "trace level latency", "span latency over time", "trace response time"],
+      "template": "area-chart",
+      "description": "Trace-level latency over time (decimal SECONDS). SDK: `new AgentTraces(sdk as never).getLatencyTimeline({ startTime, endTime })` → BARE array `[{ name (series), value (seconds), date }]`. The `name` values are not fixed percentiles — module averages `value` per `date` across series → `[{ date, value }]`. To plot distinct series, inspect the live `name` values and switch to multi-line-chart with those exact keys. Subpath: @uipath/uipath-typescript/traces.",
+      "defaults": {
+        "title": "Trace Latency",
+        "description": "Latency over time (seconds)",
+        "icon": "Gauge",
+        "xKey": "date",
+        "yKey": "value",
+        "headlineMode": "latest",
+        "deltaPolarity": "up-bad"
+      }
+    },
+    "agent-unit-consumption": {
+      "aliases": ["unit consumption", "per agent units", "agent unit consumption", "agu pltu per agent", "platform units per agent", "trace unit consumption"],
+      "template": "ranked-table",
+      "description": "Per-agent AGU/PLTU unit totals (trace-level). SDK: `new AgentTraces(sdk as never).getUnitConsumption({ startTime, endTime })` → BARE array `[{ agentId, folderKey, agentVersion, agentUnitsConsumed, platformUnitsConsumed }]`. Subpath: @uipath/uipath-typescript/traces.",
+      "defaults": {
+        "title": "Unit Consumption by Agent",
+        "description": "AGU / PLTU consumed per agent",
+        "icon": "Activity",
+        "columnDefs": [
+          { "key": "agentId", "label": "Agent" },
+          { "key": "agentVersion", "label": "Version" },
+          { "key": "agentUnitsConsumed", "label": "AGU", "align": "right", "format": "number" },
+          { "key": "platformUnitsConsumed", "label": "PLTU", "align": "right", "format": "number" }
+        ]
+      }
+    },
     "agent-memory-timeline": {
       "aliases": ["agent memory", "memory timeline", "memory state", "memory entries over time", "in-memory count"],
       "template": "area-chart",
@@ -198,10 +300,7 @@
     }
   },
   "hardRefuse": [
-    { "pattern": "invocation volume|consumption timeline|consumption over time|invocations over time", "reason": "SDK 1.4.1 has per-agent consumption totals (Agents.getAll → quantityAGU) but no time-bucketed consumption endpoint.", "alternative": "agent-consumption (T1 ranked table of per-agent AGU totals), or T3 via Jobs SDK: getAll({ filter: \"ProcessType eq 'Agent'\" }) bucketed by date for a run-volume trend." },
-    { "pattern": "agent error|error rate|error trend|error count|error spike|agent failure", "reason": "SDK 1.4.1 Agents service exposes list/health/consumption only — no agent error timeline endpoint.", "alternative": "T3 via Jobs SDK: getAll({ filter: \"State eq 'Faulted' and ProcessType eq 'Agent'\" }); or agent-health (T1 — healthScore + lastIncidentType per agent)." },
-    { "pattern": "top failing agent|most errors by agent", "reason": "SDK 1.4.1 has no per-agent error counts.", "alternative": "T3 via Jobs SDK: getAll({ filter: \"State eq 'Faulted' and ProcessType eq 'Agent'\" }) grouped by processName; or agent-health (T1) for worst health scores." },
-    { "pattern": "agent latency|p95 latency|p50 latency|latency trend", "reason": "SDK 1.4.1 has no agent latency endpoint.", "alternative": "T3 via Jobs SDK: getAll({ filter: \"ProcessType eq 'Agent'\" }), compute (endTime - startTime)." },
+    { "pattern": "invocation volume|invocations over time|invocation count|calls per agent", "reason": "SDK 1.4.1 has no agent invocation-count timeline. (It does have an AGU consumption timeline and an error timeline — those are separate metrics.)", "alternative": "agent-consumption-timeline (T1 — AGU over time), agent-error-timeline (T1), or T3 via Jobs SDK: getAll({ filter: \"ProcessType eq 'Agent'\" }) bucketed by date for a run-volume trend." },
     { "pattern": "cost.*dollar|dollar.*cost|\\$.*agent|agent.*\\$", "reason": "The platform tracks AGU/PLTU units, not currency.", "alternative": "agent-consumption (T1) for per-agent AGU/PLTU totals." },
     { "pattern": "cpu|ram per agent|per.agent ram", "reason": "Per-agent CPU/RAM is not exposed by any API. (Note: 'Agent Memory' is the memory-entries feature, not RAM.)", "alternative": "agent-health (T1) for health scores; agent-memory-timeline (T1) if they meant the Agent Memory feature." },
     { "pattern": "who triggered|triggered by|user.*job|job.*user", "reason": "Job records carry no end-user identity.", "alternative": "T3-SDK: new Jobs(sdk as never).getAll({ filter: \"ProcessName eq 'x'\" }) grouped by processName. For governance events, policy-denials (T1) includes actorIdentityId." },

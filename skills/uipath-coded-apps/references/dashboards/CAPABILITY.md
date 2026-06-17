@@ -58,6 +58,7 @@ Fire all of these simultaneously. Use multiple tool calls in one response — do
 |-----------------|-----------|
 | tasks, action items | `references/sdk/action-center.md` *(from skill root)* |
 | cases, process instances, Maestro | `references/sdk/maestro.md` *(from skill root)* |
+| traces, spans, trace-level errors/latency/units | `references/sdk/traces.md` *(from skill root)* |
 | governance, policy, compliance, denials | `references/sdk/governance.md` *(from skill root)* |
 
 **2 commands (same message):**

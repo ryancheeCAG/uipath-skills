@@ -213,7 +213,15 @@ Combined scopes required: `OR.Execution` · `OR.Folders` · `OR.Jobs` · `Conver
 
 | Method | Required Scope |
 |--------|----------------|
-| `Agents.getAll()` | `Insights` and `Insights.RealTimeData` |
+| `Agents.getAll()` / `getErrors()` | `Insights` and `Insights.RealTimeData` |
+| `Agents.getErrorsTimeline()` / `getConsumptionTimeline()` / `getLatencyTimeline()` | `Insights` and `Insights.RealTimeData` |
+
+## Agent Traces (SDK ≥ 1.4.1)
+
+| Method | Required Scope |
+|--------|----------------|
+| `AgentTraces.getErrorsTimeline()` / `getLatencyTimeline()` / `getUnitConsumption()` | `Insights` and `Insights.RealTimeData` |
+| `AgentTraces.getSpansByTraceId()` / `getSpansByReference()` | `Insights` and `Insights.RealTimeData` |
 
 ## Agent Memory (SDK ≥ 1.4.1)
 
@@ -240,4 +248,4 @@ Combined scopes required: `OR.Execution` · `OR.Folders` · `OR.Jobs` · `Conver
 | Orchestrator Jobs (list + read output) | `OR.Jobs.Read OR.Folders.Read` (add `OR.Folders.Read` so `Jobs.getOutput()` can resolve file-type output arguments via Attachments) |
 | Maestro full access | `PIMS OR.Execution.Read` |
 | Conversational Agent | `OR.Execution OR.Folders OR.Jobs ConversationalAgents Traces.Api` |
-| Insights RTM (Agents, Agent Memory, Governance) | `Insights Insights.RealTimeData` |
+| Insights RTM (Agents, Agent Traces, Agent Memory, Governance) | `Insights Insights.RealTimeData` |

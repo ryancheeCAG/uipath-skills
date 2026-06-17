@@ -723,11 +723,32 @@ test('1.4.1: previously-refused agent metrics now resolve as T1', () => {
   }
 })
 
-test('1.4.1: timeline metrics the SDK lacks are still hard-refused', () => {
-  for (const text of ['invocation volume over time', 'consumption timeline', 'agent latency p95', 'agent error rate trend']) {
+test('1.4.1: agent/trace timeline metrics now resolve as T1', () => {
+  for (const [text, expected] of [
+    ['agent error rate trend', 'agent-error-timeline'],
+    ['errors over time', 'agent-error-timeline'],
+    ['agent latency p95', 'agent-latency-timeline'],
+    ['latency over time', 'agent-latency-timeline'],
+    ['consumption timeline', 'agent-consumption-timeline'],
+    ['consumption over time', 'agent-consumption-timeline'],
+    ['top errors', 'agent-errors'],
+    ['errors by type', 'agent-errors'],
+    ['trace latency', 'trace-latency-timeline'],
+    ['trace errors', 'trace-error-timeline'],
+    ['unit consumption', 'agent-unit-consumption'],
+  ]) {
+    const result = resolveAlias(text)
+    assert.ok(result, `"${text}" did not resolve`)
+    assert.equal(result.key, expected, `"${text}" resolved to ${result.key}, expected ${expected}`)
     const refused = registry.hardRefuse.some(e => new RegExp(e.pattern).test(text))
-    assert.ok(refused, `"${text}" should be hard-refused (no SDK 1.4.1 endpoint)`)
-    assert.equal(resolveAlias(text)?.key?.startsWith('agent-memory') ?? false, false)
+    assert.ok(!refused, `"${text}" should NOT be hard-refused — SDK 1.4.1 supports it`)
+  }
+})
+
+test('1.4.1: invocation-count timelines (no SDK endpoint) are still hard-refused', () => {
+  for (const text of ['invocation volume over time', 'invocations over time', 'invocation count by day']) {
+    const refused = registry.hardRefuse.some(e => new RegExp(e.pattern).test(text))
+    assert.ok(refused, `"${text}" should be hard-refused (no SDK 1.4.1 invocation-count endpoint)`)
   }
 })
 

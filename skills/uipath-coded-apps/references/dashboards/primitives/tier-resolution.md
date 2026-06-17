@@ -68,7 +68,7 @@ export const fetchData: MetricFn = async (sdk) => {
 - Return a **flat array of row objects** — SDK-typed arrays accepted directly. Never add `as unknown as Record<string,unknown>[]` casts.
 - Use dynamic import: `const { ServiceClass } = await import('@uipath/uipath-typescript/...')`
 - Use constructor injection: `new ServiceClass(sdk as never)`
-- **Read methods ONLY.** Allowed: `getAll`, `getById`, `getAllRecords`, `queryRecordsById`, `getIncidents`. Never call `create`, `complete`, `assign`, `start`, `stop`, `resume`, `restart`, `insert*`, `update*`, `delete*`, `upload*`.
+- **Read methods ONLY.** Allowed: `getAll`, `getById`, `getAllRecords`, `queryRecordsById`, `getIncidents`, `getErrors`, `getErrorsTimeline`, `getConsumptionTimeline`, `getLatencyTimeline`, `getUnitConsumption`, `getTimeline`, `getCallsTimeline`, `getTopSpaces`, `getSpansByTraceId`, `getSpansByReference`, `getPolicyTraces`, `getOperationSummary`. Never call `create`, `complete`, `assign`, `start`, `stop`, `resume`, `restart`, `insert*`, `update*`, `delete*`, `upload*`.
 - **Full listings: use `fetchAll` — never hand-write the cursor loop.**
   ```ts
   import { fetchAll } from '@/lib/paginate'
@@ -102,6 +102,13 @@ The registry entry describes the metric and expected SDK call. Use it as your gu
 | `active-agents-kpi` | Count of active agents | `kpi-card` | `Agents.getAll(start, end)` → `{ items }`; return `[{ count: items.length }]` |
 | `agent-consumption` | Agents ranked by AGU/PLTU | `ranked-table` | `Agents.getAll(start, end, { orderBy: { column: AgentListSortColumn.QuantityAGU, desc: true } })` → `{ items }` |
 | `agent-health` | Agents ranked by health score | `ranked-table` | `Agents.getAll(start, end, { orderBy: { column: AgentListSortColumn.HealthScore } })` → `{ items }` (healthScore 0–100, lastIncidentType) |
+| `agent-error-timeline` | Agent errors over time | `area-chart` | `Agents.getErrorsTimeline(start, end)` → BARE `[{ name, value, date }]`; module sums `value` per `date` |
+| `agent-latency-timeline` | P50/P95 latency over time | `multi-line-chart` | `Agents.getLatencyTimeline(start, end)` → BARE `[{ name:'P50'\|'P95', value (ms), date }]`; module pivots to `[{ date, P50, P95 }]` |
+| `agent-consumption-timeline` | AGU consumed over time | `area-chart` | `Agents.getConsumptionTimeline(start, end)` → BARE `[{ timeSlice, aguConsumption }]` (native shape) |
+| `agent-errors` | Error classes ranked | `ranked-table` | `Agents.getErrors(start, end, { orderBy: { column: AgentErrorSortColumn.ExecutionCount, desc: true } })` → `{ items }` |
+| `trace-error-timeline` | Trace errors over time | `area-chart` | `AgentTraces.getErrorsTimeline({ startTime, endTime })` → BARE `[{ name, value, date }]` (see `sdk/traces.md`) |
+| `trace-latency-timeline` | Trace latency over time | `area-chart` | `AgentTraces.getLatencyTimeline({ startTime, endTime })` → BARE `[{ name, value (s), date }]`; module averages per date |
+| `agent-unit-consumption` | AGU/PLTU per agent | `ranked-table` | `AgentTraces.getUnitConsumption({ startTime, endTime })` → BARE `[{ agentId, agentUnitsConsumed, platformUnitsConsumed }]` |
 | `agent-memory-timeline` | Memory entries over time | `area-chart` | `AgentMemory.getTimeline({ startTime, endTime })` → BARE array `[{ timeSlice, totalCount, … }]` |
 | `memory-calls-trend` | Memory access volume | `area-chart` | `AgentMemory.getCallsTimeline({ startTime, endTime })` → BARE array `[{ timeSlice, memoryCallsCount }]` |
 | `top-memory-spaces` | Top memory spaces | `ranked-table` | `AgentMemory.getTopSpaces({ limit: 10 })` → BARE ranked array |
@@ -355,7 +362,7 @@ export const fetchDetail: MetricFn = async (sdk) => {
 
 | User asks for | Why impossible | Suggest instead |
 |--------------|----------------|-----------------|
-| Agent error / latency / consumption **timelines** | SDK 1.4.1 Agents service has only `getAll` (list + health + consumption totals) — no time-series endpoints | `agent-health` / `agent-consumption` (per-agent totals), or T3 Jobs trend with `ProcessType eq 'Agent'` |
+| Agent **invocation-count** timeline (runs/calls per period) | SDK 1.4.1 has error/latency/consumption timelines but no invocation-count endpoint | `agent-consumption-timeline` (AGU over time), `agent-error-timeline`, or T3 Jobs trend with `ProcessType eq 'Agent'` |
 | Agent cost in dollars | Platform tracks AGU/PLTU units, not currency | `agent-consumption` for per-agent unit totals |
 | CPU/RAM per agent | Not exposed by any API ("Agent Memory" = memory entries, not RAM) | `agent-health`; or `agent-memory-timeline` if they meant the Memory feature |
 | Who triggered a job | Job records have no end-user identity | `job-completion-trend` grouped by process; `policy-denials` includes `actorIdentityId` for governance events |
@@ -372,16 +379,18 @@ Full method signatures, response types, and field names live in `references/sdk/
 | Domain | Reference file | Key service classes |
 |--------|---------------|---------------------|
 | Agents + Agent Memory (Insights RTM, ≥ 1.4.1) | `sdk/agents.md` *(from skill root)* | `Agents`, `AgentMemory` |
+| Agent Traces (Insights RTM, ≥ 1.4.1) | `sdk/traces.md` *(from skill root)* | `AgentTraces` |
 | Governance (Insights RTM, ≥ 1.4.1) | `sdk/governance.md` *(from skill root)* | `Governance` |
 | Jobs, Queues, Processes, Assets | `sdk/orchestrator.md` *(from skill root)* | `Jobs`, `Queues`, `Processes`, `Assets` |
 | Tasks | `sdk/action-center.md` *(from skill root)* | `Tasks` |
 | Cases, Process Instances | `sdk/maestro.md` *(from skill root)* | `Cases`, `CaseInstances` |
 | Data entities | `sdk/data-fabric.md` *(from skill root)* | `Entities` |
 
-`sdk/agents.md` and `sdk/orchestrator.md` are **always loaded** in the parallel blast. Load `sdk/action-center.md` (tasks), `sdk/maestro.md` (cases), or `sdk/governance.md` (governance/policy) only when the request mentions them.
+`sdk/agents.md` and `sdk/orchestrator.md` are **always loaded** in the parallel blast. Load `sdk/traces.md` (trace/span-level metrics), `sdk/action-center.md` (tasks), `sdk/maestro.md` (cases), or `sdk/governance.md` (governance/policy) only when the request mentions them.
 
-**Three calling conventions — don't mix them up:**
-- `Agents.getAll(startTime, endTime, options?)` — positional `Date` args, rows on `.items`
+**Calling conventions — don't mix them up:**
+- `Agents.getAll / getErrors / getErrorsTimeline / getConsumptionTimeline / getLatencyTimeline(startTime, endTime, options?)` — positional `Date` args. `getAll`/`getErrors` return rows on `.items`; the three timeline methods return a **bare array**
+- `AgentTraces.getErrorsTimeline / getLatencyTimeline / getUnitConsumption({ startTime?, endTime?, … })` — ONE options object, dates inside, returns a **bare array** (see `sdk/traces.md`)
 - `AgentMemory.getTimeline({ startTime?, endTime?, … })` — ONE options object, dates inside, returns a **bare array**
 - `Governance.getPolicyTraces(startTime, options?)` — required positional `startTime`, rest in options, rows on `.items`; `getOperationSummary` returns a **single object** (wrap into rows in the module)
 
