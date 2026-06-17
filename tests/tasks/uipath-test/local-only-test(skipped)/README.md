@@ -8,7 +8,7 @@ Behavioural eval scenarios for the **`uipath-test`** skill (the `uip tm` command
 ```bash
 cd tests
 SKILLS_REPO_PATH=$(cd .. && pwd) \
-  .venv/bin/coder-eval run "tasks/uipath-test/local-only-test(skipped)"/**/*.yaml \
+  .venv/bin/coder-eval run "tasks/uipath-test/local-only-test(skipped)/**/*.yaml" \
   -e experiments/pe.yaml -j 6 --no-preserve
 ```
 
