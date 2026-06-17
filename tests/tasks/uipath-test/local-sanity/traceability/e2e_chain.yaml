@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 11.1 (traceability).
   Walked requirement -> case -> execution chain from a HEALTH requirement. Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:diagnose, feature:traceability]
+tags: [uipath-test, integration, mode:diagnose, lifecycle:discover, feature:traceability]
 
 skip: true
 

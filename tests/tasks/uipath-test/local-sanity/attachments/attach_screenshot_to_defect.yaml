@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 9.2 (attachments).
   Uploaded a screenshot attachment in HEALTH (uip tm attachment). Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:attachment-upload]
+tags: [uipath-test, integration, mode:operate, lifecycle:setup, feature:attachment-upload]
 
 skip: true
 

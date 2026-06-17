@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 1.2 (project and configuration).
   Read HEALTH project details (project get / list --filter). Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:project-get]
+tags: [uipath-test, smoke, mode:operate, lifecycle:discover, feature:project-get]
 
 skip: true
 

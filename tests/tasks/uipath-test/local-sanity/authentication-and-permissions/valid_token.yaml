@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 14.1 (authentication and permissions).
   Confirmed login via the CLI (uip login status / auth login). Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:login-status]
+tags: [uipath-test, smoke, mode:operate, lifecycle:discover, feature:login-status]
 
 skip: true
 

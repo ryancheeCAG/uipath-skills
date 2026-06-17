@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 15.5 (cli skill invocation and error handling).
   Transparent pagination across a large HEALTH result set. Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:testcases-list]
+tags: [uipath-test, integration, mode:operate, lifecycle:discover, feature:testcases-list]
 
 skip: true
 

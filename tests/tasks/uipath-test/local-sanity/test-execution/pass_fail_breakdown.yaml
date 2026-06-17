@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 6.3 (test execution).
   Read per-case pass/fail breakdown (executions list-filtered/get-stats). Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:executions-list]
+tags: [uipath-test, integration, mode:operate, lifecycle:discover, feature:executions-list]
 
 skip: true
 

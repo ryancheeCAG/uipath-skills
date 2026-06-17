@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 12.3 (orchestrator integration).
   Triggered and polled a HEALTH job to completion (executions run/wait). Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:testsets-run]
+tags: [uipath-test, integration, mode:operate, lifecycle:setup, feature:testsets-run]
 
 skip: true
 

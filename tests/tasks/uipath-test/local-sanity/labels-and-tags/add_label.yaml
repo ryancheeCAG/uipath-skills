@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 8.1 (labels and tags).
   Added the flaky label to a HEALTH case (objectlabel add). Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:objectlabel-add]
+tags: [uipath-test, integration, mode:operate, lifecycle:setup, feature:objectlabel-add]
 
 skip: true
 

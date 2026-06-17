@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 12.1 (orchestrator integration).
   Listed available machines (uip or machines list). Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:or-machines-list]
+tags: [uipath-test, smoke, mode:operate, lifecycle:discover, feature:or-machines-list]
 
 skip: true
 

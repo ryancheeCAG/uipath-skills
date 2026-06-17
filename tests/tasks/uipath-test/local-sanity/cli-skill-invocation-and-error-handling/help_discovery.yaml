@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 15.1 (cli skill invocation and error handling).
   Discovered TM commands via help (uip tm --help). Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:cli-help]
+tags: [uipath-test, smoke, mode:operate, lifecycle:discover, feature:cli-help]
 
 skip: true
 

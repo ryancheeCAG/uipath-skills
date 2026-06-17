@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 15.2 (cli skill invocation and error handling).
   Validation error for missing required params (no API call). Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:edge-case, mode:operate, feature:cli-validation]
+tags: [uipath-test, integration, mode:operate, lifecycle:setup, feature:cli-validation]
 
 skip: true
 

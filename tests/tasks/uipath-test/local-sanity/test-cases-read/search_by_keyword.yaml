@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 2.4 (test cases read).
   Searched HEALTH test cases by keyword (--filter). Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:testcases-list]
+tags: [uipath-test, smoke, mode:operate, lifecycle:discover, feature:testcases-list]
 
 skip: true
 

@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 13.1 (jira integration).
   Flagged the failing HEALTH case as a bug (objectlabel add) and surfaced the Jira-origin requirements it ties to. Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:objectlabel-add, feature:requirements-list]
+tags: [uipath-test, integration, mode:operate, lifecycle:setup, feature:objectlabel-add, feature:requirements-list]
 
 skip: true
 

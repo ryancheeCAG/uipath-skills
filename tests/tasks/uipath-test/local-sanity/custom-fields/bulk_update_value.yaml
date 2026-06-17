@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 10.5 (custom fields).
   Bulk-updated a custom field across HEALTH cases. Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:customfield-value-update]
+tags: [uipath-test, integration, mode:operate, lifecycle:setup, feature:customfield-value-update]
 
 skip: true
 

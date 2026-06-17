@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 6.2 (test execution).
   Read live execution status (executions get-stats/list). Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:executions-list]
+tags: [uipath-test, integration, mode:operate, lifecycle:discover, feature:executions-list]
 
 skip: true
 

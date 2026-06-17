@@ -4,7 +4,7 @@ description: >
   Discovers automations in Orchestrator, links an entry point to a HEALTH test case,
   runs a test set containing that case, and checks the execution result. Tests the
   full discover → link → run → verify chain in one shot.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:testcases-link-automation, feature:testsets-run]
+tags: [uipath-test, e2e, mode:operate, lifecycle:setup, feature:testcases-link-automation, feature:testsets-run]
 
 skip: true
 

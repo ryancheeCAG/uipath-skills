@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 4.2 (requirements).
   Read coverage for a HEALTH requirement (requirements get/list). Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:requirements-list]
+tags: [uipath-test, smoke, mode:operate, lifecycle:discover, feature:requirements-list]
 
 skip: true
 

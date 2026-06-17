@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 5.1 (test sets).
   Listed HEALTH test sets (testsets list --project-key HEALTH). Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:testsets-list]
+tags: [uipath-test, smoke, mode:operate, lifecycle:discover, feature:testsets-list]
 
 skip: true
 

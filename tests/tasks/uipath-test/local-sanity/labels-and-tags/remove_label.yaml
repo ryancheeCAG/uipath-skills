@@ -3,7 +3,7 @@ description: >
   P&E GA-validation scenario 8.3 (labels and tags).
   Removed the flaky label in HEALTH (objectlabel remove). Runs against the live HEALTH project. Maps to the Confluence
   P&E Evaluation Scenarios matrix.
-tags: [uipath-test, gating:must-pass, mode:operate, feature:objectlabel-remove]
+tags: [uipath-test, integration, mode:operate, lifecycle:setup, feature:objectlabel-remove]
 
 skip: true
 
