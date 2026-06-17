@@ -299,7 +299,7 @@ The CLI emits a `Code` field on every JSON response. Useful when filtering or sc
 | `eval run start` (no `--wait`) | `MaestroFlowEvalRunStarted` |
 | `eval run start --wait` (summary) | `MaestroFlowEvalRunCompleted` |
 | `eval run status` | `MaestroFlowEvalRunStatus` |
-| `eval run results` | `MaestroFlowEvalRunResults` |
+| `eval run results` | `FlowEvalRunResults` (no `Maestro` prefix — unlike its `eval run` siblings) |
 | `eval run list` | `MaestroFlowEvalRunList` |
 | `eval run compare` | `MaestroFlowEvalRunComparison` |
 

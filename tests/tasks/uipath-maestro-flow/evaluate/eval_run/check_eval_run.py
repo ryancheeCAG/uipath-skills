@@ -5,7 +5,8 @@ Reads `eval-results.json` (the JSON the agent saved from
 `uip maestro flow eval run results <run_id> --verbose --output json`) and
 asserts:
 
-  1. Top-level `Code` is `MaestroFlowEvalRunResults`.
+  1. Top-level `Code` is `FlowEvalRunResults` (the `eval run results`
+     envelope code; the prefixed `MaestroFlowEvalRunResults` is tolerated too).
   2. There is at least 1 per-data-point row.
   3. Every row has `Status == "Completed"`.
   4. No row has a non-empty `Error`.
@@ -110,9 +111,12 @@ def _extract_rows(doc: dict) -> list[dict]:
     minor key-name drift by walking common containers.
     """
     code = doc.get("Code")
-    if code != "MaestroFlowEvalRunResults":
+    # The CLI emits `FlowEvalRunResults` for `eval run results` (the only
+    # eval-run envelope code without the `Maestro` prefix its siblings carry).
+    # Tolerate the prefixed spelling too in case the CLI normalizes later.
+    if code not in ("FlowEvalRunResults", "MaestroFlowEvalRunResults"):
         _fail(
-            f'eval-results.json `Code` should be "MaestroFlowEvalRunResults", '
+            f'eval-results.json `Code` should be "FlowEvalRunResults", '
             f'got {code!r}'
         )
     data = doc.get("Data") or {}
