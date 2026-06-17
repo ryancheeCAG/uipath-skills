@@ -57,8 +57,16 @@ Two halves make a valid Maestro `.bpmn`:
    structural BPMN the registry does not emit — sequence flows, gateways,
    events, boundary events, containers, multi-instance markers — and generate
    the `bpmndi:BPMNDiagram`.
-4. **Validate.** There is **no** `uip maestro bpmn validate` CLI command.
-   Validate with a well-formed-XML parse plus the structural checklist in
+4. **Validate.** There is **no** `uip maestro bpmn validate` CLI command. Run the
+   bundled validator — it reconstructs the canvas model and runs every
+   PO.Frontend rule:
+
+   ```bash
+   cd skills/uipath-maestro-bpmn/validator && npm install --silent
+   node validate-bpmn.mjs <file.bpmn>   # prints VALID (exit 0) or the errors (exit 1)
+   ```
+
+   A well-formed-XML parse is the secondary fallback if Node is unavailable. See
    [references/structural-bpmn.md#validation](references/structural-bpmn.md#validation).
 
 ## Structural coverage
@@ -111,3 +119,4 @@ and honestly surfaced to the user as gaps when asked.
 | Runtime expressions, `vars.`/`bindings.`/`iterator.`, `=js:` (Jint) syntax | [references/expression-authoring.md](references/expression-authoring.md) |
 | Read-only discovery CLI conventions | [references/cli-conventions.md](references/cli-conventions.md) |
 | Keeping content public-safe | [references/public-safety.md](references/public-safety.md) |
+| Bundled offline validator (every PO.Frontend rule) | [validator/README.md](validator/README.md) |

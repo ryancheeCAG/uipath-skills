@@ -111,7 +111,8 @@ Payload shapes the canvas serializes:
 
 - **Timer**: `<bpmn:timerEventDefinition><bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT30M</bpmn:timeDuration></bpmn:timerEventDefinition>`
   (or `timeDate` / `timeCycle`). Static durations must be valid ISO-8601;
-  week designators (`PnW`) are unsupported. Expression-mode (`=…`) is allowed.
+  week designators (`PnW`) are unsupported. Expression-mode is allowed and
+  accepts either prefix — `=…` or `@…`.
 - **Message**: `<bpmn:messageEventDefinition messageRef="Message_1" />` with a
   `<bpmn:message id="Message_1" name="…"/>` declared at definitions level. The
   Maestro internal-message events (`Maestro.ReceiveMessageEvent` /
@@ -124,7 +125,9 @@ Payload shapes the canvas serializes:
   must declare an `errorCode` (`ERROR_BOUNDARY_EVENT_REQUIRES_ERROR_CODE`).
 - **Signal**: `<bpmn:signalEventDefinition signalRef="Signal_1" />` with a
   definitions-level `<bpmn:signal/>`.
-- **Escalation**: `<bpmn:escalationEventDefinition escalationRef="Escalation_1" />`.
+- **Escalation**: `<bpmn:escalationEventDefinition escalationRef="Escalation_1" />`
+  with a `<bpmn:escalation id="Escalation_1" name="…" escalationCode="…"/>`
+  declared at definitions level (parallel to message/error/signal).
 - **Conditional / Link / Compensate / Terminate**: emit the bare definition
   element (e.g. `<bpmn:terminateEventDefinition />`); the canvas round-trips it.
 
@@ -183,7 +186,7 @@ serialize them (`elements/nodes.ts`), so author them from the canvas contract:
 <bpmn:multiInstanceLoopCharacteristics isSequential="true">
   <bpmn:completionCondition xsi:type="bpmn:tFormalExpression">=vars.Var_Done</bpmn:completionCondition>
   <bpmn:extensionElements>
-    <uipath:loopCharacteristics version="v1"
+    <uipath:loopCharacteristics
         inputCollection="=vars.Var_Items" inputElement="item" />
   </bpmn:extensionElements>
 </bpmn:multiInstanceLoopCharacteristics>
@@ -229,14 +232,23 @@ Example:
 
 ## Validation
 
-There is **no** `uip maestro bpmn validate` CLI command. Validate with a
-well-formed-XML parse plus the structural checklist below. The checklist mirrors
-the canvas serializer's blocking rules (gateway/condition, fake-join,
-superfluous-gateway, error end/boundary event, timer-duration,
-single-blank-start, variable-reference, and IS-connector checks referenced
-above).
+There is **no** `uip maestro bpmn validate` CLI command. The skill ships its own
+offline validator that reconstructs the PO.Frontend Node/Edge/CanvasState model
+from the parsed BPMN and runs **every** canvas validation rule — run it as the
+primary check:
 
-Parse for well-formedness first:
+```bash
+cd skills/uipath-maestro-bpmn/validator && npm install --silent
+node validate-bpmn.mjs <file.bpmn>   # prints VALID and exits 0, or prints errors and exits 1
+```
+
+`VALID` / exit 0 means the document passes all rules. Any other output lists the
+blocking errors (gateway/condition, fake-join, superfluous-gateway, error
+end/boundary event, timer-duration, single-blank-start, variable-reference, and
+IS-connector checks). See [validator/README.md](../validator/README.md).
+
+If Node is unavailable, fall back to a well-formed-XML parse plus the structural
+checklist below — it mirrors the same blocking rules:
 
 ```bash
 python3 -c "import xml.etree.ElementTree as ET; ET.parse('<file.bpmn>')"
