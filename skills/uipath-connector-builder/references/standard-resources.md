@@ -29,9 +29,9 @@ defined here appear in the CRUD dropdown. Each entry:
 | `isHidden` | Hide this method from the dropdown. |
 | `responseDisplayName` / `responseDescription` | Response var name/desc in Studio. |
 | `parameters` | Same schema as element.json resource params. element.json is the source of truth for contract fields; SR-only UI fields preserved. Runtime-only types (`value`, `body`) are excluded from the SR side. |
-| `curated` | If present, this method becomes a standalone curated activity. |
+| `curated` | If present, this method becomes a standalone curated activity. **Auto-added by default** by `resource create` and `resource sync-from-cache` (pass `--no-curate` to skip). |
 
-Curated block: `{ "name", "displayName", "description", "isHidden" }`.
+Curated block: `{ "name", "displayName", "description", "isHidden" }`. For the activity's fields to actually render in Studio, each field's `method.<VERB>` entry also needs `requestCurated`/`responseCurated` (see fields below) — the auto-curation step sets these too.
 
 ## metadata.events
 `{ "eventMode": ["polling"] }` — supported types: `"polling"`, `"webhooks"`.
@@ -52,7 +52,9 @@ Core: `name`, `type` (string/integer/number/boolean/date/date-time/object/array)
 }
 ```
 Properties: `response`, `request`, `required`, `requestCurated`, `responseCurated`,
-`designOverrides`.
+`designOverrides`. `requestCurated`/`responseCurated` gate a field's visibility **inside a curated
+activity** (plain `request`/`response` is not enough); the auto-curation step sets them from the
+field's request/response side.
 
 **Searchable**: `searchable`, `searchableOperators` (`["=","!=","like",">","<",">=","<=","in"]`),
 `searchableNames`.
@@ -68,7 +70,7 @@ field's value).
 ## Rules
 1. Field dict key MUST equal `field.name`. 2. `fields` is top-level. 3. Only methods in
 `metadata.method` appear in dropdowns. 4. Primary key field needs `"primaryKey": true`.
-5. `standardResourceName` is authoritative; otherwise SR `path` must match element.json.
+5. `standardResourceName` links a resource entry to its SR; the SR's `metadata.method.<VERB>.{reference ?? path}` must also resolve to the element.json resource `path` (the IS slug `/<object>`, **NOT** the vendor path) for the method to attach and show under the object in Studio. Periodic matches on that value; `connector validate` warns "SR linkage broken" when nothing resolves.
 
 ## See also
 - [element-json.md](element-json.md), [events.md](events.md)

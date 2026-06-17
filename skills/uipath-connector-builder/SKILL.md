@@ -84,10 +84,17 @@ uip is connectors builder connector inspect                      # confirm scaff
 uip is connectors builder resource sync-from-cache --output json
 #   add --connection-id <id> | --object-name <obj> to scope
 #   --dry-run to preview; --overwrite ONLY when the user confirmed Replace in triage
+#   --no-curate to keep the generic shape (default: curate — see below)
 # sync-from-cache writes ONLY app/element/standard-resources/*.json — it does NOT touch element.json.
+# Before writing, it normalizes each SR for the connector contract:
+#   - metadata.method.<VERB>.{path,reference} and the top-level path are rewritten to the IS
+#     slug "/<object>" so Periodic links the method to its element.json resource. (Cache SRs
+#     carry the VENDOR path; left as-is the object shows in Studio with its name but NO methods.)
+#   - each method is auto-curated into a standalone Studio activity (curated block +
+#     requestCurated/responseCurated field visibility). Pass --no-curate to opt out.
 # Run resource create for each NEW object (skip ones marked Replace; resource create errors on duplicates):
 uip is connectors builder resource create --name <object> --methods <VERBS> \
-  --vendor-path <relative-vendor-path-from-the-SR>
+  --vendor-path <relative-vendor-path-from-the-SR>   # also auto-curates by default; --no-curate to opt out
 uip is connectors builder connector validate
 # Push design-state to tenant:
 uip is connectors builder remote import --output json
@@ -96,7 +103,12 @@ uip is connectors builder remote publish --background --output json
 #   Returns { PublishId }. Studio Web shows the connector ~5-10 min later.
 ```
 
-### Add a curated activity (a method shown as a standalone Studio activity)
+### Add or customize a curated activity (a method shown as a standalone Studio activity)
+`resource create` and `resource sync-from-cache` **auto-curate every method by default** — they
+add the `metadata.method.<VERB>.curated` block AND set `requestCurated`/`responseCurated` field
+visibility. Pass `--no-curate` to keep the generic, non-curated object shape. Use `method curate`
+below only to override the auto-generated activity name/displayName, or to curate a method that was
+created with `--no-curate`:
 ```bash
 uip is connectors builder connector inspect
 uip is connectors builder resource method curate --resource cases --method GET \

@@ -36,6 +36,15 @@ addressed write → re-validate. Tooling: `connector inspect`, `state query <poi
   preRequest hook mangles the body, CE↔vendor field-name mismatch.
 - **Fields don't show in Studio**: missing `requestCurated`/`responseCurated` on field
   method entries, no `curated` block in `metadata.method.{METHOD}`, or `design.isHidden`.
+- **Object shows in Studio but has NO methods under it**: the SR's
+  `metadata.method.<VERB>.{reference ?? path}` doesn't resolve to the element.json resource
+  `path` (the IS slug `/<object>`), so Periodic can't link the method. Usual cause: a
+  cache-synced SR still carrying the **vendor** path. `connector validate` flags this as
+  "SR linkage broken". Fix: set the SR method's `reference` (or `path`) to `/<object>` —
+  re-running `resource sync-from-cache` normalizes it automatically.
+- **Methods aren't curated activities**: `resource create` / `resource sync-from-cache`
+  curate by default; a method with no `curated` block was created with `--no-curate` — add
+  one with `resource method curate`.
 
 ## Hook issues
 - **done() not called**: an exception or a branch skips `done()`.

@@ -31,6 +31,8 @@ Connector nodes come in two flavors:
 - **Concrete** — the node type encodes a specific object + operation (e.g. `uipath.connector.uipath-atlassian-jira.curated_create_issue`). `inputDefinition.fields[]` is populated; `method` and `endpoint` are fixed.
 - **Generic** — the node type encodes only the operation (e.g. `uipath.connector.uipath-salesforce-sfdc.list-records`, `…insert-record`, `…update-record`). `inputDefinition` is `{}`; the node needs an extra `objectName` in `--detail`, and `method` / `endpoint` come from `is resources describe`.
 
+> **Prefer Concrete (curated) over Generic per operation.** When both cover the same operation, pick the curated activity — fixed schema and endpoint mean less to configure and less to get wrong. Fall back to Generic only when no curated activity exists. This is a selection decision made at planning time — see [planning.md — Prefer curated activities per operation](planning.md#prefer-curated-activities-per-operation).
+
 To classify a node, read `Node.form.sections[0].fields[0].componentProps.connectorDetail.configuration` from the `registry get` response, parse it as JSON, and check `activityType`. `"Generic"` → run Step 2a to discover `objectName` (and capture `operation` from the same marker for the `--operation` flag in Step 3). Anything else → skip Step 2a.
 
 ## Critical: Connector Definition Must Include `form`

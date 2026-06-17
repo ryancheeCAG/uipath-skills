@@ -455,6 +455,11 @@ uip is connectors builder connector scaffold --name '<Display Name>' --output js
 uip is connectors builder resource sync-from-cache --output json
 #   --connection-id, --object-name to scope
 #   --overwrite ONLY for Shape C "Replace" path
+#   sync-from-cache normalizes each SR for the connector contract before writing:
+#     - rewrites metadata.method.<VERB>.{path,reference} + top-level path to the IS slug "/<object>"
+#       so Periodic links the method to its element.json resource (cache SRs carry the VENDOR path,
+#       which would otherwise leave the object showing in Studio with NO methods); and
+#     - auto-curates each method into a standalone Studio activity. Pass --no-curate to opt out.
 
 # 3. Wire NEW SRs into element.json (per new object)
 #    Shape A: every spec is new           → resource create per object
@@ -465,6 +470,8 @@ uip is connectors builder resource create --name <object> \
   --vendor-path "$(jq -r '.data.metadata.method | to_entries[0].value.path' \
                    ~/.uipath/cache/integrationservice/<tenantId>/<connector>/<connection>/<object>.standard.json)" \
   --methods <comma-separated-verbs> --output json
+#   resource create also auto-curates each method into a standalone Studio activity by default
+#   (curated block + requestCurated/responseCurated field visibility). Pass --no-curate to opt out.
 
 # 4. Configure auth                                   (State A only)
 uip is connectors builder auth set --auth-type <oauth2|basic|...> --output json

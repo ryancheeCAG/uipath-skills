@@ -88,6 +88,21 @@ Apply the canonical disambiguation ladder owned by Integration Service:
 
 Lock the chosen connector key in the planning notes — never re-derive per node within the same flow.
 
+### Prefer curated activities per operation
+
+Once the connector is locked, pick the activity **per operation**. For each operation the flow needs, prefer the curated (Concrete) activity over the Generic CRUD activity. A single connector mixes both flavors — decide per operation, never per connector.
+
+- **Curated (Concrete)** — node type encodes object + operation (e.g. `curated_create_issue`), ships a populated input schema, fixes `method`/`endpoint`. Less to configure, fewer ways to misfire.
+- **Generic (CRUD)** — node type encodes only the operation (`list-records`, `insert-record`, `update-record`, `get-record`, `delete-record`), needs an extra `objectName` resolved at configure time.
+
+Selection rule:
+
+1. Search the connector's activities for a curated match — `curated_*` node types, or a `DisplayName` that names the object + action (e.g. "Create Issue").
+2. Use a Generic CRUD activity **only** when no curated activity covers the operation.
+3. Never default to Generic when a curated equivalent exists.
+
+Concrete vs Generic is confirmed at configure time via `activityType` — see [impl.md — Generic vs Concrete Activities](impl.md#generic-vs-concrete-activities).
+
 ### Check Connector Connections
 
 For each connector found in registry search, verify a healthy connection exists. Extract the connector key from the node type name (e.g., `uipath.connector.uipath-microsoft-outlook365.get-newest-email` -> key is `uipath-microsoft-outlook365`).
