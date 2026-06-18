@@ -31,8 +31,6 @@ description: >
   robot in the folder (passed via env).
 tags: [uipath-test, e2e, mode:operate, lifecycle:setup, resource, feature:test-case]
 
-skip: true
-
 # The lifecycle is long: raise the per-iteration turn cap well above the SDK
 # default (20), give each turn room for slow cold-runner `uip` calls, and cap
 # the whole run. These are TOP-LEVEL task fields (not a `run_limits:` block —
@@ -46,6 +44,9 @@ expected_commands: 35
 # runs on the cloud serverless robot, so no Studio/Windows runner is needed.
 sandbox:
   driver: tempdir
+  env:
+    E2E_TM_FOLDER: fcf79fe1-147b-4000-82b3-9eb81b165452
+    E2E_TM_MACHINE_KEY: ce01aa90-5e52-4ec3-afb2-ed67850e6e87
 
 initial_prompt: |
   We're standing up Test Manager for a brand-new feature on our Online
