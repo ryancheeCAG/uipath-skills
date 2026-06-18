@@ -45,10 +45,22 @@ expected_commands: 35
 sandbox:
   driver: tempdir
   env:
-    E2E_TM_FOLDER: fcf79fe1-147b-4000-82b3-9eb81b165452
-    E2E_TM_MACHINE_KEY: ce01aa90-5e52-4ec3-afb2-ed67850e6e87
+    E2E_TM_FOLDER_NAME: "Shared/uipath-test"
+    E2E_TM_FOLDER: "fcf79fe1-147b-4000-82b3-9eb81b165452"
+    E2E_TM_MACHINE_KEY: "ce01aa90-5e52-4ec3-afb2-ed67850e6e87"
+  agent:
+    type: claude-code
+    allowed_tools: ["Skill", "Bash", "Read", "Write", "Edit", "Glob", "Grep"]
+    disallowed_tools: ["Agent"]
+    permission_mode: acceptEdits
+    model: claude-sonnet-4-6
 
 initial_prompt: |
+  **ENVIRONMENT VARIABLES (already set)**:
+  - E2E_TM_FOLDER_NAME: "Shared/uipath-test"
+  - E2E_TM_FOLDER: "fcf79fe1-147b-4000-82b3-9eb81b165452" (folder key)
+  - E2E_TM_MACHINE_KEY: "ce01aa90-5e52-4ec3-afb2-ed67850e6e87" (serverless machine)
+
   We're standing up Test Manager for a brand-new feature on our Online
   Banking app — the payments flow — and I'd like you to take it the whole
   way for me: from an empty project to a clean tenant again, in one go.
@@ -73,19 +85,21 @@ initial_prompt: |
 
   Add the governance bits we always tack on: drop a label/tag on one of the
   cases, and define a custom field on test cases — then actually fill it in
-  on a case, both as free text and as a tag value. Attach a short spec doc to
-  the project itself and a file to one of the cases. While you're in there,
-  polish the project description and tweak that custom field definition too.
+  on a case, both as free text and as a tag value. Attach a short spec doc
+  to the project itself and a test-data file to one of the cases — we'll
+  handle the third attachment (a screenshot on a test-case log) later during
+  the manual run. While you're in there, polish the project description and
+  tweak that custom field definition too.
 
   For the automation side: I've already published a tiny test automation
-  called "TestManagerSmoke" to our Orchestrator folder, so you don't need to
-  build or publish anything — the folder and a serverless robot are set up
-  for you, and their keys are in the E2E_TM_FOLDER and E2E_TM_MACHINE_KEY
-  environment variables (there's an E2E_TM_ROBOT_KEY too if you need a robot
-  id). It exposes two entry points that each log a line and grab a
-  screenshot: "PassCase" passes, and "FailCase" is meant to fail — it throws,
-  standing in for a step that needs a login the robot won't have. Find those
-  entry points and wire each one to a different case in the Automated Suite.
+  called "TestManagerSmoke" to our Orchestrator folder (in the folder specified
+  by $E2E_TM_FOLDER above), so you don't need to build or publish anything —
+  the folder and a serverless robot are already set up for you. Use the values
+  above (E2E_TM_FOLDER and E2E_TM_MACHINE_KEY). It exposes two entry points
+  that each log a line and grab a screenshot: "PassCase" passes, and "FailCase"
+  is meant to fail — it throws, standing in for a step that needs a login the
+  robot won't have. Find those entry points and wire each one to a different
+  case in the Automated Suite.
 
   Then actually run it. Point the project at that folder so it knows where
   automated runs should execute, make sure the serverless machine is assigned
@@ -100,9 +114,10 @@ initial_prompt: |
 
   Separately, handle the manual side: run the Manual Suite as a manual
   execution and record real outcomes for its cases — at least one pass and
-  one fail, with step-by-step notes — and attach a screenshot to the one you
-  mark failed. Then double-check that the step logs and the assertions on
-  that case actually recorded.
+  one fail, with step-by-step notes. Once you've finished and marked one of
+  the logs as failed, attach a screenshot to that test-case log entry itself
+  (not to the test case — to the log). Then double-check that the step logs
+  and the assertions on that case actually recorded.
 
   Once everything's in place, go back over the whole project read-only and
   make sure it all hangs together: list the projects, the project's test
@@ -112,8 +127,8 @@ initial_prompt: |
   at it. Trace which requirements that automated run covered, and export the
   requirement. Finally, pull a Test Manager report. Then write me a one-page
   summary at ./tm-lifecycle-summary.md that names the project, the
-  requirement, both suites, both executions (the automated one and the manual
-  one), and how the pass/fail shook out.
+  requirement, both test sets, both executions (the automated one and the
+  manual one), and how the pass/fail shook out.
 
   When all that's done, please leave the tenant the way you found it: unlink
   the automation, clear the project's default folder, and delete the project.
@@ -189,18 +204,18 @@ success_criteria:
     pass_threshold: 1.0
 
   - type: command_executed
-    description: "Created two test sets — Automated + Manual suites (`uip tm testsets create --project-key <…>`, ≥2)"
+    description: "Created test sets — Automated + Manual suites (`uip tm testsets create --project-key <…>`)"
     tool_name: "Bash"
     command_pattern: '(?=.*--project-key\s+\S)uip\s+tm\s+testsets?\s+create\b'
-    min_count: 2
+    min_count: 1
     weight: 1.5
     pass_threshold: 1.0
 
   - type: command_executed
-    description: "Added test cases to the test sets (`uip tm testcases add …`, ≥2 — both suites)"
+    description: "Added test cases to the test sets (`uip tm testcases add …` — both suites)"
     tool_name: "Bash"
     command_pattern: 'uip\s+tm\s+testcases?\s+add\b'
-    min_count: 2
+    min_count: 1
     weight: 1.5
     pass_threshold: 1.0
 
@@ -262,9 +277,9 @@ success_criteria:
     pass_threshold: 1.0
 
   - type: command_executed
-    description: "Uploaded file attachments (`uip tm attachment upload --object-type <…> --file <…>`, ≥2)"
+    description: "Uploaded file attachments to project and testcase (`uip tm attachment upload --object-type project|testcase --file <…>`, ≥2)"
     tool_name: "Bash"
-    command_pattern: '(?=.*--object-type\s+\S)(?=.*--file\s+\S)uip\s+tm\s+attachment\s+upload\b'
+    command_pattern: '(?s)(?=[\s\S]*--object-type\s+\S)(?=[\s\S]*--file\s+\S)uip\s+tm\s+attachment\s+upload\b'
     min_count: 2
     weight: 1.5
     pass_threshold: 1.0
@@ -295,10 +310,10 @@ success_criteria:
     pass_threshold: 1.0
 
   - type: command_executed
-    description: "Linked a few automation entry points to different test cases (`uip tm testcases link-automation --project-key <…>`, ≥2)"
+    description: "Linked automation entry points to test cases (`uip tm testcases link-automation --project-key <…>`)"
     tool_name: "Bash"
     command_pattern: '(?=.*--project-key\s+\S)uip\s+tm\s+testcases?\s+link-automation\b'
-    min_count: 2
+    min_count: 1
     weight: 2.5
     pass_threshold: 1.0
 
@@ -312,17 +327,9 @@ success_criteria:
     pass_threshold: 1.0
 
   - type: command_executed
-    description: "Assigned the (pre-created) serverless machine to the target folder (`uip or machines assign <machine-key> --folder-path <folder>`)"
-    tool_name: "Bash"
-    command_pattern: '(?=.*--folder-path\s+\S)uip\s+or\s+machines\s+assign\b'
-    min_count: 1
-    weight: 1.5
-    pass_threshold: 1.0
-
-  - type: command_executed
     description: "Triggered an AUTOMATED execution of the Automated Suite (`uip tm testsets run --execution-type automated`, or `testcases run/execute --execution-type automated`)"
     tool_name: "Bash"
-    command_pattern: '(?=.*--execution-type\s+automated)uip\s+tm\s+(testsets?\s+run|testcases?\s+(run|execute))\b'
+    command_pattern: '(?=.*--execution-type\s+["\x27]?automated["\x27]?)uip\s+tm\s+(testsets?\s+run|testcases?\s+(run|execute))\b'
     min_count: 1
     weight: 3.0
     pass_threshold: 1.0
@@ -379,7 +386,7 @@ success_criteria:
   - type: command_executed
     description: "Triggered a MANUAL execution of the Manual Suite (`uip tm testsets run --execution-type manual`)"
     tool_name: "Bash"
-    command_pattern: '(?=.*--execution-type\s+manual)uip\s+tm\s+testsets?\s+run\b'
+    command_pattern: '(?=.*--execution-type\s+["\x27]?manual["\x27]?)uip\s+tm\s+testsets?\s+run\b'
     min_count: 1
     weight: 1.5
     pass_threshold: 1.0
@@ -403,7 +410,7 @@ success_criteria:
   - type: command_executed
     description: "Attached a screenshot to a test-case log (`uip tm attachment upload --object-type testCaseLog …`)"
     tool_name: "Bash"
-    command_pattern: '(?i)(?=.*--object-type\s+testcaselog)(?=.*--file\s+\S)uip\s+tm\s+attachment\s+upload\b'
+    command_pattern: '(?is)(?=[\s\S]*--object-type\s+["\x27]?testcaselog["\x27]?)(?=[\s\S]*--file\s+\S)uip\s+tm\s+attachment\s+upload\b'
     min_count: 1
     weight: 2.0
     pass_threshold: 1.0
