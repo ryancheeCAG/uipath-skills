@@ -80,6 +80,13 @@ The plan message ends there — no OAuth talk in the plan, no tool calls in the 
 - 📋 **Table or ranked list** — "as a sortable table with columns [A, B, C]", or "ranked worst/highest-first". To make rows clickable (drill into the clicked entity), set `rowLink: { key: "<rowField>" }` and export `fetchDetailByKey(sdk, key, getToken)` — generates a `/<widget>/:key` detail page.
 - 🔷 **Multi-line chart** — "as multiple lines over time (e.g. P50/P95)"
 
+> **Governance violations are GATED.** Only propose the governance/compliance widgets (violations by
+> standard/rule/hook, agents-by-violations, recent-violations, per-agent compliance report) when the prompt
+> signals governance intent — "governance/policy violation(s)", "compliance", a standard/pack reference
+> (`ISO 42001`, `A.8.4`, "standard", "pack"), or runtime-governance terms. Then read
+> `sdk/governance-traces.md` and build the modules with `@/lib/governance`. NEVER add them to a plain
+> agent-health/ops dashboard. They're trace-derived/interim (bounded by-agent scan, cap 10) — say so in the plan.
+
 > **Promise only what the scaffold can render.** The bullets above are the complete set of buildable affordances. Before writing a feature into the plan, confirm it maps to one of them: KPI delta → `{value, previous}`; row drill-down → `rowLink` + `fetchDetailByKey`. If a prompt needs something not listed (a bespoke interaction, a custom layout), say so in the plan ("this needs a template extension") rather than promising it and silently dropping it during the build.
 
 **Example plan:**
@@ -222,11 +229,11 @@ Never re-ask for anything the user already provided. The same pattern applies to
 uip admin external-apps create "UiPath Dashboard - <DASHBOARD_NAME>" \
   --non-confidential \
   --redirect-uri "http://localhost:57173,<CLOUD_URL>/<ORG>/portal_" \
-  --user-scope "OR.Assets,OR.Jobs,OR.Folders,OR.Buckets,OR.Execution,OR.Tasks,OR.Queues,OR.Users,Insights,Insights.RealTimeData,PIMS" \
+  --user-scope "OR.Assets,OR.Jobs,OR.Folders,OR.Buckets,OR.Execution,OR.Tasks,OR.Queues,OR.Users,Insights,Insights.RealTimeData,Traces.Api,PIMS" \
   --output json
 ```
 
-Read `ClientId` from the JSON response and carry it as the plan's `clientId` (the build subagent writes it into intent.json). Tell the user: "OAuth app created — building now."
+`Traces.Api` is required for the governance trace-derived metrics (`Traces.getById`); without it those span reads 403. Read `ClientId` from the JSON response and carry it as the plan's `clientId` (the build subagent writes it into intent.json). Tell the user: "OAuth app created — building now."
 
 **If the command fails** (invalid scopes for this environment): retry with the minimal set:
 

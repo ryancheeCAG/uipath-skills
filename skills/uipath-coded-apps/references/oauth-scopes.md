@@ -222,6 +222,7 @@ Combined scopes required: `OR.Execution` · `OR.Folders` · `OR.Jobs` · `Conver
 |--------|----------------|
 | `AgentTraces.getErrorsTimeline()` / `getLatencyTimeline()` / `getUnitConsumption()` | `Insights` and `Insights.RealTimeData` |
 | `AgentTraces.getSpansByTraceId()` / `getSpansByReference()` | `Insights` and `Insights.RealTimeData` |
+| `Traces.getById()` / `getSpansByIds()` (generic spans — governance traces) | `Traces.Api` (+ `Insights` and `Insights.RealTimeData`) |
 
 ## Agent Memory (SDK ≥ 1.4.1)
 

@@ -1105,6 +1105,68 @@ test('multi-line series: a string literal (registry form) passes through unchang
 // NOTE: scaffold tsconfig (incremental/skipLibCheck) is now validated in
 // apps-dev-tools (it owns the scaffold source) — not a skill concern.
 
+// ── Governance violations (gated, trace-derived, interim) ─────────────────────
+
+const TRACE_GOV_KEYS = new Set(['agent-governance-violations', 'violations-by-standard', 'violations-by-rule', 'violations-by-hook', 'agents-by-violations', 'recent-violations', 'agent-compliance-report'])
+
+test('governance: trace metrics resolve T1 only on explicit runtime/standard/rule aliases', () => {
+  for (const [text, expected] of [
+    ['rule violations', 'agent-governance-violations'],
+    ['runtime compliance violations', 'agent-governance-violations'],
+    ['violations by standard', 'violations-by-standard'],
+    ['iso violations', 'violations-by-standard'],
+    ['violations by rule', 'violations-by-rule'],
+    ['violations by hook', 'violations-by-hook'],
+    ['agents with most violations', 'agents-by-violations'],
+    ['rule violation log', 'recent-violations'],
+    ['agent compliance report', 'agent-compliance-report'],
+  ]) {
+    const r = resolveAlias(text)
+    assert.ok(r, `"${text}" did not resolve`)
+    assert.equal(r.key, expected, `"${text}" → ${r?.key}, expected ${expected}`)
+  }
+})
+
+test('governance gate: plain agent-ops phrases do NOT pull in a trace-governance metric', () => {
+  for (const text of ['active agents', 'agent health', 'agent latency p95', 'memory calls over time', 'faulted jobs', 'busiest processes']) {
+    const r = resolveAlias(text)
+    assert.ok(!r || !TRACE_GOV_KEYS.has(r.key), `"${text}" must not resolve to a trace-governance metric (got ${r?.key})`)
+  }
+})
+
+test('governance no-regression: generic governance/policy phrases route to Insights-API metrics, not trace scan', () => {
+  // The existing Governance SDK metrics must keep winning generic intent — the
+  // trace-derived widgets are reserved for EXPLICIT runtime/standard/rule asks.
+  for (const [text, expected] of [
+    ['policy denials', 'policy-denials'],
+    ['denied actions', 'policy-denials'],
+    ['blocked actions', 'policy-denials'],
+    ['policy violations', 'policy-denials'],
+    ['governance denials', 'policy-denials'],
+    ['governance summary', 'governance-verdicts'],
+    ['allow deny breakdown', 'governance-verdicts'],
+    ['enforcement summary', 'governance-verdicts'],
+    ['governance overview', 'governance-verdicts'],
+  ]) {
+    const r = resolveAlias(text)
+    assert.ok(r, `"${text}" did not resolve`)
+    assert.ok(!TRACE_GOV_KEYS.has(r.key), `"${text}" must NOT route to a trace-governance metric (got ${r?.key})`)
+    assert.equal(r.key, expected, `"${text}" → ${r?.key}, expected ${expected}`)
+  }
+})
+
+test('governance: all violation entries generate clean widgets (rowLink wired where set)', () => {
+  for (const name of ['agent-governance-violations', 'violations-by-standard', 'violations-by-rule', 'violations-by-hook', 'agents-by-violations', 'recent-violations', 'agent-compliance-report']) {
+    const entry = registry.t1[name]
+    assert.ok(entry, `missing ${name}`)
+    const metric = { name, tier: 'T1', title: entry.defaults.title, displayAs: entry.template, ...entry.defaults }
+    const content = buildWidgetFile(metric, entry, '30d')
+    assert.equal(content.match(/<[A-Z][A-Z_]*>|<<[A-Z_]+>>/g), null, `${name} leftover placeholders`)
+    assert.ok(content.includes(`import { fetchData } from '@/metrics/${name}'`), `${name} missing fetchData import`)
+    if (entry.defaults.rowLink) assert.ok(content.includes('onRowClick'), `${name} rowLink not wired`)
+  }
+})
+
 // ── Regression guards: every build path must be kept in lockstep ──────────────
 // (Caught the externalization bug where incremental edits never set the widgets
 // dir and the row-click drill-down was wired only into the fresh build.)

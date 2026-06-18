@@ -378,6 +378,30 @@ export const fetchDetail: MetricFn = async (sdk) => {
 
 ---
 
+## Governance violations — GATED, interim (trace-derived)
+
+A dedicated capability for **agent governance/compliance violations against standards** (catalog keys
+`agent-governance-violations`, `violations-by-standard`, `violations-by-rule`, `violations-by-hook`,
+`agents-by-violations`, `recent-violations`, `agent-compliance-report`). It is **trace-derived and interim**
+(no OOB aggregate; bounded by-agent scan, cap 10) — full recipe + the typed `@/lib/governance` parser in
+[`sdk/governance-traces.md`](../../sdk/governance-traces.md).
+
+> **Gate — propose these ONLY on an EXPLICIT runtime-compliance / standards / rules-violation signal:**
+> a standard/pack reference ("standard(s)", "pack", `ISO` + clause e.g. `ISO 42001` / `A.8.4`, or a named
+> `pack_name`), an explicit **rule violation** ("rule(s) violated/fired", "rule violations"), or
+> **runtime-governance** terms ("runtime compliance/governance", hook names, `enforce`/`audit` mode). The
+> request must name one of these — generic intent does not qualify.
+>
+> **Do NOT regress the Insights-API governance metrics.** Plain "governance", "policy", "denials", "blocked
+> actions", "allow/deny", "enforcement summary", "policy violations" → route to `policy-denials` /
+> `governance-verdicts` (the existing `Governance` SDK metrics, `sdk/governance.md`), NOT to these
+> trace-derived widgets. When unsure which the user means, ASK — don't default to the trace scan.
+> **Never add governance widgets to a plain agent-health/ops dashboard.**
+>
+> When the gate IS met, load `sdk/governance-traces.md` and write each module with `@/lib/governance`
+> (`parseGovernanceSpans`/`countBy`) — never hand-roll span parsing. Every widget shows an EmptyState when
+> there's no governance data (un-instrumented agents must not crash the dashboard).
+
 ## T0 — Hard Refuse
 
 **Refuse ONLY the specific metric — not the whole dashboard.** Always offer an alternative.
@@ -402,12 +426,13 @@ Full method signatures, response types, and field names live in `references/sdk/
 | Agents + Agent Memory (Insights RTM, ≥ 1.4.1) | `sdk/agents.md` *(from skill root)* | `Agents`, `AgentMemory` |
 | Agent Traces (Insights RTM, ≥ 1.4.1) | `sdk/traces.md` *(from skill root)* | `AgentTraces` |
 | Governance (Insights RTM, ≥ 1.4.1) | `sdk/governance.md` *(from skill root)* | `Governance` |
+| Agent governance violations (GATED, interim, trace-derived) | `sdk/governance-traces.md` *(from skill root)* | `Jobs` → `Traces.getById(traceId)` spans + `@/lib/governance` |
 | Jobs, Queues, Processes, Assets | `sdk/orchestrator.md` *(from skill root)* | `Jobs`, `Queues`, `Processes`, `Assets` |
 | Tasks | `sdk/action-center.md` *(from skill root)* | `Tasks` |
 | Cases, Process Instances, Maestro Insights/SLA | `sdk/maestro.md` *(from skill root)* | `Cases`, `CaseInstances`, `MaestroProcesses` |
 | Data entities | `sdk/data-fabric.md` *(from skill root)* | `Entities` |
 
-`sdk/agents.md` and `sdk/orchestrator.md` are **always loaded** in the parallel blast. Load `sdk/traces.md` (trace/span-level metrics), `sdk/action-center.md` (tasks), `sdk/maestro.md` (cases), or `sdk/governance.md` (governance/policy) only when the request mentions them.
+`sdk/agents.md` and `sdk/orchestrator.md` are **always loaded** in the parallel blast. Load `sdk/traces.md` (trace/span-level metrics), `sdk/action-center.md` (tasks), `sdk/maestro.md` (cases), or `sdk/governance.md` (governance/policy) only when the request mentions them. Load `sdk/governance-traces.md` ONLY when the prompt signals governance/compliance/standard/ISO intent (see the gated section above).
 
 **Calling conventions — don't mix them up:**
 - `Agents.getAll / getErrors / getErrorsTimeline / getConsumptionTimeline / getLatencyTimeline(startTime, endTime, options?)` — positional `Date` args. `getAll`/`getErrors` return rows on `.items`; the three timeline methods return a **bare array**

@@ -435,6 +435,71 @@
           { "key": "failedCount", "label": "Failures", "align": "right", "format": "number" }
         ]
       }
+    },
+    "agent-governance-violations": {
+      "aliases": ["runtime governance violations", "runtime compliance violations", "rule violations", "agent rule violations", "standards violations", "standard violations", "runtime policy violations"],
+      "template": "kpi-card",
+      "description": "GATED — runtime compliance / standards / rule-violation intent ONLY (trace-derived; interim). NOT for generic governance/policy/denials — those are the Insights-API metrics `policy-denials` / `governance-verdicts`. See sdk/governance-traces.md. Total runtime rule violations across the top 10 most-recently-active agents (bounded by-agent scan). Module: scanViolations(sdk) (governance-traces.md) → `[{ value: violations.length }]`. Scope: Insights Insights.RealTimeData OR.Folders.Read.",
+      "defaults": { "title": "Governance Violations", "description": "Rules fired across recent agents", "icon": "ShieldAlert", "valueField": "value", "valueLabel": "violations", "deltaPolarity": "up-bad" }
+    },
+    "violations-by-standard": {
+      "aliases": ["violations by standard", "violations by pack", "compliance by standard", "iso violations", "violations by iso", "governance violations by standard"],
+      "template": "donut-chart",
+      "description": "GATED — runtime/standard/pack/ISO intent ONLY (trace-derived; interim; NOT generic governance — see `policy-denials`/`governance-verdicts`). See sdk/governance-traces.md. Runtime rule violations grouped by standard/pack. Module: `return countBy(await scanViolations(sdk), v => v.standard)` → `[{ name, value }]`. Scope: Insights Insights.RealTimeData OR.Folders.Read.",
+      "defaults": { "title": "Violations by Standard", "description": "Which standards are firing", "icon": "ShieldAlert", "xKey": "name", "yKey": "value" }
+    },
+    "violations-by-rule": {
+      "aliases": ["violations by rule", "top governance rules", "most fired rules", "which rules fired", "top violated rules", "rule violations breakdown"],
+      "template": "ranked-table",
+      "description": "GATED — runtime/rule-violation intent ONLY (trace-derived; interim; NOT generic governance — see `policy-denials`/`governance-verdicts`). See sdk/governance-traces.md. Rules ranked by how often they fired at runtime. Module: group scanViolations(sdk) by ruleName → `[{ name (ruleName), value (count), standard }]` (or countBy(violations, v => v.ruleName)). Scope: Insights Insights.RealTimeData OR.Folders.Read.",
+      "defaults": { "title": "Top Governance Rules", "description": "Rules ranked by occurrences", "icon": "ListChecks", "columnDefs": [ { "key": "name", "label": "Rule" }, { "key": "value", "label": "Fired", "align": "right", "format": "number" } ] }
+    },
+    "violations-by-hook": {
+      "aliases": ["violations by hook", "rule violations by hook", "violations by lifecycle hook", "violations by stage", "violations by lifecycle"],
+      "template": "donut-chart",
+      "description": "GATED — runtime/rule-violation intent ONLY (trace-derived; interim; NOT generic governance — see `policy-denials`/`governance-verdicts`). See sdk/governance-traces.md. Runtime rule violations grouped by lifecycle hook (BEFORE_AGENT/BEFORE_MODEL/AFTER_MODEL/AFTER_AGENT). Module: `return countBy(await scanViolations(sdk), v => v.hook)`. Scope: Insights Insights.RealTimeData OR.Folders.Read.",
+      "defaults": { "title": "Violations by Hook", "description": "Which lifecycle stage flags violations", "icon": "Workflow", "xKey": "name", "yKey": "value" }
+    },
+    "agents-by-violations": {
+      "aliases": ["agents by rule violations", "agents by standard violations", "agents with most violations", "non-compliant agents", "worst agents by violations"],
+      "template": "ranked-table",
+      "description": "GATED — runtime/standard/rule-violation intent ONLY (trace-derived; interim; NOT generic governance — see `policy-denials`/`governance-verdicts`). See sdk/governance-traces.md. Agents ranked by runtime rule-violation count. Module: `return countBy(await scanViolations(sdk), v => v.agentName)`. Scope: Insights Insights.RealTimeData OR.Folders.Read.",
+      "defaults": { "title": "Agents by Violations", "description": "Agents ranked by governance violations", "icon": "ShieldAlert", "columnDefs": [ { "key": "name", "label": "Agent" }, { "key": "value", "label": "Violations", "align": "right", "format": "number" } ] }
+    },
+    "recent-violations": {
+      "aliases": ["recent rule violations", "recent runtime violations", "rule violation log", "standards violation list", "latest rule violations", "latest runtime governance violations"],
+      "template": "data-table",
+      "description": "GATED — runtime/standard/rule-violation intent ONLY (trace-derived; interim; NOT generic governance — see `policy-denials`/`governance-verdicts`). See sdk/governance-traces.md. Recent runtime rule violations (one row per fired rule). Module: `return await scanViolations(sdk)` → GovernanceViolation rows. rowLink to the per-agent report. Scope: Insights Insights.RealTimeData OR.Folders.Read.",
+      "defaults": {
+        "title": "Recent Governance Violations",
+        "description": "Rules fired across recent agent runs",
+        "icon": "ShieldAlert",
+        "rowLink": { "key": "agentName" },
+        "columnDefs": [
+          { "key": "agentName", "label": "Agent" },
+          { "key": "ruleName", "label": "Rule" },
+          { "key": "standard", "label": "Standard" },
+          { "key": "hook", "label": "Hook" },
+          { "key": "action", "label": "Action" },
+          { "key": "time", "label": "When", "format": "timeAgo" }
+        ]
+      }
+    },
+    "agent-compliance-report": {
+      "aliases": ["agent compliance report", "agent governance report", "per agent compliance report", "governance report by agent", "runtime compliance report"],
+      "template": "data-table",
+      "description": "GATED — runtime compliance / standards / rule-violation intent ONLY (trace-derived; interim; NOT generic governance — see `policy-denials`/`governance-verdicts`). See sdk/governance-traces.md. Agents list (Agents.getAll → .items); rowLink to a per-agent report whose fetchDetailByKey(sdk, agentName) shows that agent's latest run's rule list (PASS/MATCHED) grouped by hook. Export BOTH fetchData (agents) + fetchDetailByKey (see governance-traces.md). Scope: Insights Insights.RealTimeData OR.Folders.Read OR.Jobs.Read.",
+      "defaults": {
+        "title": "Agent Compliance",
+        "description": "Click an agent for its latest-run governance report",
+        "icon": "ShieldCheck",
+        "rowLink": { "key": "agentName" },
+        "columnDefs": [
+          { "key": "agentName", "label": "Agent" },
+          { "key": "healthScore", "label": "Health", "align": "right" },
+          { "key": "lastRun", "label": "Last Run", "format": "timeAgo" }
+        ]
+      }
     }
   },
   "t2": {
