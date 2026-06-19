@@ -156,6 +156,10 @@ Charts and tables render shallow without these. Set them on each metric in `inte
 
 Full detail-view contract (record grain, toRows, anti-patterns): `references/dashboards/primitives/detail-views.md`.
 
+**Rich drill-downs (`detailView`)** — a metric with `rowLink.key` or `detail: true` can declare `detailView: { widgets: [...] }` to render multiple sub-widgets (charts + tables) on the detail page. Each widget specifies `displayAs`, `title`, `source` (key into the named-source map), and chart `xKey`/`yKey` or table `columns`. When `detailView` is present, the module's `fetchDetailByKey` / `fetchDetail` must return a named-source map (`{ rows, byHook, byRule, … }`) instead of a bare array.
+
+> **Rich drill-downs are opt-in.** Add a `detailView` only when the user asks to click an entity and *see charts/insights* about it (e.g. 'let me click an agent and see its violation breakdown'). Default detail views stay a single records table. When you add one, the module's detail fetch must return a named-source map whose keys match each sub-widget's `source`.
+
 Example T3 chart with full presentation — intent entry:
 
 ```json

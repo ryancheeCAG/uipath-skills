@@ -391,6 +391,7 @@ A dedicated capability for **agent governance/compliance violations against stan
 > `pack_name`), an explicit **rule violation** ("rule(s) violated/fired", "rule violations"), or
 > **runtime-governance** terms ("runtime compliance/governance", hook names, `enforce`/`audit` mode). The
 > request must name one of these — generic intent does not qualify.
+> `agent-compliance-report`'s row-click opens a RICH detail view by default (violations-by-hook donut + top-rules ranked table + full evaluations table) via `detailView`.
 >
 > **Do NOT regress the Insights-API governance metrics.** Plain "governance", "policy", "denials", "blocked
 > actions", "allow/deny", "enforcement summary", "policy violations" → route to `policy-denials` /

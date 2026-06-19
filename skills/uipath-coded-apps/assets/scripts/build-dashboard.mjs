@@ -167,6 +167,34 @@ export const VALID_DISPLAY_TYPES = [
   'area-chart', 'line-chart', 'bar-chart', 'donut-chart', 'multi-line-chart', 'rate-chart',
 ]
 
+/** Detail-view sub-widget displayAs vocabularies (rich drill-down). */
+const DETAIL_CHART_TYPES = new Set(['donut-chart', 'bar-chart', 'area-chart', 'line-chart', 'multi-line-chart'])
+const DETAIL_TABLE_TYPES = new Set(['data-table', 'ranked-table'])
+
+/** Validate a metric's optional detailView spec. Throws with a precise message. */
+export function validateDetailView(metric) {
+  const dv = metric.detailView
+  if (dv == null) return
+  if (!metric.rowLink?.key && metric.detail !== true) {
+    throw new Error(`metric "${metric.name}": detailView requires the metric to have rowLink.key (table) or detail:true (chart)`)
+  }
+  if (!Array.isArray(dv.widgets) || dv.widgets.length === 0) {
+    throw new Error(`metric "${metric.name}": detailView.widgets must be a non-empty array`)
+  }
+  for (const w of dv.widgets) {
+    if (!w.source || typeof w.source !== 'string') throw new Error(`metric "${metric.name}": each detailView widget needs a "source" string`)
+    if (!w.title) throw new Error(`metric "${metric.name}": detailView widget (source "${w.source}") needs a title`)
+    const isChart = DETAIL_CHART_TYPES.has(w.displayAs)
+    const isTable = DETAIL_TABLE_TYPES.has(w.displayAs)
+    if (!isChart && !isTable) throw new Error(`metric "${metric.name}": detailView widget displayAs "${w.displayAs}" invalid`)
+    if (w.displayAs === 'multi-line-chart') {
+      if (!w.xKey || !Array.isArray(w.series) || w.series.length === 0) throw new Error(`metric "${metric.name}": detailView multi-line-chart needs xKey + series[]`)
+    } else if (isChart) {
+      if (!w.xKey || !w.yKey) throw new Error(`metric "${metric.name}": detailView ${w.displayAs} needs xKey and yKey`)
+    }
+  }
+}
+
 /** Headline aggregate modes — how a chart's big number is computed from its series. */
 export const VALID_HEADLINE_MODES = ['sum', 'avg', 'latest', 'count', 'max', 'min']
 
@@ -246,13 +274,19 @@ export async function runIntentMigrations(intent, migrationsDir, targetVersion =
 function writeKeyedViewIfRowLink(P, componentName, metric, entry, timeRange) {
   const detailPath = join(P, 'src', 'dashboard', 'views', `${componentName}DetailView.tsx`)
   const displayAs = metric.displayAs ?? entry?.template ?? ''
-  if (metric.rowLink?.key && widgetLayoutGroup(displayAs) === 'table') {
+  // rowLink and detailView fall back to the registry entry's defaults — same as
+  // title/columns — so a cataloged metric (e.g. agent-compliance-report) ships its
+  // drill-down without the intent having to restate it.
+  const rowLink = metric.rowLink ?? entry?.defaults?.rowLink
+  const detailView = metric.detailView ?? entry?.defaults?.detailView ?? null
+  if (rowLink?.key && widgetLayoutGroup(displayAs) === 'table') {
     writeAtomic(detailPath, generateKeyedDetailViewFile({
       componentName,
       title: metric.title ?? entry?.defaults?.title ?? componentName,
       subtitle: autoSubtitle(metric, entry?.defaults ?? {}, timeRange),
       moduleSpecifier: metricModuleSpecifier(metric),
       detailColumns: metric.detailColumns ? compileColumns(metric.detailColumns) : null,
+      detailView,
     }))
     return true
   }
@@ -590,10 +624,52 @@ function applyTemplate(templateName, subs) {
  * @returns {string} Full TypeScript file content
  */
 export function generateViewFile(widget) {
-  const { componentName, title, subtitle = '', moduleSpecifier, detailExport, detailColumns, defaultSortKey } = widget
+  const { componentName, title, subtitle = '', moduleSpecifier, detailExport, detailColumns, defaultSortKey, detailView = null } = widget
 
   const columnsExpr = detailColumns ? detailColumns : 'autoColumns(rows)'
   const sortKeyExpr = defaultSortKey ? JSON.stringify(defaultSortKey) : '(columns[0]?.key as string)'
+
+  const compiled = detailView ? compileDetailWidgets(detailView, 'd') : null
+  const extraImports = compiled ? '\n' + [...compiled.imports].filter(i => !i.includes("'@/dashboard/chrome/RecordsTable'")).join('\n') : ''
+
+  const body = detailView
+    ? `  const d = (data && !Array.isArray(data)) ? (data as Record<string, unknown[]>) : { rows: toRows(data ?? []) }
+
+  if (loading) return (
+    <DetailViewShell title="${title ?? componentName}" description="${subtitle}">
+      <LoadingState height="h-96" />
+    </DetailViewShell>
+  )
+  if (error) return (
+    <DetailViewShell title="${title ?? componentName}" description="${subtitle}">
+      <EmptyState message={error.message} />
+    </DetailViewShell>
+  )
+  return (
+    <DetailViewShell title="${title ?? componentName}" description="${subtitle}">
+      <div className="space-y-6">
+${compiled.jsx}
+      </div>
+    </DetailViewShell>
+  )`
+    : `  const rows = toRows(data ?? [])
+  const columns = ${columnsExpr}
+
+  if (loading) return (
+    <DetailViewShell title="${title ?? componentName}" description="${subtitle}">
+      <LoadingState height="h-96" />
+    </DetailViewShell>
+  )
+  if (error) return (
+    <DetailViewShell title="${title ?? componentName}" description="${subtitle}">
+      <EmptyState message={error.message} />
+    </DetailViewShell>
+  )
+  return (
+    <DetailViewShell title="${title ?? componentName}" description="${subtitle}">
+      <RecordsTable rows={rows} columns={columns} defaultSortKey={${sortKeyExpr}} />
+    </DetailViewShell>
+  )`
 
   return `import React from 'react'
 import { DetailViewShell } from '@/dashboard/chrome/DetailViewShell'
@@ -602,7 +678,7 @@ import { useWidgetData } from '@/hooks/useWidgetData'
 import { LoadingState, EmptyState } from '@/dashboard/chrome'
 import { fmtNumber, fmtPercent, fmtDuration, fmtTimeAgo } from '@/lib/format'
 import { toneClass } from '@/lib/widget'
-import { ${detailExport} } from '${moduleSpecifier}'
+import { ${detailExport} } from '${moduleSpecifier}'${extraImports}
 
 type Row = Record<string, unknown>
 
@@ -634,24 +710,7 @@ export function ${componentName}View() {
     return []
   }
 
-  const rows = toRows(data ?? [])
-  const columns = ${columnsExpr}
-
-  if (loading) return (
-    <DetailViewShell title="${title ?? componentName}" description="${subtitle}">
-      <LoadingState height="h-96" />
-    </DetailViewShell>
-  )
-  if (error) return (
-    <DetailViewShell title="${title ?? componentName}" description="${subtitle}">
-      <EmptyState message={error.message} />
-    </DetailViewShell>
-  )
-  return (
-    <DetailViewShell title="${title ?? componentName}" description="${subtitle}">
-      <RecordsTable rows={rows} columns={columns} defaultSortKey={${sortKeyExpr}} />
-    </DetailViewShell>
-  )
+${body}
 }
 `
 }
@@ -663,50 +722,41 @@ export function ${componentName}View() {
  * @returns {string}
  */
 export function generateKeyedDetailViewFile(widget) {
-  const { componentName, title, subtitle = '', moduleSpecifier, detailColumns } = widget
+  const { componentName, title, subtitle = '', moduleSpecifier, detailColumns, detailView = null } = widget
   const columnsExpr = detailColumns ? detailColumns : 'autoColumns(rows)'
 
-  return `import React from 'react'
-import { useParams } from 'react-router-dom'
-import { useState, useEffect } from 'react'
-import { DetailViewShell } from '@/dashboard/chrome/DetailViewShell'
-import { RecordsTable, type ColumnDef } from '@/dashboard/chrome/RecordsTable'
-import { useAuth } from '@/hooks/useAuth'
-import { LoadingState, EmptyState } from '@/dashboard/chrome'
-import { fmtNumber, fmtPercent, fmtDuration, fmtTimeAgo } from '@/lib/format'
-import { toneClass } from '@/lib/widget'
-import { fetchDetailByKey } from '${moduleSpecifier}'
+  const compiled = detailView ? compileDetailWidgets(detailView, 'd') : null
+  const extraImports = compiled ? '\n' + [...compiled.imports].filter(i => !i.includes("'@/dashboard/chrome/RecordsTable'")).join('\n') : ''
 
-type Row = Record<string, unknown>
+  // Body branches: rich detailView renders compiled sub-widgets over a normalized
+  // source map; otherwise today's single RecordsTable (backward-compat, unchanged).
+  const stateInit = detailView ? `const [data, setData] = useState<unknown>(null)` : `const [data, setData] = useState<Row[]>([])`
+  const fetchThen = detailView
+    ? `.then((res: unknown) => { setData(res); setLoading(false) })`
+    : `.then((rows: Row[]) => { setData(rows); setLoading(false) })`
 
-/** Auto-detect columns from the first row when explicit detailColumns aren't given. */
-function autoColumns(rows: Row[]): ColumnDef<Row>[] {
-  if (rows.length === 0) return [{ key: 'value', label: 'Value' }]
-  return Object.entries(rows[0])
-    .filter(([, v]) => v !== null && v !== undefined && typeof v !== 'object')
-    .map(([k, v]) => ({
-      key: k,
-      label: k.replace(/([A-Z])/g, ' $1').replace(/^(.)/, (s: string) => s.toUpperCase()).trim(),
-      ...(typeof v === 'number' && { align: 'right' as const }),
-    }))
-}
+  const body = detailView
+    ? `  const d = (data && !Array.isArray(data)) ? (data as Record<string, unknown[]>) : { rows: toRows(data as unknown) }
+  const heading = key ? \`${title ?? componentName}: \${decodeURIComponent(key)}\` : '${title ?? componentName}'
 
-export function ${componentName}DetailView() {
-  const { key } = useParams<{ key: string }>()
-  const { sdk, getToken } = useAuth()
-  const [data, setData] = useState<Row[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-
-  useEffect(() => {
-    if (!sdk || !key) return
-    setLoading(true)
-    fetchDetailByKey(sdk, key, getToken)
-      .then((rows: Row[]) => { setData(rows); setLoading(false) })
-      .catch((err: unknown) => { setError(err instanceof Error ? err : new Error(String(err))); setLoading(false) })
-  }, [sdk, key])
-
-  const rows = data
+  if (loading) return (
+    <DetailViewShell title={heading} description="${subtitle}">
+      <LoadingState height="h-96" />
+    </DetailViewShell>
+  )
+  if (error) return (
+    <DetailViewShell title={heading} description="${subtitle}">
+      <EmptyState message={error.message} />
+    </DetailViewShell>
+  )
+  return (
+    <DetailViewShell title={heading} description="${subtitle}">
+      <div className="space-y-6">
+${compiled.jsx}
+      </div>
+    </DetailViewShell>
+  )`
+    : `  const rows = data
   const columns = ${columnsExpr}
   const heading = key ? \`${title ?? componentName}: \${decodeURIComponent(key)}\` : '${title ?? componentName}'
 
@@ -724,7 +774,62 @@ export function ${componentName}DetailView() {
     <DetailViewShell title={heading} description="${subtitle}">
       <RecordsTable rows={rows} columns={columns} />
     </DetailViewShell>
-  )
+  )`
+
+  return `import React from 'react'
+import { useParams } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { DetailViewShell } from '@/dashboard/chrome/DetailViewShell'
+import { RecordsTable, type ColumnDef } from '@/dashboard/chrome/RecordsTable'
+import { useAuth } from '@/hooks/useAuth'
+import { LoadingState, EmptyState } from '@/dashboard/chrome'
+import { fmtNumber, fmtPercent, fmtDuration, fmtTimeAgo } from '@/lib/format'
+import { toneClass } from '@/lib/widget'
+import { fetchDetailByKey } from '${moduleSpecifier}'${extraImports}
+
+type Row = Record<string, unknown>
+
+/** Auto-detect columns from the first row when explicit detailColumns aren't given. */
+function autoColumns(rows: Row[]): ColumnDef<Row>[] {
+  if (rows.length === 0) return [{ key: 'value', label: 'Value' }]
+  return Object.entries(rows[0])
+    .filter(([, v]) => v !== null && v !== undefined && typeof v !== 'object')
+    .map(([k, v]) => ({
+      key: k,
+      label: k.replace(/([A-Z])/g, ' $1').replace(/^(.)/, (s: string) => s.toUpperCase()).trim(),
+      ...(typeof v === 'number' && { align: 'right' as const }),
+    }))
+}
+${detailView ? `
+/** Safely extract a row array from any response shape (legacy fallback / bare arrays). */
+function toRows(raw: unknown): Row[] {
+  if (!raw) return []
+  if (Array.isArray(raw)) return raw as Row[]
+  if (typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>
+    if (Array.isArray(obj.items)) return obj.items as Row[]
+    if (Array.isArray(obj.data)) return obj.data as Row[]
+    if (obj.data && typeof obj.data === 'object') return toRows(obj.data)
+  }
+  return []
+}
+` : ''}
+export function ${componentName}DetailView() {
+  const { key } = useParams<{ key: string }>()
+  const { sdk, getToken } = useAuth()
+  ${stateInit}
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+
+  useEffect(() => {
+    if (!sdk || !key) return
+    setLoading(true)
+    fetchDetailByKey(sdk, key, getToken)
+      ${fetchThen}
+      .catch((err: unknown) => { setError(err instanceof Error ? err : new Error(String(err))); setLoading(false) })
+  }, [sdk, key])
+
+${body}
 }
 `
 }
@@ -892,6 +997,8 @@ export function validateIntent(intent) {
     if (m.rowLink !== undefined && (typeof m.rowLink !== 'object' || !m.rowLink.key || typeof m.rowLink.key !== 'string')) {
       errors.push(`metric "${m.name}" rowLink must be an object with a string "key" (the row field used as the drill-down route param). The module must export fetchDetailByKey.`)
     }
+    // Rich detail-view spec — throws with a precise message on any violation.
+    validateDetailView(m)
   }
   return errors
 }
@@ -961,6 +1068,66 @@ export function compileColumns(input) {
 }
 
 /**
+ * Compile a metric's `detailView` spec into the imports + JSX for a rich
+ * drill-down view. Chart sub-widgets render the matching primitive from
+ * `@/dashboard/charts`; table sub-widgets render a titled Card wrapping a
+ * RecordsTable. Each sub-widget reads its named source off `dataVar`
+ * (the normalized `{ rows, byHook, ... }` map).
+ * @param {{ widgets: Array<object> }} detailView
+ * @param {string} [dataVar='d']
+ * @returns {{ imports: Set<string>, jsx: string }}
+ */
+export function compileDetailWidgets(detailView, dataVar = 'd') {
+  const imports = new Set()
+  const blocks = []
+  const CHART_IMPORT = {
+    'donut-chart': 'Donut',
+    'bar-chart': 'Bars',
+    'area-chart': 'TrendArea',
+    'line-chart': 'TrendArea',
+    'multi-line-chart': 'MultiLine',
+  }
+  for (const w of (detailView.widgets ?? [])) {
+    const srcExpr = `(${dataVar}[${JSON.stringify(w.source)}] ?? []) as Record<string, unknown>[]`
+    if (DETAIL_CHART_TYPES.has(w.displayAs)) {
+      const comp = CHART_IMPORT[w.displayAs]
+      imports.add(`import { ${comp} } from '@/dashboard/charts'`)
+      imports.add(`import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'`)
+      let chartEl
+      if (w.displayAs === 'multi-line-chart') {
+        chartEl = `<MultiLine data={${srcExpr}} xKey={${JSON.stringify(w.xKey)}} series={${compileSeries(w.series)}} />`
+      } else if (w.displayAs === 'donut-chart') {
+        chartEl = `<Donut data={${srcExpr}} nameKey={${JSON.stringify(w.xKey)}} valueKey={${JSON.stringify(w.yKey)}} />`
+      } else if (w.displayAs === 'bar-chart') {
+        chartEl = `<Bars data={${srcExpr}} nameKey={${JSON.stringify(w.xKey)}} valueKey={${JSON.stringify(w.yKey)}} />`
+      } else if (w.displayAs === 'area-chart') {
+        chartEl = `<TrendArea data={${srcExpr}} xKey={${JSON.stringify(w.xKey)}} yKey={${JSON.stringify(w.yKey)}} />`
+      } else { // line-chart
+        chartEl = `<TrendArea data={${srcExpr}} xKey={${JSON.stringify(w.xKey)}} yKey={${JSON.stringify(w.yKey)}} area={false} />`
+      }
+      blocks.push(`        <Card>
+          <CardHeader><CardTitle>{${JSON.stringify(w.title)}}</CardTitle></CardHeader>
+          <CardContent>
+            ${chartEl}
+          </CardContent>
+        </Card>`)
+    } else {
+      // table sub-widget
+      imports.add(`import { RecordsTable, type ColumnDef } from '@/dashboard/chrome/RecordsTable'`)
+      imports.add(`import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'`)
+      const colsExpr = w.columns ? compileColumns(w.columns) : `autoColumns(${srcExpr})`
+      blocks.push(`        <Card>
+          <CardHeader><CardTitle>{${JSON.stringify(w.title)}}</CardTitle></CardHeader>
+          <CardContent>
+            <RecordsTable rows={${srcExpr}} columns={${colsExpr}} />
+          </CardContent>
+        </Card>`)
+    }
+  }
+  return { imports, jsx: blocks.join('\n') }
+}
+
+/**
  * Compile a multi-line-chart `series` spec into a TS array literal.
  * Accepts either a ready literal string (passed through) or an array of
  * `{ key, color, label? }` objects — the natural form an author writes in
@@ -1016,6 +1183,7 @@ export function buildViewSpec(componentName, metric, entry, timeRange) {
     detailExport: metric.detail === true ? 'fetchDetail' : 'fetchData',
     detailColumns: metric.detailColumns ? compileColumns(metric.detailColumns) : null,
     defaultSortKey: metric.detailSortKey,
+    detailView: metric.detailView ?? entry?.defaults?.detailView ?? null,
   }
 }
 
@@ -1363,13 +1531,18 @@ async function runDashboardBuild(intent, intentPath) {
 
       // Row-click drill-down: a table widget with `rowLink` gets a keyed detail
       // view at /<widget>/:key that calls the module's fetchDetailByKey.
-      if (metric.rowLink?.key && widgetLayoutGroup(displayAs) === 'table') {
+      // rowLink + detailView fall back to the registry entry's defaults (same as
+      // title/columns), so a cataloged metric ships its drill-down + rich charts
+      // without the intent restating them.
+      const keyedRowLink = metric.rowLink ?? entry?.defaults?.rowLink
+      if (keyedRowLink?.key && widgetLayoutGroup(displayAs) === 'table') {
         keyedSpecs[componentName] = {
           componentName,
           title: metric.title ?? entry?.defaults?.title ?? componentName,
           subtitle: autoSubtitle(metric, entry?.defaults ?? {}, timeRange),
           moduleSpecifier: metricModuleSpecifier(metric),
           detailColumns: metric.detailColumns ? compileColumns(metric.detailColumns) : null,
+          detailView: metric.detailView ?? entry?.defaults?.detailView ?? null,
           routeBase: `/${componentName.toLowerCase()}`,
         }
       }

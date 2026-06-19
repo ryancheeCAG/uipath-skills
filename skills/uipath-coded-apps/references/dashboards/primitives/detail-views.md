@@ -30,8 +30,26 @@ The chart's `fnBody` returns **aggregated buckets** (e.g. `{ date, count }`). A 
 
 The generated view calls `toRows(data)` before `RecordsTable`, handling `{ items: [...] }`, `{ data: [...] }`, a nested `data` object, or a top-level array. Defined inside every view file — no import needed.
 
+## Rich detail views (charts)
+
+A detail view can render multiple sub-widgets via an optional `detailView: { widgets: [...] }` on the metric. Each sub-widget declares:
+
+- `displayAs` — `donut-chart` | `bar-chart` | `area-chart` | `line-chart` | `multi-line-chart` | `data-table` | `ranked-table`
+- `title` — sub-widget heading
+- `source` — key into the named-source map returned by the detail fetch
+- Chart sub-widgets: `xKey` + `yKey`; multi-line uses `xKey` + `series[]`
+- Table sub-widgets: optional `columns` (`{ key, label, align?, format?, color? }[]`)
+
+The detail fetch (`fetchDetailByKey` for `rowLink`, `fetchDetail` for `detail: true`) must return a **named-source map** `{ rows, byHook, byRule, … }` whose keys match each sub-widget's `source`. A bare array = legacy single-table behaviour (the view normalizes `array → { rows }`).
+
+Charts render via presentational components in `@/dashboard/charts` (`Donut` / `Bars` / `TrendArea` / `MultiLine`); tables via `RecordsTable`. Each sub-widget renders its own EmptyState when its `source` is empty.
+
+`detailView` is valid only on a metric with `rowLink.key` or `detail: true`.
+
 ## Anti-patterns
 
 - **Never** ship a chart detail view backed by the chart's aggregate `fnBody` — supply `detailFnBody` so the drill-down shows records.
 - **Never** sort a time column on its rendered label — key the sort on the raw ISO field via `detailSortKey`.
 - **Never** emit `navigate()` / `ViewAllLink` from a widget the build won't generate a view for.
+- **Never** declare `detailView` on a metric without `rowLink.key` or `detail:true` — the build rejects it.
+- **Never** return an aggregate-only array when `detailView` declares chart sources — return the named-source map so each sub-widget has data.

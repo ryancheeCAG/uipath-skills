@@ -5,7 +5,7 @@ import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
 import { execSync } from 'node:child_process'
-import { validateIntent, resolveMetric, buildWidgetFile, generateViewFile, generateKeyedDetailViewFile, buildViewSpec, compileColumns, emit, parseEvent, classifyEditIntent, resolveChangeMetric, widgetLayoutGroup, setWidgetsDir, VALID_DISPLAY_TYPES, metricModuleSpecifier, buildVersions, SCAFFOLD_VERSION, INTENT_SCHEMA_VERSION, STATE_SCHEMA_VERSION, scaffoldDrift, runIntentMigrations, VALID_EDIT_OPS } from '../build-dashboard.mjs'
+import { validateIntent, resolveMetric, buildWidgetFile, generateViewFile, generateKeyedDetailViewFile, buildViewSpec, compileColumns, compileDetailWidgets, emit, parseEvent, classifyEditIntent, resolveChangeMetric, widgetLayoutGroup, setWidgetsDir, VALID_DISPLAY_TYPES, metricModuleSpecifier, buildVersions, SCAFFOLD_VERSION, INTENT_SCHEMA_VERSION, STATE_SCHEMA_VERSION, scaffoldDrift, runIntentMigrations, VALID_EDIT_OPS } from '../build-dashboard.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const REGISTRY_PATH = resolve(__dirname, '../capability-registry.json')
@@ -1187,4 +1187,124 @@ test('regression: row-click keyed views are wired on fresh + incremental + upgra
   assert.ok((src.match(/writeKeyedViewIfRowLink\(/g) || []).length >= 3, 'keyed detail view must be (re)written on ADD, CHANGE, and REBUILD')
   // no bare 2-arg injectAppRoutes call survives (the old broken incremental path)
   assert.ok(!/injectAppRoutes\(P, viewNames\)(?!,)/.test(src), 'no injectAppRoutes call may omit keyed views')
+})
+
+// ── Rich detail views (detailView spec) ───────────────────────────────────────
+
+/** Minimal valid schemaVersion-2 intent with one overridable metric. */
+function baseIntent(overrides = {}) {
+  const { metrics, ...rest } = overrides
+  return {
+    schemaVersion: 2,
+    dashboardName: 'D',
+    timeRange: '30d',
+    metrics: metrics ?? [{ name: 'agents', tier: 'T3', title: 'Agents', displayAs: 'data-table' }],
+    ...rest,
+  }
+}
+
+// TASK 2 — schema validation -----------------------------------------------------
+
+test('detailView: valid spec on a rowLink table passes validateIntent', () => {
+  const errs = validateIntent(baseIntent({ metrics: [{
+    name: 'agents', tier: 'T3', title: 'Agents', displayAs: 'data-table',
+    rowLink: { key: 'name' },
+    detailView: { widgets: [
+      { displayAs: 'donut-chart', title: 'By Hook', source: 'byHook', xKey: 'name', yKey: 'value' },
+      { displayAs: 'data-table', title: 'All', source: 'rows' },
+    ] },
+  }] }))
+  assert.deepEqual(errs, [])
+})
+
+test('detailView: chart sub-widget missing xKey/yKey throws', () => {
+  assert.throws(() => validateIntent(baseIntent({ metrics: [{
+    name: 'agents', tier: 'T3', title: 'Agents', displayAs: 'data-table',
+    rowLink: { key: 'name' },
+    detailView: { widgets: [{ displayAs: 'donut-chart', title: 'By Hook', source: 'byHook' }] },
+  }] })), /xKey|yKey/i)
+})
+
+test('detailView: bad displayAs throws', () => {
+  assert.throws(() => validateIntent(baseIntent({ metrics: [{
+    name: 'agents', tier: 'T3', title: 'Agents', displayAs: 'data-table',
+    rowLink: { key: 'name' },
+    detailView: { widgets: [{ displayAs: 'pie', title: 'By Hook', source: 'byHook', xKey: 'name', yKey: 'value' }] },
+  }] })), /displayAs/i)
+})
+
+test('detailView: requires rowLink.key or detail:true', () => {
+  assert.throws(() => validateIntent(baseIntent({ metrics: [{
+    name: 'agents', tier: 'T3', title: 'Agents', displayAs: 'data-table',
+    detailView: { widgets: [{ displayAs: 'donut-chart', title: 'By Hook', source: 'byHook', xKey: 'name', yKey: 'value' }] },
+  }] })), /detailView requires/i)
+})
+
+// TASK 3 — compileDetailWidgets + keyed view -------------------------------------
+
+test('compileDetailWidgets: emits primitive imports + JSX per sub-widget', () => {
+  const { imports, jsx } = compileDetailWidgets({ widgets: [
+    { displayAs: 'donut-chart', title: 'By Hook', source: 'byHook', xKey: 'name', yKey: 'value' },
+    { displayAs: 'ranked-table', title: 'Rules', source: 'byRule', columns: [{ key: 'name', label: 'Rule' }] },
+    { displayAs: 'data-table', title: 'All', source: 'rows' },
+  ]}, 'd')
+  assert.ok([...imports].some(i => i.includes('Donut')), 'Donut import missing')
+  assert.ok(jsx.includes('d["byHook"]') || jsx.includes('d.byHook'), 'byHook source not referenced')
+  assert.ok(jsx.includes('RecordsTable'), 'table sub-widget not via RecordsTable')
+})
+
+test('detailView falls back to registry entry defaults (buildViewSpec)', () => {
+  // A cataloged metric ships its detailView via registry defaults — the intent
+  // metric need not restate it. Guards the fresh-build + view-spec fallback.
+  const entry = { defaults: { detailView: { widgets: [
+    { displayAs: 'donut-chart', title: 'By Hook', source: 'byHook', xKey: 'name', yKey: 'value' },
+  ] } } }
+  const spec = buildViewSpec('AgentComplianceReport', { name: 'agent-compliance-report', title: 'Agent Compliance' }, entry, '30d')
+  assert.ok(spec.detailView, 'detailView should fall back to entry.defaults.detailView')
+  assert.equal(spec.detailView.widgets[0].source, 'byHook')
+})
+
+test('generateKeyedDetailViewFile: with detailView imports charts + references source map', () => {
+  const view = generateKeyedDetailViewFile({
+    componentName: 'AllAgents', title: 'Agents', subtitle: 'Spans',
+    moduleSpecifier: '@/metrics/all-agents', detailColumns: null,
+    detailView: { widgets: [
+      { displayAs: 'donut-chart', title: 'By Hook', source: 'byHook', xKey: 'name', yKey: 'value' },
+    ] },
+  })
+  assert.ok(view.includes("@/dashboard/charts"), 'keyed detailView must import chart primitives')
+  assert.ok(view.includes('d["byHook"]') || view.includes('d.byHook'), 'keyed detailView must reference source map')
+  assert.ok(view.includes('fetchDetailByKey(sdk, key, getToken)'), 'keyed view must still call fetchDetailByKey')
+})
+
+test('generateKeyedDetailViewFile: without detailView still renders a single RecordsTable (backward-compat)', () => {
+  const view = generateKeyedDetailViewFile({
+    componentName: 'AllAgents', title: 'Agents', subtitle: 'Spans',
+    moduleSpecifier: '@/metrics/all-agents', detailColumns: null,
+  })
+  assert.ok(view.includes('<RecordsTable'), 'no-detailView keyed view must render a single RecordsTable')
+  assert.ok(!view.includes("@/dashboard/charts"), 'no-detailView keyed view must not import charts')
+})
+
+// TASK 4 — chart record-grain view (generateViewFile) ----------------------------
+
+test('generateViewFile: with detailView imports charts + references source map', () => {
+  const view = generateViewFile({
+    componentName: 'Errors', title: 'Errors', subtitle: 'Last 30d',
+    moduleSpecifier: '@/metrics/errors', detailExport: 'fetchDetail', detailColumns: null,
+    detailView: { widgets: [
+      { displayAs: 'bar-chart', title: 'By Hook', source: 'byHook', xKey: 'name', yKey: 'value' },
+    ] },
+  })
+  assert.ok(view.includes("@/dashboard/charts"), 'detailView view must import chart primitives')
+  assert.ok(view.includes('d["byHook"]') || view.includes('d.byHook'), 'detailView view must reference source map')
+})
+
+test('generateViewFile: without detailView still renders a single RecordsTable (backward-compat)', () => {
+  const view = generateViewFile({
+    componentName: 'Errors', title: 'Errors', subtitle: 'Last 30d',
+    moduleSpecifier: '@/metrics/errors', detailExport: 'fetchData', detailColumns: null,
+  })
+  assert.ok(view.includes('<RecordsTable'), 'no-detailView view must render a single RecordsTable')
+  assert.ok(!view.includes("@/dashboard/charts"), 'no-detailView view must not import charts')
 })

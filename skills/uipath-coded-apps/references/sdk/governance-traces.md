@@ -108,22 +108,23 @@ export const fetchData: MetricFn = async (sdk) => {
 export const fetchDetailByKey: MetricDetailByKeyFn = async (sdk, agentName) => {
   const { Jobs } = await import('@uipath/uipath-typescript/jobs')
   const { Traces } = await import('@uipath/uipath-typescript/traces')
+  const { parseGovernanceSpans, countBy } = await import('@/lib/governance')
   const jobs = (await new Jobs(sdk as never).getAll({ filter: "ProcessType eq 'Agent'", orderby: 'CreationTime desc' }))?.items ?? []
   const job = jobs.find((j: { processName?: string | null; traceId?: string | null }) => j.processName === agentName)
-  if (!job?.traceId) return []
+  if (!job?.traceId) return { rows: [], byHook: [], byRule: [] }
   const spans = await new Traces(sdk as never).getById(job.traceId)
-  // show ALL rules (PASS + MATCHED) for the report, grouped by hook.
-  // Traces.getById attributes is already an object; tolerate a JSON string too.
-  return (spans ?? []).filter((s: any) => String(s.name).startsWith('governance.rule.')).map((s: any) => {
-    const a: any = (s.attributes && typeof s.attributes === 'object')
-      ? s.attributes
+  const { violations } = parseGovernanceSpans(spans)
+  const rows = (spans ?? []).filter((s: any) => String(s.name).startsWith('governance.rule.')).map((s: any) => {
+    const a: any = (s.attributes && typeof s.attributes === 'object') ? s.attributes
       : (() => { try { return JSON.parse(s.attributes ?? '{}') } catch { return {} } })()
     return { hook: a['governance.hook'] ?? '', rule: a['governance.rule_name'] ?? a['governance.rule_id'] ?? s.name,
-             standard: a['governance.pack_name'] ?? '', status: a['governance.status'] ?? '', action: a['governance.action'] ?? '',
-             detail: a['governance.detail'] ?? '', time: s.startTime }
+             standard: a['governance.pack_name'] ?? '', status: a['governance.status'] ?? '', action: a['governance.action'] ?? '' }
   })
+  return { rows, byHook: countBy(violations, v => v.hook), byRule: countBy(violations, v => v.ruleName) }
 }
 ```
+
+When the metric declares `detailView`, return a **named-source map** (`{ rows, byHook, byRule, … }`) whose keys match each sub-widget's `source`; otherwise return a bare array (single table). Derived from ONE `Traces.getById` — no extra round-trips. See `primitives/detail-views.md § Rich detail views`.
 
 ## Scope
 

@@ -488,7 +488,7 @@
     "agent-compliance-report": {
       "aliases": ["agent compliance report", "agent governance report", "per agent compliance report", "governance report by agent", "runtime compliance report"],
       "template": "data-table",
-      "description": "GATED — runtime compliance / standards / rule-violation intent ONLY (trace-derived; interim; NOT generic governance — see `policy-denials`/`governance-verdicts`). See sdk/governance-traces.md. Agents list (Agents.getAll → .items); rowLink to a per-agent report whose fetchDetailByKey(sdk, agentName) shows that agent's latest run's rule list (PASS/MATCHED) grouped by hook. Export BOTH fetchData (agents) + fetchDetailByKey (see governance-traces.md). Scope: Insights Insights.RealTimeData OR.Folders.Read OR.Jobs.Read.",
+      "description": "GATED — runtime compliance / standards / rule-violation intent ONLY (trace-derived; interim; NOT generic governance — see `policy-denials`/`governance-verdicts`). See sdk/governance-traces.md. Agents list (Agents.getAll → .items); rowLink to a per-agent report whose fetchDetailByKey(sdk, agentName) shows that agent's latest run's rule list (PASS/MATCHED) grouped by hook. Export BOTH fetchData (agents) + fetchDetailByKey (see governance-traces.md). Scope: Insights Insights.RealTimeData OR.Folders.Read OR.Jobs.Read. rowLink → a per-agent RICH detail view (donut by hook + ranked rules + full table) via `detailView` + a named-source `fetchDetailByKey`.",
       "defaults": {
         "title": "Agent Compliance",
         "description": "Click an agent for its latest-run governance report",
@@ -498,7 +498,14 @@
           { "key": "agentName", "label": "Agent" },
           { "key": "healthScore", "label": "Health", "align": "right" },
           { "key": "lastRun", "label": "Last Run", "format": "timeAgo" }
-        ]
+        ],
+        "detailView": { "widgets": [
+          { "displayAs": "donut-chart",  "title": "Violations by Hook",  "source": "byHook",     "xKey": "name", "yKey": "value" },
+          { "displayAs": "ranked-table", "title": "Top Rules Fired",     "source": "byRule",
+            "columns": [ {"key":"name","label":"Rule"}, {"key":"value","label":"Fired","align":"right","format":"number"} ] },
+          { "displayAs": "data-table",   "title": "All Rule Evaluations","source": "rows",
+            "columns": [ {"key":"hook","label":"Hook"}, {"key":"rule","label":"Rule"}, {"key":"standard","label":"Standard"}, {"key":"status","label":"Status"}, {"key":"action","label":"Action"} ] }
+        ] }
       }
     }
   },
