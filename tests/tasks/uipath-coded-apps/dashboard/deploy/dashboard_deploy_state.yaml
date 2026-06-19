@@ -9,19 +9,22 @@ tags: [uipath-coded-apps, integration, dashboard, mode:operate, feature:scaffold
 sandbox:
   driver: tempdir
   node: {}
-  setup: |
-    mkdir -p .dashboard dist
-    echo "<html></html>" > dist/index.html
-    # Fresh deploy state — systemName is null
-    cat > .dashboard/state.json << 'EOF'
-    {
-      "app": { "name": "Agent Health Dashboard", "routingName": "agent-health-x7k2", "semver": "1.0.0" },
-      "env": "alpha", "org": "testorg", "tenant": "testTenant",
-      "cloudUrl": "https://alpha.uipath.com",
-      "widgets": ["ActiveAgentsKPI", "ErrorRateTrend"],
-      "deployment": { "systemName": null, "folderKey": null, "appUrl": null, "lastDeployedAt": null }
-    }
-    EOF
+
+pre_run:
+  - command: |
+      mkdir -p .dashboard dist
+      echo "<html></html>" > dist/index.html
+      cat > .dashboard/state.json << 'EOF'
+      {
+        "app": { "name": "Agent Health Dashboard", "routingName": "agent-health-x7k2", "semver": "1.0.0" },
+        "env": "alpha", "org": "testorg", "tenant": "testTenant",
+        "cloudUrl": "https://alpha.uipath.com",
+        "widgets": ["ActiveAgentsKPI", "ErrorRateTrend"],
+        "deployment": { "systemName": null, "folderKey": null, "appUrl": null, "lastDeployedAt": null }
+      }
+      EOF
+    timeout: 15
+    fail_on_error: true
 
 initial_prompt: |
   Deploy my Agent Health dashboard to the "Shared" folder in Automation Cloud.
@@ -71,12 +74,11 @@ success_criteria:
     weight: 3.0
     pass_threshold: 1.0
 
-  # PAT must NOT be in any command arguments (security)
-  - type: run_command
-    description: "No PAT token passed as CLI argument"
-    command: >
-      node -e "process.exit(0)"
-    timeout: 5
-    expected_exit_code: 0
-    weight: 1.0
+  # Deploy must use --routing-name (display/system handled separately) — fresh deploy still pins the slug
+  - type: command_executed
+    description: "Agent ran uip codedapp deploy with --routing-name agent-health-x7k2 from state.json"
+    tool_name: "Bash"
+    command_pattern: 'uip\s+codedapp\s+deploy.*--routing-name.*agent-health-x7k2'
+    min_count: 1
+    weight: 1.5
     pass_threshold: 1.0

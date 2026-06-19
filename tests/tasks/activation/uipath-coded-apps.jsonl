@@ -58,3 +58,5 @@
 {"id": "uipath-coded-apps-058", "prompt": "create a cost dashboard tracking AGU consumption and wasted units by agent", "expected_skill": "uipath-coded-apps"}
 {"id": "uipath-coded-apps-059", "prompt": "build me a UiPath agent health dashboard: active agents, invocation volume over 24 hours, error rate trend", "expected_skill": "uipath-coded-apps"}
 {"id": "uipath-coded-apps-060", "prompt": "add a governance violations widget to my existing dashboard", "expected_skill": "uipath-coded-apps"}
+{"id": "uipath-coded-apps-061", "prompt": "build me a runtime compliance dashboard showing ISO 42001 rule violations per agent", "expected_skill": "uipath-coded-apps"}
+{"id": "uipath-coded-apps-062", "prompt": "deploy my agent health dashboard to Automation Cloud", "expected_skill": "uipath-coded-apps"}

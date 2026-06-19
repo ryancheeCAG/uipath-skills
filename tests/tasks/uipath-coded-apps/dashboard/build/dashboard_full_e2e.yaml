@@ -1,16 +1,13 @@
 task_id: uipath-coded-apps-dashboard-full-e2e
 description: >
-  End-to-end build of a 4-widget agent health dashboard exercising all
-  major patterns: KPI, area chart, line chart, and table. Validates the
-  complete 8-phase pipeline — plan shown, scaffold created, all env vars
-  written from the active uip login session, widgets generated with correct
-  routing, tsc passes, and the final summary is user-facing (no technical output).
-tags: [uipath-coded-apps, e2e, dashboard, feature:scaffold, feature:routing, feature:recipes, mode:build]
-
-agent:
-  type: claude-code
-  permission_mode: acceptEdits
-  allowed_tools: ["Skill", "Bash", "Read", "Write", "Edit", "Glob", "Grep"]
+  End-to-end build of a 4-widget agent health dashboard exercising KPI, area
+  chart, line chart, and table. Validates the full compiler pipeline on the
+  current architecture: intent.json (pure metadata, schemaVersion 2), one
+  metric module per metric under src/metrics/ authoring real SDK calls
+  (Agents.getAll + timelines), generated widgets under src/dashboard/widgets/,
+  named time constants, state.json written, and a clean `tsc --noEmit` over the
+  generated project (the gold-standard correctness gate).
+tags: [uipath-coded-apps, e2e, dashboard, feature:scaffold, feature:routing, mode:build]
 
 run_limits:
   turn_timeout: 1200
@@ -20,103 +17,51 @@ sandbox:
   node: {}
 
 initial_prompt: |
-  Build me a UiPath agent health dashboard: active agents, invocation volume
-  over 24 hours, error rate trend for the week, and top agents by usage with
-  health scores.
+  Build me a UiPath agent health dashboard: active agents, agent consumption
+  over the last 24 hours, error rate trend for the week, and top agents by
+  usage with health scores.
 
   Do NOT ask for approval, confirmation, or feedback.
   Do NOT pause between planning and implementation.
   Before starting, load the uipath-coded-apps skill and follow its workflow.
 
 success_criteria:
-  # ── Scaffold ──────────────────────────────────────────────────────────
-  - type: file_exists
-    description: "package.json created"
-    path: "package.json"
-    weight: 1.5
+  - type: skill_triggered
+    description: "Agent invoked the uipath-coded-apps skill"
+    skill_name: "uipath-coded-apps"
+    expected_skill: "uipath-coded-apps"
+    weight: 1.0
     pass_threshold: 1.0
 
-  - type: file_check
-    description: ".env.local has VITE_UIPATH_CLOUD_URL (Insights RTM base)"
-    path: ".env.local"
-    patterns:
-      - pattern: "VITE_UIPATH_CLOUD_URL=https://"
-        must_match: true
-    weight: 2.0
-    pass_threshold: 1.0
-
-  - type: file_check
-    description: ".env.local has VITE_UIPATH_BASE_URL (SDK API base)"
-    path: ".env.local"
-    patterns:
-      - pattern: "VITE_UIPATH_BASE_URL=https://.*api\\.uipath\\.com"
-        must_match: true
-    weight: 2.0
-    pass_threshold: 1.0
-
-  - type: file_check
-    description: ".env.local has non-empty VITE_UIPATH_PAT"
-    path: ".env.local"
-    patterns:
-      - pattern: "VITE_UIPATH_PAT=ey"
-        must_match: true
-    weight: 2.0
-    pass_threshold: 1.0
-
-  # ── Routing ───────────────────────────────────────────────────────────
+  # ── Routing: SDK calls authored in the metric modules (project auto-located) ──
   - type: run_command
-    description: "Active agents KPI uses agents.getAgents"
-    command: "python3 -c \"import os,sys; d='src/widgets'; files=[f for f in os.listdir(d) if f.endswith('.tsx')] if os.path.isdir(d) else []; sys.exit(0 if any('agents.getAgents' in open(os.path.join(d,f)).read() for f in files) else 1)\""
+    description: "Metric modules use Agents.getAll and the consumption + errors timelines"
+    command: >
+      python3 $SKILLS_REPO_PATH/tests/tasks/uipath-coded-apps/dashboard/_shared/check_dashboard.py
+      --min-metrics 4 --min-widgets 4
+      --require-substr "getAll" --require-substr "getConsumptionTimeline" --require-substr "getErrors"
+    timeout: 30
     expected_exit_code: 0
-    weight: 2.0
-    pass_threshold: 1.0
-
-  - type: run_command
-    description: "Invocation chart uses agents.getConsumptionTimeline"
-    command: "python3 -c \"import os,sys; d='src/widgets'; files=[f for f in os.listdir(d) if f.endswith('.tsx')] if os.path.isdir(d) else []; sys.exit(0 if any('agents.getConsumptionTimeline' in open(os.path.join(d,f)).read() for f in files) else 1)\""
-    expected_exit_code: 0
-    weight: 2.0
-    pass_threshold: 1.0
-
-  - type: run_command
-    description: "Error trend uses agents.getErrors"
-    command: "python3 -c \"import os,sys; d='src/widgets'; files=[f for f in os.listdir(d) if f.endswith('.tsx')] if os.path.isdir(d) else []; sys.exit(0 if any('agents.getErrors' in open(os.path.join(d,f)).read() for f in files) else 1)\""
-    expected_exit_code: 0
-    weight: 2.0
-    pass_threshold: 1.0
-
-  # ── Structure ─────────────────────────────────────────────────────────
-  - type: file_exists
-    description: "src/widgets/index.ts exports all widgets"
-    path: "src/widgets/index.ts"
-    weight: 1.5
-    pass_threshold: 1.0
-
-  - type: file_check
-    description: "App.tsx imports widgets and passes to DashboardShell"
-    path: "src/App.tsx"
-    patterns:
-      - pattern: "DashboardShell"
-        must_match: true
-    weight: 1.5
-    pass_threshold: 1.0
-
-  # ── TypeScript validation ──────────────────────────────────────────────
-  - type: command_executed
-    description: "tsc --noEmit ran"
-    tool_name: "Bash"
-    command_pattern: 'tsc\s+--noEmit'
-    min_count: 1
     weight: 2.5
     pass_threshold: 1.0
 
-  # ── Outcome validation ─────────────────────────────────────────────────
+  - type: command_executed
+    description: "tsc --noEmit ran during the build"
+    tool_name: "Bash"
+    command_pattern: 'tsc\s+--noEmit'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
+
+  # ── Gold gate: full structural + routing + clean compile over the generated project ──
   - type: run_command
-    description: "Full structural + routing + env var validation via check script"
+    description: "Compiler-model gold gate: pure-metadata intent, state.json, named time constants, no legacy tokens, tsc --noEmit passes"
     command: >
       python3 $SKILLS_REPO_PATH/tests/tasks/uipath-coded-apps/dashboard/_shared/check_dashboard.py
-      --min-widgets 4 --require-insights --require-starttime --no-tsc
-    timeout: 30
+      --min-metrics 4 --min-widgets 4 --require-starttime --require-state
+      --forbid-substr fnBody --forbid-substr useInsights --forbid-substr "as unknown as"
+      --tsc
+    timeout: 240
     expected_exit_code: 0
     weight: 5.0
     pass_threshold: 1.0

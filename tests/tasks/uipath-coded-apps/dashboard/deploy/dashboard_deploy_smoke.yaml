@@ -9,19 +9,22 @@ tags: [uipath-coded-apps, smoke, dashboard, mode:operate, feature:scaffold]
 sandbox:
   driver: tempdir
   node: {}
-  setup: |
-    mkdir -p .dashboard src/dashboard
-    cat > .dashboard/state.json << 'EOF'
-    {
-      "app": { "name": "Test Dashboard", "routingName": "test-dashboard-x1y2", "semver": "1.0.0" },
-      "env": "alpha", "org": "testorg", "tenant": "testTenant",
-      "cloudUrl": "https://alpha.uipath.com",
-      "widgets": ["ActiveAgentsKPI"],
-      "deployment": { "systemName": null, "folderKey": "abc123-folder-key", "appUrl": null, "lastDeployedAt": null }
-    }
-    EOF
-    mkdir -p dist
-    echo "<html></html>" > dist/index.html
+
+pre_run:
+  - command: |
+      mkdir -p .dashboard src/dashboard dist
+      cat > .dashboard/state.json << 'EOF'
+      {
+        "app": { "name": "Test Dashboard", "routingName": "test-dashboard-x1y2", "semver": "1.0.0" },
+        "env": "alpha", "org": "testorg", "tenant": "testTenant",
+        "cloudUrl": "https://alpha.uipath.com",
+        "widgets": ["ActiveAgentsKPI"],
+        "deployment": { "systemName": null, "folderKey": "abc123-folder-key", "appUrl": null, "lastDeployedAt": null }
+      }
+      EOF
+      echo "<html></html>" > dist/index.html
+    timeout: 15
+    fail_on_error: true
 
 initial_prompt: |
   Deploy my dashboard to Automation Cloud. The project is in the current directory.

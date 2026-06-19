@@ -9,25 +9,28 @@ tags: [uipath-coded-apps, integration, dashboard, mode:operate, feature:scaffold
 sandbox:
   driver: tempdir
   node: {}
-  setup: |
-    mkdir -p .dashboard dist
-    echo "<html></html>" > dist/index.html
-    # Upgrade state — systemName is populated (previously deployed)
-    cat > .dashboard/state.json << 'EOF'
-    {
-      "app": { "name": "Agent Health Dashboard", "routingName": "agent-health-x7k2", "semver": "1.0.3" },
-      "env": "alpha", "org": "testorg", "tenant": "testTenant",
-      "cloudUrl": "https://alpha.uipath.com",
-      "widgets": ["ActiveAgentsKPI", "ErrorRateTrend", "InvocationVolume"],
-      "deployment": {
-        "systemName": "govdash-agent-health-x7k2",
-        "folderKey": "abc123-folder-key",
-        "deployVersion": 5,
-        "appUrl": "https://alpha.uipath.com/testorg/testTenant/agent-health-x7k2",
-        "lastDeployedAt": "2026-05-20T10:00:00Z"
+
+pre_run:
+  - command: |
+      mkdir -p .dashboard dist
+      echo "<html></html>" > dist/index.html
+      cat > .dashboard/state.json << 'EOF'
+      {
+        "app": { "name": "Agent Health Dashboard", "routingName": "agent-health-x7k2", "semver": "1.0.3" },
+        "env": "alpha", "org": "testorg", "tenant": "testTenant",
+        "cloudUrl": "https://alpha.uipath.com",
+        "widgets": ["ActiveAgentsKPI", "ErrorRateTrend", "InvocationVolume"],
+        "deployment": {
+          "systemName": "govdash-agent-health-x7k2",
+          "folderKey": "abc123-folder-key",
+          "deployVersion": 5,
+          "appUrl": "https://alpha.uipath.com/testorg/testTenant/agent-health-x7k2",
+          "lastDeployedAt": "2026-05-20T10:00:00Z"
+        }
       }
-    }
-    EOF
+      EOF
+    timeout: 15
+    fail_on_error: true
 
 initial_prompt: |
   Deploy the latest version of my Agent Health dashboard.
