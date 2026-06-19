@@ -83,6 +83,9 @@ const REGISTRY = JSON.parse(readFileSync(resolve(__dirname, 'capability-registry
  * @property {string}      [detailSortKey]  - Raw field the detail table sorts on
  * @property {string}      [series]      - multi-line-chart series literal
  * @property {string}      [pivotExpression] - multi-line-chart pivot expression
+ * @property {DetailViewSpec} [detailView]
+ * @property {{key:string}} [rowLink]
+ * @property {boolean} [detail]
  */
 
 /**
@@ -171,6 +174,20 @@ export const VALID_DISPLAY_TYPES = [
 const DETAIL_CHART_TYPES = new Set(['donut-chart', 'bar-chart', 'area-chart', 'line-chart', 'multi-line-chart'])
 const DETAIL_TABLE_TYPES = new Set(['data-table', 'ranked-table'])
 
+/**
+ * @typedef {Object} DetailViewWidget
+ * @property {'donut-chart'|'bar-chart'|'area-chart'|'line-chart'|'multi-line-chart'|'data-table'|'ranked-table'} displayAs
+ * @property {string} title
+ * @property {string} source  Key into the detail fetch's named-source map.
+ * @property {string} [xKey]
+ * @property {string} [yKey]
+ * @property {Array<{key:string,color:string}>} [series]  Required for multi-line-chart.
+ * @property {Array<object>} [columns]  Table column defs.
+ */
+/**
+ * @typedef {Object} DetailViewSpec
+ * @property {DetailViewWidget[]} widgets
+ */
 /** Validate a metric's optional detailView spec. Throws with a precise message. */
 export function validateDetailView(metric) {
   const dv = metric.detailView

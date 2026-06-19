@@ -98,6 +98,7 @@ rule list (status + hook + action + detail), grouped by hook — mirroring the p
 ```ts
 import type { MetricFn, MetricDetailByKeyFn } from '@/lib/metric-contract'
 import { parseGovernanceSpans } from '@/lib/governance'
+import type { GovernanceSpanLike } from '@/lib/governance'
 
 export const fetchData: MetricFn = async (sdk) => {
   const { Agents } = await import('@uipath/uipath-typescript/agents')
@@ -114,7 +115,7 @@ export const fetchDetailByKey: MetricDetailByKeyFn = async (sdk, agentName) => {
   if (!job?.traceId) return { rows: [], byHook: [], byRule: [] }
   const spans = await new Traces(sdk as never).getById(job.traceId)
   const { violations } = parseGovernanceSpans(spans)
-  const rows = (spans ?? []).filter((s: any) => String(s.name).startsWith('governance.rule.')).map((s: any) => {
+  const rows = (spans ?? []).filter((s: GovernanceSpanLike) => String(s.name).startsWith('governance.rule.')).map((s: GovernanceSpanLike) => {
     const a: any = (s.attributes && typeof s.attributes === 'object') ? s.attributes
       : (() => { try { return JSON.parse(s.attributes ?? '{}') } catch { return {} } })()
     return { hook: a['governance.hook'] ?? '', rule: a['governance.rule_name'] ?? a['governance.rule_id'] ?? s.name,
