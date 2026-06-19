@@ -1110,17 +1110,18 @@ export function compileDetailWidgets(detailView, dataVar = 'd') {
       const comp = CHART_IMPORT[w.displayAs]
       imports.add(`import { ${comp} } from '@/dashboard/charts'`)
       imports.add(`import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'`)
+      const emptyProp = typeof w.emptyMessage === 'string' ? ` emptyMessage={${JSON.stringify(w.emptyMessage)}}` : ''
       let chartEl
       if (w.displayAs === 'multi-line-chart') {
-        chartEl = `<MultiLine data={${srcExpr}} xKey={${JSON.stringify(w.xKey)}} series={${compileSeries(w.series)}} />`
+        chartEl = `<MultiLine data={${srcExpr}} xKey={${JSON.stringify(w.xKey)}} series={${compileSeries(w.series)}}${emptyProp} />`
       } else if (w.displayAs === 'donut-chart') {
-        chartEl = `<Donut data={${srcExpr}} nameKey={${JSON.stringify(w.xKey)}} valueKey={${JSON.stringify(w.yKey)}} />`
+        chartEl = `<Donut data={${srcExpr}} nameKey={${JSON.stringify(w.xKey)}} valueKey={${JSON.stringify(w.yKey)}}${emptyProp} />`
       } else if (w.displayAs === 'bar-chart') {
-        chartEl = `<Bars data={${srcExpr}} nameKey={${JSON.stringify(w.xKey)}} valueKey={${JSON.stringify(w.yKey)}} />`
+        chartEl = `<Bars data={${srcExpr}} nameKey={${JSON.stringify(w.xKey)}} valueKey={${JSON.stringify(w.yKey)}}${emptyProp} />`
       } else if (w.displayAs === 'area-chart') {
-        chartEl = `<TrendArea data={${srcExpr}} xKey={${JSON.stringify(w.xKey)}} yKey={${JSON.stringify(w.yKey)}} />`
+        chartEl = `<TrendArea data={${srcExpr}} xKey={${JSON.stringify(w.xKey)}} yKey={${JSON.stringify(w.yKey)}}${emptyProp} />`
       } else { // line-chart
-        chartEl = `<TrendArea data={${srcExpr}} xKey={${JSON.stringify(w.xKey)}} yKey={${JSON.stringify(w.yKey)}} area={false} />`
+        chartEl = `<TrendArea data={${srcExpr}} xKey={${JSON.stringify(w.xKey)}} yKey={${JSON.stringify(w.yKey)}} area={false}${emptyProp} />`
       }
       blocks.push(`        <Card>
           <CardHeader><CardTitle>{${JSON.stringify(w.title)}}</CardTitle></CardHeader>
@@ -1251,6 +1252,7 @@ export function buildWidgetFile(metric, registryEntry = null, timeRange = '30d')
       rateDen:           metric.rateDen ?? defaults.rateDen ?? 'den',
       series:            compileSeries(metric.series ?? defaults.series ?? '[{key:"value",color:"hsl(var(--chart-1))"}]'),
       pivotExpression:   metric.pivotExpression ?? defaults.pivotExpression ?? 'rawData',
+      emptyMessage:      metric.emptyMessage ?? defaults.emptyMessage ?? 'No data',
     }
     return applyTemplate(spec.template, specToSubs(spec))
   }
@@ -1268,9 +1270,10 @@ export function buildWidgetFile(metric, registryEntry = null, timeRange = '30d')
   const valueLabel   = metric.valueLabel ?? defaults.valueLabel ?? ''
   const previousField = metric.previousField ?? defaults.previousField ?? ''
   const deltaPolarity = metric.deltaPolarity ?? defaults.deltaPolarity ?? 'neutral'
-  const rowLinkKey   = metric.rowLink?.key ?? ''
+  const rowLinkKey   = metric.rowLink?.key ?? defaults.rowLink?.key ?? ''
   const rowLinkRoute = rowLinkKey ? `/${componentName.toLowerCase()}` : ''
   const defaultSortAsc = metric.defaultSortAsc === true ? 'true' : 'false'
+  const emptyMessage = metric.emptyMessage ?? defaults.emptyMessage ?? 'No data'
   const subtitle     = autoSubtitle(metric, defaults, timeRange)
 
   let content = readFileSync(t3ShellPath, 'utf8')
@@ -1289,6 +1292,7 @@ export function buildWidgetFile(metric, registryEntry = null, timeRange = '30d')
     .split('<<ROW_LINK_KEY>>').join(rowLinkKey)
     .split('<<ROW_LINK_ROUTE>>').join(rowLinkRoute)
     .split('<<DEFAULT_SORT_ASC>>').join(defaultSortAsc)
+    .split('<<EMPTY_MESSAGE>>').join(emptyMessage)
   return content
 }
 
@@ -1316,6 +1320,7 @@ function specToSubs(spec) {
     RATE_DEN: spec.rateDen,
     SERIES: spec.series,
     PIVOT_EXPRESSION: spec.pivotExpression,
+    EMPTY_MESSAGE: spec.emptyMessage ?? 'No data',
     SDK_IMPORT_LINE: spec.sdkImportLine ?? '',
     RESPONSE_TYPE_IMPORT: spec.responseTypeImport ?? '',
     HOOK_IMPORT: spec.hookImport ?? "import { useWidgetData } from '@/hooks/useWidgetData'",

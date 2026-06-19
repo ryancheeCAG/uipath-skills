@@ -1308,3 +1308,60 @@ test('generateViewFile: without detailView still renders a single RecordsTable (
   assert.ok(view.includes('<RecordsTable'), 'no-detailView view must render a single RecordsTable')
   assert.ok(!view.includes("@/dashboard/charts"), 'no-detailView view must not import charts')
 })
+
+// ── Issue 1: rowLink falls back to registry defaults ──────────────────────────
+
+test('rowLink: a cataloged table whose rowLink lives in registry defaults renders clickable', () => {
+  const content = buildWidgetFile(
+    { name: 'x', tier: 'T1', title: 'X', displayAs: 'data-table' },
+    { template: 'data-table', defaults: { rowLink: { key: 'agentName' } } },
+    '30d'
+  )
+  assert.ok(content.includes('onRowClick'), 'rowLink from registry defaults must wire onRowClick')
+  assert.ok(content.includes("const ROW_LINK_KEY = 'agentName'"), 'ROW_LINK_KEY must come from registry defaults.rowLink.key')
+})
+
+// ── Issue 2: per-metric explanatory empty states (emptyMessage) ────────────────
+// These exercise the <<EMPTY_MESSAGE>> / <EMPTY_MESSAGE> placeholders added to the
+// widget templates. The placeholders live in the apps-dev-tools sibling source
+// (the orchestrator rebuilds the fixture zip from it during the self-test build);
+// run against that source when present so the assertions track the edited templates.
+const SIBLING_WIDGETS = resolve(__dirname, '../../../../../../apps-dev-tools/uipath-dashboard-starter-kit/widgets')
+function withSiblingTemplates(fn) {
+  if (!existsSync(SIBLING_WIDGETS)) return // sibling source unavailable — skip
+  const prev = WIDGETS_DIR_FOR_TESTS
+  setWidgetsDir(SIBLING_WIDGETS)
+  try { fn() } finally { if (prev) setWidgetsDir(prev) }
+}
+
+test('emptyMessage: table metric emits the per-metric empty message (not bare "No data")', () => {
+  withSiblingTemplates(() => {
+    const content = buildWidgetFile(
+      { name: 'gov', tier: 'T3', title: 'Violations', displayAs: 'data-table', emptyMessage: 'Rules are passing' },
+      null, '30d'
+    )
+    assert.ok(content.includes('Rules are passing'), 'table empty message not substituted')
+    assert.ok(!content.includes('message="No data"'), 'bare "No data" must be replaced')
+  })
+})
+
+test('emptyMessage: chart metric emits the per-metric empty message', () => {
+  withSiblingTemplates(() => {
+    const content = buildWidgetFile(
+      { name: 'gov-trend', tier: 'T3', title: 'Violations Trend', displayAs: 'area-chart', xKey: 'date', yKey: 'value', emptyMessage: 'Rules are passing' },
+      null, '30d'
+    )
+    assert.ok(content.includes('Rules are passing'), 'chart empty message not substituted')
+  })
+})
+
+test('emptyMessage: falls back to registry defaults.emptyMessage', () => {
+  withSiblingTemplates(() => {
+    const content = buildWidgetFile(
+      { name: 'x', tier: 'T1', title: 'X', displayAs: 'data-table' },
+      { template: 'data-table', defaults: { emptyMessage: 'Nothing to report' } },
+      '30d'
+    )
+    assert.ok(content.includes('Nothing to report'), 'emptyMessage must fall back to registry defaults')
+  })
+})

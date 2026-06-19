@@ -386,6 +386,11 @@ A dedicated capability for **agent governance/compliance violations against stan
 (no OOB aggregate; bounded by-agent scan, cap 10) — full recipe + the typed `@/lib/governance` parser in
 [`sdk/governance-traces.md`](../../sdk/governance-traces.md).
 
+> Violation widgets show only matched rules — a passing fleet looks empty. For runtime-compliance requests,
+> ALSO offer the all-evaluations metrics: `rule-evaluations-by-outcome` (Pass vs Matched),
+> `rule-evaluations-by-hook`, and `rule-compliance` (rule · standard · hook · evaluated · matched) — backed by
+> `parseRuleEvaluations` / `scanEvaluations` (PASS + MATCHED), not `parseGovernanceSpans().violations`.
+
 > **Gate — propose these ONLY on an EXPLICIT runtime-compliance / standards / rules-violation signal:**
 > a standard/pack reference ("standard(s)", "pack", `ISO` + clause e.g. `ISO 42001` / `A.8.4`, or a named
 > `pack_name`), an explicit **rule violation** ("rule(s) violated/fired", "rule violations"), or

@@ -29,6 +29,23 @@ accepts both, so never `JSON.parse` by hand.
 - Some rule spans carry only `{agentId, agentName, agentVersion}` (no rule signal) — the parser skips them.
   The integer span `status`/`Status` is NOT the governance signal; use `governance.matched`/`governance.status`.
 
+## Violations vs evaluations (PASS vs MATCHED)
+
+- **VIOLATION** = `governance.matched` truthy (`true` or `"true"`) — a rule fired.
+- **EVALUATION** = ANY `governance.rule.*` span — every rule check, PASS or MATCHED.
+
+Violation-only widgets show coverage gaps, but a healthy fleet (rules passing) renders empty — indistinguishable from "no governance data". So when the user asks for **runtime compliance** (not just violations), ALSO propose an all-evaluations widget: `rule-evaluations-by-outcome` (Pass vs Matched), `rule-evaluations-by-hook`, or `rule-compliance`. Back those with `parseRuleEvaluations`; keep the violation widgets on `parseGovernanceSpans().violations`.
+
+```ts
+import { parseGovernanceSpans, parseRuleEvaluations, countBy } from '@/lib/governance'
+import type { GovernanceRuleEvaluation } from '@/lib/governance'
+
+const evals = parseRuleEvaluations(spans)            // EVERY rule check (PASS + MATCHED); each has matched/outcome
+const violations = parseGovernanceSpans(spans).violations // matched only
+```
+
+`GovernanceRuleEvaluation = GovernanceViolation + { matched: boolean, outcome: 'Matched' | 'Pass' }`.
+
 ## Use the shipped lib — never hand-roll parsing
 
 `@/lib/governance` (typed, hardened, never throws) is the only sanctioned parser:
@@ -85,6 +102,50 @@ async function scanViolations(sdk: any) {
 export const fetchData: MetricFn = async (sdk) => countBy(await scanViolations(sdk), v => v.standard)
 ```
 
+### All-evaluations scan (PASS + MATCHED) — `scanEvaluations`
+
+Mirrors `scanViolations` (same bounded `Jobs` → `Traces.getById` scan, `MAX_AGENTS = 10`) but pushes `...parseRuleEvaluations(spans)` — EVERY rule check, so a compliant fleet is visible.
+
+```ts
+import { parseRuleEvaluations, countBy } from '@/lib/governance'
+
+const MAX_AGENTS = 10
+
+async function scanEvaluations(sdk: any) {
+  const { Jobs } = await import('@uipath/uipath-typescript/jobs')
+  const { Traces } = await import('@uipath/uipath-typescript/traces')
+  const jobs = (await new Jobs(sdk as never).getAll(
+    { filter: "ProcessType eq 'Agent'", orderby: 'CreationTime desc', pageSize: 100 }))?.items ?? []
+  const seen = new Set<string>()
+  const out: any[] = []
+  for (const j of jobs as Array<{ processName?: string | null; traceId?: string | null }>) {
+    const agent = j.processName ?? ''
+    if (!j.traceId || (agent && seen.has(agent))) continue
+    seen.add(agent)
+    const spans = await new Traces(sdk as never).getById(j.traceId)
+    out.push(...parseRuleEvaluations(spans))
+    if (seen.size >= MAX_AGENTS) break
+  }
+  return out
+}
+
+// rule-evaluations-by-hook (donut)
+const byHook = countBy(await scanEvaluations(sdk), e => e.hook)
+// rule-evaluations-by-outcome (donut → Pass vs Matched)
+const byOutcome = countBy(await scanEvaluations(sdk), e => e.outcome)
+
+// rule-compliance (ranked-table): group by ruleName → evaluated vs matched counts
+const evals = await scanEvaluations(sdk)
+const m = new Map<string, { name: string; standard: string; hook: string; evaluated: number; matched: number }>()
+for (const e of evals) {
+  const cur = m.get(e.ruleName) ?? { name: e.ruleName, standard: e.standard, hook: e.hook, evaluated: 0, matched: 0 }
+  cur.evaluated += 1
+  if (e.matched) cur.matched += 1
+  m.set(e.ruleName, cur)
+}
+const ruleCompliance = [...m.values()].sort((a, b) => b.evaluated - a.evaluated)
+```
+
 > `Traces.getById(traceId, { agentId?, pageSize?, includeExpiredSpans? })` returns the trace's full span set
 > (governance rule + hook spans included); `parseGovernanceSpans` filters to the governance ones. Generic
 > alternative if needed: `Traces.getSpansByIds(traceId, spanIds)`.
@@ -92,13 +153,13 @@ export const fetchData: MetricFn = async (sdk) => countBy(await scanViolations(s
 ## Layer-1 per-agent compliance report (rowLink drill-down)
 
 A `data-table` of agents with `rowLink: { key: "agentName" }`; the module also exports
-`fetchDetailByKey(sdk, agentName)` → that agent's latest run's spans → `parseGovernanceSpans` → render the
-rule list (status + hook + action + detail), grouped by hook — mirroring the product's Trace view.
+`fetchDetailByKey(sdk, agentName)` → that agent's latest run's spans → `parseRuleEvaluations` (ALL checks,
+PASS + MATCHED) for the row table, plus violation rollups (`byHook`, `byRule`) and an outcome split
+(`byOutcome`) — mirroring the product's Trace view but with the compliant rules visible too.
 
 ```ts
 import type { MetricFn, MetricDetailByKeyFn } from '@/lib/metric-contract'
-import { parseGovernanceSpans } from '@/lib/governance'
-import type { GovernanceSpanLike } from '@/lib/governance'
+import { parseGovernanceSpans, parseRuleEvaluations, countBy } from '@/lib/governance'
 
 export const fetchData: MetricFn = async (sdk) => {
   const { Agents } = await import('@uipath/uipath-typescript/agents')
@@ -109,23 +170,23 @@ export const fetchData: MetricFn = async (sdk) => {
 export const fetchDetailByKey: MetricDetailByKeyFn = async (sdk, agentName) => {
   const { Jobs } = await import('@uipath/uipath-typescript/jobs')
   const { Traces } = await import('@uipath/uipath-typescript/traces')
-  const { parseGovernanceSpans, countBy } = await import('@/lib/governance')
+  const { parseGovernanceSpans, parseRuleEvaluations, countBy } = await import('@/lib/governance')
   const jobs = (await new Jobs(sdk as never).getAll({ filter: "ProcessType eq 'Agent'", orderby: 'CreationTime desc' }))?.items ?? []
   const job = jobs.find((j: { processName?: string | null; traceId?: string | null }) => j.processName === agentName)
-  if (!job?.traceId) return { rows: [], byHook: [], byRule: [] }
+  if (!job?.traceId) return { rows: [], byHook: [], byRule: [], byOutcome: [] }
   const spans = await new Traces(sdk as never).getById(job.traceId)
   const { violations } = parseGovernanceSpans(spans)
-  const rows = (spans ?? []).filter((s: GovernanceSpanLike) => String(s.name).startsWith('governance.rule.')).map((s: GovernanceSpanLike) => {
-    const a: any = (s.attributes && typeof s.attributes === 'object') ? s.attributes
-      : (() => { try { return JSON.parse(s.attributes ?? '{}') } catch { return {} } })()
-    return { hook: a['governance.hook'] ?? '', rule: a['governance.rule_name'] ?? a['governance.rule_id'] ?? s.name,
-             standard: a['governance.pack_name'] ?? '', status: a['governance.status'] ?? '', action: a['governance.action'] ?? '' }
-  })
-  return { rows, byHook: countBy(violations, v => v.hook), byRule: countBy(violations, v => v.ruleName) }
+  const rows = parseRuleEvaluations(spans) // ALL evaluations (PASS + MATCHED, minimal-attr skipped) — each has matched/outcome
+  return {
+    rows,
+    byHook: countBy(violations, v => v.hook),
+    byRule: countBy(violations, v => v.ruleName),
+    byOutcome: countBy(rows, e => e.outcome),
+  }
 }
 ```
 
-When the metric declares `detailView`, return a **named-source map** (`{ rows, byHook, byRule, … }`) whose keys match each sub-widget's `source`; otherwise return a bare array (single table). Derived from ONE `Traces.getById` — no extra round-trips. See `primitives/detail-views.md § Rich detail views`.
+When the metric declares `detailView`, return a **named-source map** (`{ rows, byHook, byRule, byOutcome, … }`) whose keys match each sub-widget's `source`; otherwise return a bare array (single table). Derived from ONE `Traces.getById` — no extra round-trips. See `primitives/detail-views.md § Rich detail views`.
 
 ## Scope
 

@@ -440,31 +440,31 @@
       "aliases": ["runtime governance violations", "runtime compliance violations", "rule violations", "agent rule violations", "standards violations", "standard violations", "runtime policy violations"],
       "template": "kpi-card",
       "description": "GATED — runtime compliance / standards / rule-violation intent ONLY (trace-derived; interim). NOT for generic governance/policy/denials — those are the Insights-API metrics `policy-denials` / `governance-verdicts`. See sdk/governance-traces.md. Total runtime rule violations across the top 10 most-recently-active agents (bounded by-agent scan). Module: scanViolations(sdk) (governance-traces.md) → `[{ value: violations.length }]`. Scope: Insights Insights.RealTimeData OR.Folders.Read.",
-      "defaults": { "title": "Governance Violations", "description": "Rules fired across recent agents", "icon": "ShieldAlert", "valueField": "value", "valueLabel": "violations", "deltaPolarity": "up-bad" }
+      "defaults": { "title": "Governance Violations", "description": "Rules fired across recent agents", "icon": "ShieldAlert", "valueField": "value", "valueLabel": "violations", "deltaPolarity": "up-bad", "emptyMessage": "No violations in the selected window — rules are passing. Add a Rule Evaluations widget to see all checks." }
     },
     "violations-by-standard": {
       "aliases": ["violations by standard", "violations by pack", "compliance by standard", "iso violations", "violations by iso", "governance violations by standard"],
       "template": "donut-chart",
       "description": "GATED — runtime/standard/pack/ISO intent ONLY (trace-derived; interim; NOT generic governance — see `policy-denials`/`governance-verdicts`). See sdk/governance-traces.md. Runtime rule violations grouped by standard/pack. Module: `return countBy(await scanViolations(sdk), v => v.standard)` → `[{ name, value }]`. Scope: Insights Insights.RealTimeData OR.Folders.Read.",
-      "defaults": { "title": "Violations by Standard", "description": "Which standards are firing", "icon": "ShieldAlert", "xKey": "name", "yKey": "value" }
+      "defaults": { "title": "Violations by Standard", "description": "Which standards are firing", "icon": "ShieldAlert", "xKey": "name", "yKey": "value", "emptyMessage": "No violations in the selected window — rules are passing. Add a Rule Evaluations widget to see all checks." }
     },
     "violations-by-rule": {
       "aliases": ["violations by rule", "top governance rules", "most fired rules", "which rules fired", "top violated rules", "rule violations breakdown"],
       "template": "ranked-table",
       "description": "GATED — runtime/rule-violation intent ONLY (trace-derived; interim; NOT generic governance — see `policy-denials`/`governance-verdicts`). See sdk/governance-traces.md. Rules ranked by how often they fired at runtime. Module: group scanViolations(sdk) by ruleName → `[{ name (ruleName), value (count), standard }]` (or countBy(violations, v => v.ruleName)). Scope: Insights Insights.RealTimeData OR.Folders.Read.",
-      "defaults": { "title": "Top Governance Rules", "description": "Rules ranked by occurrences", "icon": "ListChecks", "columnDefs": [ { "key": "name", "label": "Rule" }, { "key": "value", "label": "Fired", "align": "right", "format": "number" } ] }
+      "defaults": { "title": "Top Governance Rules", "description": "Rules ranked by occurrences", "icon": "ListChecks", "emptyMessage": "No violations in the selected window — rules are passing. Add a Rule Evaluations widget to see all checks.", "columnDefs": [ { "key": "name", "label": "Rule" }, { "key": "value", "label": "Fired", "align": "right", "format": "number" } ] }
     },
     "violations-by-hook": {
       "aliases": ["violations by hook", "rule violations by hook", "violations by lifecycle hook", "violations by stage", "violations by lifecycle"],
       "template": "donut-chart",
       "description": "GATED — runtime/rule-violation intent ONLY (trace-derived; interim; NOT generic governance — see `policy-denials`/`governance-verdicts`). See sdk/governance-traces.md. Runtime rule violations grouped by lifecycle hook (BEFORE_AGENT/BEFORE_MODEL/AFTER_MODEL/AFTER_AGENT). Module: `return countBy(await scanViolations(sdk), v => v.hook)`. Scope: Insights Insights.RealTimeData OR.Folders.Read.",
-      "defaults": { "title": "Violations by Hook", "description": "Which lifecycle stage flags violations", "icon": "Workflow", "xKey": "name", "yKey": "value" }
+      "defaults": { "title": "Violations by Hook", "description": "Which lifecycle stage flags violations", "icon": "Workflow", "xKey": "name", "yKey": "value", "emptyMessage": "No violations in the selected window — rules are passing. Add a Rule Evaluations widget to see all checks." }
     },
     "agents-by-violations": {
       "aliases": ["agents by rule violations", "agents by standard violations", "agents with most violations", "non-compliant agents", "worst agents by violations"],
       "template": "ranked-table",
       "description": "GATED — runtime/standard/rule-violation intent ONLY (trace-derived; interim; NOT generic governance — see `policy-denials`/`governance-verdicts`). See sdk/governance-traces.md. Agents ranked by runtime rule-violation count. Module: `return countBy(await scanViolations(sdk), v => v.agentName)`. Scope: Insights Insights.RealTimeData OR.Folders.Read.",
-      "defaults": { "title": "Agents by Violations", "description": "Agents ranked by governance violations", "icon": "ShieldAlert", "columnDefs": [ { "key": "name", "label": "Agent" }, { "key": "value", "label": "Violations", "align": "right", "format": "number" } ] }
+      "defaults": { "title": "Agents by Violations", "description": "Agents ranked by governance violations", "icon": "ShieldAlert", "emptyMessage": "No violations in the selected window — rules are passing. Add a Rule Evaluations widget to see all checks.", "columnDefs": [ { "key": "name", "label": "Agent" }, { "key": "value", "label": "Violations", "align": "right", "format": "number" } ] }
     },
     "recent-violations": {
       "aliases": ["recent rule violations", "recent runtime violations", "rule violation log", "standards violation list", "latest rule violations", "latest runtime governance violations"],
@@ -474,6 +474,7 @@
         "title": "Recent Governance Violations",
         "description": "Rules fired across recent agent runs",
         "icon": "ShieldAlert",
+        "emptyMessage": "No violations in the selected window — rules are passing. Add a Rule Evaluations widget to see all checks.",
         "rowLink": { "key": "agentName" },
         "columnDefs": [
           { "key": "agentName", "label": "Agent" },
@@ -500,13 +501,32 @@
           { "key": "lastRun", "label": "Last Run", "format": "timeAgo" }
         ],
         "detailView": { "widgets": [
+          { "displayAs": "donut-chart",  "title": "Rule Outcomes (Pass vs Matched)", "source": "byOutcome", "xKey": "name", "yKey": "value" },
           { "displayAs": "donut-chart",  "title": "Violations by Hook",  "source": "byHook",     "xKey": "name", "yKey": "value" },
           { "displayAs": "ranked-table", "title": "Top Rules Fired",     "source": "byRule",
             "columns": [ {"key":"name","label":"Rule"}, {"key":"value","label":"Fired","align":"right","format":"number"} ] },
           { "displayAs": "data-table",   "title": "All Rule Evaluations","source": "rows",
-            "columns": [ {"key":"hook","label":"Hook"}, {"key":"rule","label":"Rule"}, {"key":"standard","label":"Standard"}, {"key":"status","label":"Status"}, {"key":"action","label":"Action"} ] }
+            "columns": [ {"key":"hook","label":"Hook"}, {"key":"rule","label":"Rule"}, {"key":"standard","label":"Standard"}, {"key":"outcome","label":"Result"}, {"key":"action","label":"Action"} ] }
         ] }
       }
+    },
+    "rule-evaluations-by-outcome": {
+      "aliases": ["rule evaluations by outcome", "pass vs matched", "rule pass rate", "compliance coverage", "rules passing vs matched"],
+      "template": "donut-chart",
+      "description": "GATED — runtime/standard/rule intent ONLY (trace-derived; see sdk/governance-traces.md). NOT generic governance/policy/denials — those are the Insights-API metrics `policy-denials` / `governance-verdicts`. Shows ALL rule checks (PASS + MATCHED), so a compliant fleet is visible (not just violations). All-evaluations scan grouped by outcome (Pass vs Matched). Module: `return countBy(await scanEvaluations(sdk), e => e.outcome)` → `[{ name, value }]`. Scope: Insights Insights.RealTimeData OR.Folders.Read OR.Jobs.Read Traces.Api.",
+      "defaults": { "title": "Rule Outcomes (Pass vs Matched)", "description": "All rule checks by outcome", "icon": "ShieldCheck", "xKey": "name", "yKey": "value" }
+    },
+    "rule-evaluations-by-hook": {
+      "aliases": ["rule evaluations by hook", "all checks by hook", "rule coverage by hook"],
+      "template": "donut-chart",
+      "description": "GATED — runtime/standard/rule intent ONLY (trace-derived; see sdk/governance-traces.md). NOT generic governance/policy/denials — those are the Insights-API metrics `policy-denials` / `governance-verdicts`. Shows ALL rule checks (PASS + MATCHED), so a compliant fleet is visible (not just violations). All-evaluations scan grouped by lifecycle hook (BEFORE_AGENT/BEFORE_MODEL/AFTER_MODEL/AFTER_AGENT). Module: `return countBy(await scanEvaluations(sdk), e => e.hook)`. Scope: Insights Insights.RealTimeData OR.Folders.Read OR.Jobs.Read Traces.Api.",
+      "defaults": { "title": "Rule Checks by Hook", "description": "All rule checks by lifecycle hook", "icon": "Workflow", "xKey": "name", "yKey": "value" }
+    },
+    "rule-compliance": {
+      "aliases": ["rule compliance", "rule compliance table", "rules evaluated vs matched", "compliance by rule"],
+      "template": "ranked-table",
+      "description": "GATED — runtime/standard/rule intent ONLY (trace-derived; see sdk/governance-traces.md). NOT generic governance/policy/denials — those are the Insights-API metrics `policy-denials` / `governance-verdicts`. Shows ALL rule checks (PASS + MATCHED), so a compliant fleet is visible (not just violations). Module: group scanEvaluations(sdk) by ruleName → `[{ name (ruleName), standard, hook, evaluated (count), matched (count) }]` sorted by evaluated desc. Scope: Insights Insights.RealTimeData OR.Folders.Read OR.Jobs.Read Traces.Api.",
+      "defaults": { "title": "Rule Compliance", "description": "Rules evaluated vs matched", "icon": "ListChecks", "columnDefs": [ { "key": "name", "label": "Rule" }, { "key": "standard", "label": "Standard" }, { "key": "hook", "label": "Hook" }, { "key": "evaluated", "label": "Evaluated", "align": "right", "format": "number" }, { "key": "matched", "label": "Matched", "align": "right", "format": "number" } ] }
     }
   },
   "t2": {
