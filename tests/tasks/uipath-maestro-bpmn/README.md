@@ -20,8 +20,9 @@ authoring-only skill for producing valid, importable Maestro `.bpmn` XML.
 - `connector/` covers Integration Service boundary behavior and registry
   discovery for connector wrapper types without cloud-side mutations.
 - `e2e/` covers a multi-node authoring scenario end to end.
-- `operate-diagnose/` contains legacy public-safe operate/diagnose paths; these
-  predate the authoring-only scope and are retained as-is.
+- `operate-diagnose/` covers diagnostic inspection and operate-action guidance
+  using mocked CLI responses, matching the operate and diagnose capabilities the
+  skill retains.
 - `_shared/` contains small Python helpers for durable XML shape assertions.
 
 There is **no** `uip maestro bpmn validate` or `pack` command — validate by
