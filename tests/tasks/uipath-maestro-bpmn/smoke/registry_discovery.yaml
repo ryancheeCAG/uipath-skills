@@ -1,4 +1,4 @@
-task_id: skill-bpmn-registry-discovery
+task_id: skill-bpmn-smoke-registry-discovery
 description: >
   Skill-guided evaluation: agent uses the uipath-maestro-bpmn skill to discover
   Maestro BPMN extension types via the registry CLI (pull, list/search, get)

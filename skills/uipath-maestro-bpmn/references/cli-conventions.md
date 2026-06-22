@@ -1,8 +1,11 @@
 # CLI Conventions (authoring)
 
-This skill is **authoring-only**. It produces a valid, importable Maestro
-`.bpmn` file. It does not package, upload, publish, run, or diagnose. The only
-CLI the skill drives is the read-only discovery surface.
+This reference covers the **authoring-side** CLI surface only: the read-only
+registry discovery commands used to produce a valid, importable Maestro `.bpmn`
+file. The registry commands below never mutate cloud state. Operate and diagnose
+use different CLI commands — see
+[operate/CAPABILITY.md](operate/CAPABILITY.md) and
+[diagnose/CAPABILITY.md](diagnose/CAPABILITY.md).
 
 ## Discovery commands (read-only, authoring-safe)
 
