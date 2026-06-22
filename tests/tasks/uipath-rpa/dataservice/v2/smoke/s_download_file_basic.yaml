@@ -15,20 +15,12 @@ run_limits:
   task_timeout: 1800
   turn_timeout: 1800
 
-sandbox:
-  template_sources:
-    - type: template_dir
-      path: ../../templates/local-feed
-      mount_point: "."
-
 initial_prompt: |
   Build a UiPath RPA project named `DataServiceEval` in the current working
   directory that downloads the file from the `Attachment` field of a
   pre-existing record in Data Service entity `CodingAgentsEvalFileEntity`
   by its record ID, and binds the downloaded file resource to a workflow
   variable.
-
-  Sandbox + entity install: read `./EVAL_SANDBOX.md` and follow it.
 
 success_criteria:
   - type: file_exists

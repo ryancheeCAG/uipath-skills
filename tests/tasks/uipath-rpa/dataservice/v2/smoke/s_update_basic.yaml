@@ -14,19 +14,11 @@ run_limits:
   task_timeout: 1800
   turn_timeout: 1800
 
-sandbox:
-  template_sources:
-    - type: template_dir
-      path: ../../templates/local-feed
-      mount_point: "."
-
 initial_prompt: |
   Build a UiPath RPA project named `DataServiceEval` in the current working
   directory that updates a pre-existing record in Data Service entity
   `CodingAgentsEvalEntity`, changing only the `Title` field by record ID.
   Leave every other field on the record unchanged.
-
-  Sandbox + entity install: read `./EVAL_SANDBOX.md` and follow it.
 
 success_criteria:
   - type: file_exists

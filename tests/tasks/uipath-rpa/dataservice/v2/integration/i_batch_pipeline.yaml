@@ -16,12 +16,6 @@ run_limits:
   task_timeout: 2700
   turn_timeout: 1800
 
-sandbox:
-  template_sources:
-    - type: template_dir
-      path: ../../templates/local-feed
-      mount_point: "."
-
 initial_prompt: |
   Build a UiPath RPA project named `DataServiceEval` in the current working
   directory that executes a batch pipeline on Data Service entity
@@ -61,8 +55,6 @@ initial_prompt: |
   Step 2's output must flow into steps 3 and 5, and step 3's failed-updates
   variable must flow into step 4 — do not re-derive IDs or re-query records
   from any other source.
-
-  Sandbox + entity install: read `./EVAL_SANDBOX.md` and follow it.
 
 success_criteria:
   - type: file_exists
