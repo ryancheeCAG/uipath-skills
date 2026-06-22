@@ -59,6 +59,42 @@ block directly. Variable bodies are CDATA. Reference variables in expressions as
 `vars.<id>` — see [expression-authoring.md](expression-authoring.md).
 Sub-process-scoped variables go in that sub-process's own `<uipath:variables>`.
 
+## Script tasks (`BPMN.ScriptTask`) — Jint runtime contract
+
+`bpmn:scriptTask scriptFormat="JavaScript"` runs under **Jint**, not Node.js or
+a browser. The mapping payload comes from the `BPMN.ScriptTask` registry
+template, but the runtime contract is fixed:
+
+- Only these helpers exist: `uipath.aggregate`, `uipath._aggregate`,
+  `uipath._pipe`, and a no-op `console`. No npm packages, filesystem, network,
+  browser globals, or long-running async behavior. Execution envelope is ~64 MB
+  / 30 s.
+- Set `uipath:scriptVersion value="v3"` for new scripts; preserve an imported
+  `value="v2"`. For v2+ the script returns JSON under `response`.
+- Mapped `args` fields are read as **top-level identifiers** in the script body
+  (`amount`, not `args.amount`); the input mapping itself stays `name="args"`
+  and maps each field by variable id (`=vars.Var_Amount`).
+- Map the return back through `source="=result.response"` (scalar) or
+  `source="=result.response.<field>"` (object field); `var` points at a declared
+  variable id (do not put the target id in `name`).
+
+```xml
+<bpmn:scriptTask id="Task_RiskScore" name="Risk Score" scriptFormat="JavaScript">
+  <bpmn:extensionElements>
+    <uipath:scriptVersion value="v3" />
+    <uipath:mapping version="v1">
+      <uipath:type value="BPMN.ScriptTask" version="v1" />
+      <uipath:input name="args"><![CDATA[{"amount":"=vars.Var_Amount","daysOverdue":"=vars.Var_DaysOverdue"}]]></uipath:input>
+      <uipath:output name="riskScore" type="number" var="Var_RiskScore" source="=result.response" />
+    </uipath:mapping>
+  </bpmn:extensionElements>
+  <bpmn:script><![CDATA[
+var score = amount * 0.01 + daysOverdue * 2;
+return { response: score };
+]]></bpmn:script>
+</bpmn:scriptTask>
+```
+
 ## Sequence flows, conditions, and gateway defaults (REGISTRY GAP)
 
 The registry never emits `<bpmn:sequenceFlow>`, conditions, or the gateway
@@ -75,9 +111,11 @@ The registry never emits `<bpmn:sequenceFlow>`, conditions, or the gateway
 
 ## Gateways
 
-All gateway types in `bpmnElements.gateways` are supported by the canvas:
-`bpmn:ExclusiveGateway`, `bpmn:ParallelGateway`, `bpmn:InclusiveGateway`,
-`bpmn:EventBasedGateway`, `bpmn:ComplexGateway`.
+Author these gateway types for new BPMN: `bpmn:ExclusiveGateway`,
+`bpmn:ParallelGateway`, `bpmn:InclusiveGateway`, `bpmn:EventBasedGateway`.
+`bpmn:ComplexGateway` round-trips structurally but is **preserve-only** — do not
+generate it for new authoring (see [Do not generate for new
+authoring](#do-not-generate-for-new-authoring-preserve-on-round-trip-only)).
 
 - **Exclusive (XOR)**: each non-default outgoing flow needs a
   `conditionExpression`; exactly one outgoing flow is the `default`. (Validator
@@ -94,18 +132,24 @@ All gateway types in `bpmnElements.gateways` are supported by the canvas:
 ## Events and the event-definition matrix
 
 `bpmn-spec.json` `bpmnElements.events` enumerates which event definitions each
-event element accepts. The canvas serializer
-(`event-definition.ts`) reads/writes the payload of Timer, Message, Error,
-Signal, and Escalation definitions; Conditional/Link/Compensate/Terminate
-round-trip structurally but carry no special payload.
+event element can carry on **round-trip**. For **new authoring**, only the
+**none**, **Message**, **Timer**, **Error** (on end + boundary), and
+**Terminate** (on end events only) definitions are generated. Conditional,
+Signal, Escalation, Compensate, Cancel, Link, multiple, and parallel-multiple
+definitions are **preserve-only** — keep them when imported, but do not generate
+them for new BPMN (see [Do not generate for new
+authoring](#do-not-generate-for-new-authoring-preserve-on-round-trip-only)).
 
-| Event element | Accepted event definitions |
-| --- | --- |
-| `bpmn:StartEvent` | none, Message, Timer, Conditional, Signal |
-| `bpmn:IntermediateThrowEvent` | none, Message, Escalation, Signal, Link, Compensate |
-| `bpmn:IntermediateCatchEvent` | Message, Timer, Escalation, Signal, Conditional, Link, Compensate |
-| `bpmn:EndEvent` | none, Message, Escalation, Error, Compensate, Signal, Terminate |
-| `bpmn:BoundaryEvent` | Message, Timer, Escalation, Conditional, Error, Signal, Compensate |
+The matrix below is the round-trip acceptance per element; **preserve-only**
+marks definitions that the skill keeps but does not author for new files.
+
+| Event element | Authorable | Preserve-only (round-trip) |
+| --- | --- | --- |
+| `bpmn:StartEvent` | none, Message, Timer | Conditional, Signal |
+| `bpmn:IntermediateThrowEvent` | none, Message | Escalation, Signal, Link, Compensate |
+| `bpmn:IntermediateCatchEvent` | Message, Timer | Escalation, Signal, Conditional, Link, Compensate |
+| `bpmn:EndEvent` | none, Message, Error, Terminate | Escalation, Compensate, Signal |
+| `bpmn:BoundaryEvent` | Message, Timer, Error | Escalation, Conditional, Signal, Compensate |
 
 Payload shapes the canvas serializes:
 
@@ -123,13 +167,19 @@ Payload shapes the canvas serializes:
   error end event with no `errorRef` fails to parse at runtime
   (`ERROR_END_EVENT_MISSING_EXCEPTION`); an error referenced by a boundary event
   must declare an `errorCode` (`ERROR_BOUNDARY_EVENT_REQUIRES_ERROR_CODE`).
+- **Terminate** (end events only): emit the bare
+  `<bpmn:terminateEventDefinition />`.
+
+Preserve-only payloads — keep these when imported, but do not author them for
+new files:
+
 - **Signal**: `<bpmn:signalEventDefinition signalRef="Signal_1" />` with a
   definitions-level `<bpmn:signal/>`.
 - **Escalation**: `<bpmn:escalationEventDefinition escalationRef="Escalation_1" />`
   with a `<bpmn:escalation id="Escalation_1" name="…" escalationCode="…"/>`
   declared at definitions level (parallel to message/error/signal).
-- **Conditional / Link / Compensate / Terminate**: emit the bare definition
-  element (e.g. `<bpmn:terminateEventDefinition />`); the canvas round-trips it.
+- **Conditional / Link / Compensate**: the bare definition element; the canvas
+  round-trips it.
 
 ### Boundary events (REGISTRY GAP for `attachedToRef` / `cancelActivity`)
 
@@ -154,6 +204,32 @@ registry exposes no boundary template; author it:
   error boundary events with the same error code on one task
   (`MULTIPLE_CATCH_ALL_BOUNDARY_EVENTS_ON_TASK`,
   `DUPLICATE_ERROR_BOUNDARY_EVENT_ON_TASK`).
+
+### Retry and error mapping (REGISTRY GAP)
+
+UiPath-specific retry and error-mapping metadata live inside an activity's
+`extensionElements`. The error **code** lives on the declared
+`bpmn:error errorCode="…"`; `uipath:*` elements reference it through `errorRef`.
+
+```xml
+<uipath:retry maxRetryCount="2" retryBackoff="PT30S" retryBackoffType="exponential"
+              maxDuration="PT5M" exponentialBase="2" retryAllErrors="false">
+  <uipath:errorDefinition errorRef="Error_ServiceUnavailable" />
+</uipath:retry>
+<uipath:errorMapping version="v1">
+  <uipath:error id="Mapped_ServiceUnavailable" errorRef="Error_ServiceUnavailable"
+                priority="1" condition="=vars.error.code == &quot;SERVICE_UNAVAILABLE&quot;"
+                detail="Service unavailable" retryable="true" />
+</uipath:errorMapping>
+```
+
+- `uipath:retry` attributes: `maxRetryCount`, `retryBackoff`, `retryBackoffType`,
+  `maxDuration`, `exponentialBase`, `retryAllErrors`. Do not use stale aliases
+  (`maxAttempts`, `interval`).
+- `uipath:error` (mapping) fields: `id`, `errorRef`, `priority`, `condition`,
+  `detail`, `retryable` (`true`/`false`). Conditions read the runtime error via
+  `vars.error` and contain no assignments. Do not put `code=` on `uipath:error`;
+  model the code on `bpmn:error errorCode` and reference via `errorRef`.
 
 ## Subprocess, call activity, event subprocess (REGISTRY GAP for structure)
 
@@ -203,6 +279,25 @@ serialize them (`elements/nodes.ts`), so author them from the canvas contract:
 Because the registry exposes no template for this, treat it as a documented
 authoring path backed by the canvas serializer, and tell the user it is a
 registry gap if they ask why no `registry get` covers it.
+
+## Do not generate for new authoring (preserve on round-trip only)
+
+These structures are **not** authored for new Maestro BPMN. If they appear in an
+imported or brownfield file, preserve them and report that the skill cannot
+safely regenerate or normalize them. Planned / preview / TBD statuses count as
+unsupported for generation until current tooling confirms them.
+
+- Gateway: `bpmn:complexGateway`.
+- Tasks / containers: `bpmn:manualTask`, `bpmn:adHocSubProcess`,
+  `bpmn:transaction`.
+- Event definitions: `conditionalEventDefinition`, `signalEventDefinition`,
+  `escalationEventDefinition`, `compensateEventDefinition`,
+  `cancelEventDefinition`, `linkEventDefinition`, multiple, and
+  parallel-multiple event definitions.
+- Markers: standard-loop and compensation markers (use only documented
+  multi-instance parallel/sequential metadata for new loops).
+- Terminate is supported **only** on end events — not on start, boundary,
+  intermediate-catch, or intermediate-throw events.
 
 ## Diagram interchange — `bpmndi` (REGISTRY GAP — always generated)
 

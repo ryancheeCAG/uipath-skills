@@ -87,6 +87,24 @@ Declare all bindings in a single process-level `<uipath:bindings version="v1">`
 block. Each `<uipath:binding>` carries `id`, `resource`, `propertyAttribute`,
 and a `default` value (the resolved key/id).
 
+## Agent wrapper selection — pick by `processType`, not the label
+
+When a node invokes an agent, choose the wrapper by the resource's
+**`processType`** (from `uip or processes list --all-fields`), not its display
+label:
+
+- Coded Python agents publish as `processType: "Function"` — use the
+  `Orchestrator.StartJob` process contract, **not** `StartAgentJob`.
+- Agent Builder (low-code) publishes as `processType: "Agent"` →
+  `Orchestrator.StartAgentJob`.
+- External A2A agent addressed by URL / skillId → `A2A.AgentExecution`.
+- Integration Service external agent → `Intsvc.*AgentExecution`.
+
+Gotcha: `A2A.AgentExecution` renders as an external A2A node and **disables the
+Action dropdown** in Studio Web. Do not use it for a folder-deployed agent — the
+canvas treats the task as misconfigured. Use `StartAgentJob`/`StartJob` for
+folder-deployed resources.
+
 ## 5. Assemble
 
 1. Build the document scaffold and process (see

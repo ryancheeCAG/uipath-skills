@@ -27,6 +27,16 @@ references below.
 - Package, upload, publish, or run a project, and manage its jobs and instances.
 - Diagnose a failed or misbehaving run.
 
+### Editing an existing `.bpmn` (preserve what you did not author)
+
+The skill can edit an existing file. Make **surgical** edits and preserve
+content you did not author: unknown `uipath:*` elements, `uipath:migrationVersion`,
+tags, imported Integration Service payloads, and stable element IDs. Do not
+regenerate the whole file or drop extension data the skill does not recognize —
+preserve-only structures (see the blocklist in
+[references/structural-bpmn.md](references/structural-bpmn.md)) round-trip
+untouched.
+
 For `.flow` JSON use `uipath-maestro-flow`; for XAML/coded workflows use
 `uipath-rpa`; for Python agents use `uipath-agents`; for Case plans use
 `uipath-maestro-case`.
@@ -98,8 +108,8 @@ registry serves a template for vs. what you author by hand:
 | Node `uipath:*` payloads (RPA, agent, HITL, queue, business rule, API workflow, IS connector, internal message, timer, script, variables) | **Registry** `xmlTemplate` |
 | `<bpmn:definitions>`/`<bpmn:process>` scaffold + namespaces | Authored (registry gap) |
 | Sequence flows, `conditionExpression`, gateway `default` | Authored (registry gap) |
-| Gateways: exclusive, parallel, inclusive, event-based, complex | Authored (registry gap) |
-| Events + event-definition matrix: message, timer, signal, error, escalation, conditional, link, compensate, terminate | Authored (registry gap); payload per canvas serializer |
+| Gateways: exclusive, parallel, inclusive, event-based (complex is preserve-only) | Authored (registry gap) |
+| Events + event-definition matrix: message, timer, error, terminate (end-only). Signal/escalation/conditional/link/compensate/cancel/multiple are preserve-only | Authored (registry gap); payload per canvas serializer |
 | Boundary events: `attachedToRef`, interrupting/non-interrupting (`cancelActivity`) | Authored (registry gap) |
 | Subprocess, event subprocess (`triggeredByEvent`), call activity | Authored (registry gap); call-activity payloads from registry |
 | Multi-instance / loop characteristics | Authored from canvas contract — **registry exposes no template (registry gap)** |
