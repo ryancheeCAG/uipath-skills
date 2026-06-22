@@ -7,7 +7,7 @@ These actions may contact UiPath services or external systems.
 
 > **Where you came from / where to go next.** Operate is downstream of Author (model-authored BPMN plus CLI
 > validation/enrichment) and upstream of Diagnose (runtime faults and state inspection).
-> BPMN source work lives in [author/CAPABILITY.md](../registry-workflow.md);
+> BPMN source work lives in [registry-workflow.md](../registry-workflow.md);
 > post-run investigation lives in [diagnose/CAPABILITY.md](../diagnose/CAPABILITY.md).
 >
 > **Inherits universal rules from [SKILL.md](../../SKILL.md).** In particular: BPMN XML is source, generated package
