@@ -6,7 +6,7 @@ All commands use `uip ixp` prefix. Always append `--output json` when parsing ou
 
 | Command | Description |
 |---------|-------------|
-| `uip ixp projects list --output json` | List all IXP projects |
+| `uip ixp projects list [-l <limit>] [--offset <n>] --output json` | List all IXP projects. Paginated: defaults to 50 per page (max 10000). Pass `-l` for a larger page or `--offset` to skip ahead. |
 | `uip ixp projects get <project-name> --output json` | Get a project |
 | `uip ixp projects create "<name>" <folder-path> [-d "<description>"] [--skip-taxonomy] --output json` | Create project and upload supported docs in `<folder-path>` (top-level only — sub-folders are not scanned; see [Supported document files](#supported-document-files)). By default suggests+imports taxonomy. `-d` provides context for better taxonomy suggestion. Use `--skip-taxonomy` to create a blank project (import taxonomy separately). Use `ProjectName` from output. |
 | `uip ixp projects import-taxonomy <project-name> <file> --output json` | Import taxonomy from a local JSON file. Accepts `{ field_types, label_group }` or `{ entity_defs, label_groups }` format. |
