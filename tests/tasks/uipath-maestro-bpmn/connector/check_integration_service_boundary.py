@@ -46,7 +46,7 @@ def main() -> None:
     # schemas"; the check verifies the agent named the blocker, not its wording.
     required = {
         "connection binding": "connection binding" in low,
-        "dynamic schema(s)": bool(re.search(r"dynamic\s+(input\s+|connector\s+)?schema", low)),
+        "dynamic schema(s)": bool(re.search(r"dynamic\s+(\w+\s+){0,2}schema", low)),
         "bindings_v2.json": "bindings_v2.json" in low,
         "package metadata": "package metadata" in low,
     }
