@@ -19,7 +19,7 @@ run_limits:
 initial_prompt: |
   Build a UiPath solution "GreeterSol" containing a Flow project
   "GreeterFlow" and a sibling LangGraph coded agent "InputProcessor"
-  (Python, gateway model `gpt-4o-mini-2024-07-18`, `temperature=0`).
+  (Python, gateway model `gpt-4o-mini-2024-08-06`, `temperature=0`).
   The agent takes `userInput` and returns `summary`. Wire the agent
   into the Flow, register it in the solution, and validate the
   result. Keep LLM construction inside node bodies.

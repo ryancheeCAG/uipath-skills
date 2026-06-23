@@ -56,7 +56,7 @@ Example `evaluations/evaluators/llm-judge-output.json`:
   "evaluatorTypeId": "uipath-llm-judge-output-semantic-similarity",
   "evaluatorConfig": {
     "name": "LLMJudgeOutputEvaluator",
-    "model": "gpt-4o-mini-2024-07-18",
+    "model": "gpt-4o-mini-2024-08-06",
     "defaultEvaluationCriteria": {
       "expectedOutput": {"<output_field>": "A correct, on-topic response for the given input."}
     }

@@ -4,7 +4,7 @@ from uipath_langchain.chat.models import UiPathChat
 from pydantic import BaseModel
 from typing import TypedDict
 
-llm = UiPathChat(model="gpt-4o-mini-2024-07-18", temperature=0)
+llm = UiPathChat(model="gpt-4o-mini-2024-08-06", temperature=0)
 
 class GraphInput(BaseModel):
     text: str

@@ -158,20 +158,20 @@ See [integration-service.md](integration-service.md) for the full discover-and-i
 ```python
 response = sdk.llm.chat_completions(
     messages=[{"role": "system", "content": "You are helpful."}, {"role": "user", "content": "Summarize this."}],
-    model="gpt-4o-mini-2024-07-18", max_tokens=4096, temperature=0
+    model="gpt-4o-mini-2024-08-06", max_tokens=4096, temperature=0
 )
 
 # Structured output with Pydantic
-response = sdk.llm.chat_completions(messages=[...], model="gpt-4o-mini-2024-07-18", response_format=MyPydanticModel)
+response = sdk.llm.chat_completions(messages=[...], model="gpt-4o-mini-2024-08-06", response_format=MyPydanticModel)
 
 # With tools
-response = sdk.llm.chat_completions(messages=[...], model="gpt-4o-mini-2024-07-18", tools=[tool_def], tool_choice="auto")
+response = sdk.llm.chat_completions(messages=[...], model="gpt-4o-mini-2024-08-06", tools=[tool_def], tool_choice="auto")
 ```
 
 ## LLM OpenAI
 
 ```python
-response = sdk.llm_openai.chat_completions(messages=[{"role": "user", "content": "Hello!"}], model="gpt-4o-mini-2024-07-18")
+response = sdk.llm_openai.chat_completions(messages=[{"role": "user", "content": "Hello!"}], model="gpt-4o-mini-2024-08-06")
 embeddings = sdk.llm_openai.embeddings(input="The quick brown fox", embedding_model="text-embedding-ada-002")
 ```
 

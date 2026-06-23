@@ -135,7 +135,7 @@ from uipath_langchain.chat.models import UiPathAzureChatOpenAI
 
 # Inside a graph node:
 llm = UiPathAzureChatOpenAI(
-    model="gpt-4o-mini-2024-07-18",
+    model="gpt-4o-mini-2024-08-06",
     temperature=0.7,
     max_tokens=4000,
     timeout=30,

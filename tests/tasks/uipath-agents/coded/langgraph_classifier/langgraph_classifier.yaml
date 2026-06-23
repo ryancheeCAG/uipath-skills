@@ -23,7 +23,7 @@ initial_prompt: |
   labels above) and `text` (str — the original text echoed back).
 
   For deterministic test runs, pin the LLM to a low-cost gateway
-  model (e.g. `gpt-4o-mini-2024-07-18`) with `temperature=0`.
+  model (e.g. `gpt-4o-mini-2024-08-06`) with `temperature=0`.
 
   Take the agent end-to-end through scaffold → init → run. Run
   against `'{"text": "I was charged twice for my last invoice."}'`
