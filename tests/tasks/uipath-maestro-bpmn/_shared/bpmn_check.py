@@ -113,17 +113,19 @@ def require_sequence_integrity(root: ET.Element) -> None:
 
 def require_no_private_connector_values(root: ET.Element) -> None:
     # A faithful, registry-driven file legitimately contains field *names* like
-    # `folderId`/`connectionId` (registry context fields) and the standard
-    # `exporter="UiPath (https://bpmn.uipath.com)"` attribute on the root. The
-    # real boundary concern is a *populated value* that bakes in a private
-    # identifier: a tenant/cloud URL, a tenant hostname, or a GUID-shaped
-    # connection/folder key. Inspect populated values only, not field names.
-    guid = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+    # `folderId`/`connectionId` (registry context fields), the standard
+    # `exporter="UiPath (https://bpmn.uipath.com)"` attribute on the root, and
+    # GUID-shaped values (releaseKey, entryPointId, binding ids — present in 24
+    # of the known-good fixtures). The real boundary concern is a *populated
+    # value* that bakes in a real tenant/cloud endpoint. Inspect populated
+    # values only — not field names, the root exporter, or bare GUIDs.
     tenant_host = re.compile(r"https?://|\b[\w-]+\.uipath\.com\b", re.IGNORECASE)
 
     def values(element: ET.Element) -> list[str]:
         found: list[str] = []
         for el in element.iter():
+            if el is root:
+                continue
             v = el.attrib.get("value")
             if v:
                 found.append(v)
@@ -131,9 +133,6 @@ def require_no_private_connector_values(root: ET.Element) -> None:
                 found.append(el.text.strip())
         return found
 
-    leaked = []
-    for value in values(root):
-        if tenant_host.search(value) or guid.search(value):
-            leaked.append(value[:80])
+    leaked = [value[:80] for value in values(root) if tenant_host.search(value)]
     if leaked:
-        fail(f"connector boundary leaked private values (URL/tenant/GUID): {leaked}")
+        fail(f"connector boundary leaked a real tenant/cloud endpoint: {leaked}")
