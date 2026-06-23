@@ -143,10 +143,18 @@ and honestly surfaced to the user as gaps when asked.
    and the process structure with the user (AskUserQuestion).
 5. **The diagram is mandatory.** Import is diagram-driven — every node needs a
    `BPMNShape`, every flow a `BPMNEdge`, or it will not appear on the canvas.
-6. **Use `--output json` for parsed CLI calls.**
-7. **Public-safe always.** No customer XML, tenant URLs, real IDs, or private
+6. **Node type is a child element, never an attribute.** Every `uipath:activity`
+   / `uipath:event` / `uipath:mapping` declares its type as
+   `<uipath:type value="<Type>" version="v1" />` inside the wrapper. Never write
+   `<uipath:activity type="…">` — the canvas will not recognize the node.
+7. **No `--` in XML comments.** XML forbids `--` (double-hyphen) inside
+   `<!-- … -->`, so never paste CLI commands or flags (`--output`,
+   `--connection-id`, `--object-name`) into a comment — it makes the file
+   unparseable. Keep comments minimal.
+8. **Use `--output json` for parsed CLI calls.**
+9. **Public-safe always.** No customer XML, tenant URLs, real IDs, or private
    names — see [references/public-safety.md](references/public-safety.md).
-8. **Confirm before any cloud change.** Upload, publish, deploy, run, pause,
+10. **Confirm before any cloud change.** Upload, publish, deploy, run, pause,
    resume, cancel, retry, and migrate require explicit user consent; validate
    locally first.
 
