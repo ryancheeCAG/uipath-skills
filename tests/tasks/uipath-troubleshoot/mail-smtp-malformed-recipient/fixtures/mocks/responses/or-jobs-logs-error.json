@@ -1,0 +1,11 @@
+{
+  "Result": "Success",
+  "Code": "JobLogs",
+  "Data": [
+    {
+      "Level": "Error",
+      "TimeStamp": "2026-06-24T09:26:06.382Z",
+      "Message": "SendMail: The specified string is not in the form required for an e-mail address.\r\nin Main.xaml\r\n    at SendMail \"SendMail\"\r\n    at Sequence \"Main Sequence\"\r\n    at Main \"Main\"\r\n\r\n--- .NET stack trace ---\r\nSystem.FormatException\r\n   at System.Net.Mail.MailAddressParser.TryParseAddress(String data, Boolean expectMultipleAddresses, Int32& index, ParseAddressInfo& parseAddressInfo, Boolean throwExceptionIfFail)\r\n   at System.Net.Mail.MailAddressParser.ParseMultipleAddresses(String data)\r\n   at System.Net.Mail.MailAddressCollection.ParseValue(String addresses)\r\n   at UiPath.Mail.MimeKitMail.MailMessageBuilder.AddRecipientsToMail(MailAddressCollection addressesCollection, List`1 recipients)\r\n   at UiPath.Mail.MimeKitMail.MailMessageBuilder.WithToRecipients(List`1 addresses)\r\n   at UiPath.Mail.MailMessageUtility.CreateSMTPMail(MailMessage mailMessage, UserSettings userSettings, Receiver receiver, List`1 attachments, Boolean isNewMessage, String body, MailAction mailAction)\r\n   at UiPath.Mail.MimeMailService.SendSMTPMail(MailMessage mailMessage, UserSettings userSettings, Receiver receiver, ServerSettings serverSettings, SecureSocketEncryption secureConnection, List`1 attachments, CancellationToken ct, Boolean isNewMessage, String body, MailAction mailAction)\r\n   at UiPath.Mail.SMTP.Activities.SendMail.SendMailTask(AsyncCodeActivityContext context, Receiver receiver, MailMessage mailMessage, CancellationToken cancellationToken, Boolean isNewMessage, String body)\r\n   at UiPath.Mail.Activities.Extensions.TaskExtensions.TimeoutAfter(Task task, Int32 timeoutMs)\r\n   at UiPath.Mail.Activities.SendMailActivity.ExecuteAsync(AsyncCodeActivityContext context, CancellationToken cancellationToken)\r\n   at UiPath.Mail.SMTP.Activities.SendMail.EndExecute(AsyncCodeActivityContext context, IAsyncResult result)"
+    }
+  ]
+}
