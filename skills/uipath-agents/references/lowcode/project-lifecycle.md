@@ -168,7 +168,7 @@ uip solution init "<SOLUTION_NAME>" --output json
 `uip agent init` always lands the project inside a solution — no manual `solution init` needed:
 
 - **Inside a solution directory** — auto-registers the project with the parent `.uipx`.
-- **Outside any solution** — auto-scaffolds a parent solution: creates `<Name>Solution/<Name>Solution.uipx` and nests the project at `<Name>Solution/<Name>/`. The response adds `Data.AutoCreatedSolution` (`{ Name, Path, SolutionFile }`) and reports `SolutionRegistration.Status: Registered`. Idempotent — re-running reuses the existing `.uipx` (`AlreadyRegistered`).
+- **Outside any solution** — auto-scaffolds a parent solution: creates `<Name>Solution/<Name>Solution.uipx` and nests the project at `<Name>Solution/<Name>/`. The response adds `Data.AutoCreatedSolution` (`{ Name, Path, SolutionFile }`) and reports `SolutionRegistration.Status: Registered`. Idempotent — re-running reuses the existing `.uipx` (`AlreadyRegistered`). If a **non-empty** directory already exists at the path you typed, init warns and leaves it untouched — the project still lands in `<Name>Solution/<Name>/`, not the existing directory.
 - **`--skip-solution-registration`** — opts out of **both** auto-scaffold and registration. No discovery, no sibling solution dir; the project lands at the bare path with `Status: OptedOut`.
 
 Verify via `Data.SolutionRegistration.Status` in the `agent init` response. The full set of statuses:

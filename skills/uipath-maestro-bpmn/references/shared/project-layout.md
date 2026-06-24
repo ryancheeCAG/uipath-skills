@@ -13,9 +13,12 @@ Maestro BPMN Process Orchestration projects use BPMN XML as source and generated
   to the project directory.
 
 For a new local project, place source files under a single project directory.
-`uip maestro bpmn init` nests that directory inside a solution — when run
-outside any solution it auto-scaffolds `<ProjectName>Solution/` (see
-[../author/references/greenfield.md](../author/references/greenfield.md) Step 2):
+`uip maestro bpmn init <ProjectName> --output json` nests that directory inside
+a solution. Inside a solution it registers the project with the parent `.uipx`;
+outside any solution it auto-scaffolds `<ProjectName>Solution/` and nests the
+project inside (the response adds `Data.AutoCreatedSolution` =
+`{ Name, Path, SolutionFile }` and reports `SolutionRegistration.Status:
+Registered`; re-running is idempotent and reports `AlreadyRegistered`):
 
 ```text
 ProjectNameSolution/             ← auto-scaffolded when init runs outside a solution
@@ -33,6 +36,10 @@ ProjectName/
   ProjectName.bpmn
   project.uiproj
 ```
+
+If a **non-empty** directory already exists at the path you typed, init warns
+and leaves it untouched — the project still lands in
+`<ProjectName>Solution/<ProjectName>/`, not the existing directory.
 
 ## Generated or CLI-managed package files
 
