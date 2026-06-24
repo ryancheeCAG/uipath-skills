@@ -202,6 +202,8 @@ Folder-scoped entities can hold RELATIONSHIP, FILE, or CHOICE_SET_* fields whose
 | Different folder | `"referenceFolderKey": "<target-folder-guid>"` |
 | Tenant level (target outside any folder) | Omit `referenceFolderKey` |
 
+> **`CHOICE_SET_*` exception — scope must match.** RELATIONSHIP and FILE fields permit a folder-scoped parent to point at a tenant-level target (omit `referenceFolderKey`). `CHOICE_SET_SINGLE` / `CHOICE_SET_MULTIPLE` does **not** — the platform rejects folder-entity → tenant-choice-set (and tenant-entity → folder-choice-set) at field create with *"They must be in the same scope (both tenant-level or both folder-level)."* Either move the choice set into the entity's folder, or scope both at the tenant level.
+
 **Lookup sequence:**
 
 ```bash
