@@ -22,6 +22,7 @@ If the data doesn't match: **discard it**. Do NOT use unrelated data as a proxy.
 5. **Document path resolution** — the concrete path the dynamic expression resolves to on the robot host (not the developer machine), whether the file exists there, and whether it is held open by a sync client, antivirus, or a concurrent job.
 6. **Package version** — `UiPath.Word.Activities` version in `project.json` versus the version restored on the execution host, especially for remote/Orchestrator runs.
 7. **Replace Text inputs + outcome** — for `Replace Text in Document` faults, capture the `Search` and `Replace` expressions (and their runtime lengths — 256 chars is the classic cap), whether the activity threw or succeeded-with-no-change, and whether it sits inside a loop with `Auto Save` enabled. For a silent miss, inspect the template's placeholder for run-splitting / mixed formatting; trace the **output document content**, not just the absence of an exception.
+8. **External Word state + run surface** — for a COM wrong-thread fault (`0x8001010E`), whether `WINWORD.EXE` was already running when the run started and whether it stayed open through the operation, plus the run surface (foreground Studio vs unattended / Session 0 / background) and whether the faulting activity runs on a non-creator thread (Parallel/Pick/Invoke/coded). The fault depends on an externally-owned instance and the apartment the proxy is accessed from.
 
 ## Testing Prerequisites
 
