@@ -40,6 +40,10 @@ Key properties: `ImagePath` ("Picture to insert" — fully-qualified absolute pa
 
 `Export to PDF` (`WordExportToPdf`, also "Save Document as PDF") exports the open document to a PDF at a target path, via Word Interop inside a `Word Application Scope`. It does **not** auto-create the output directory. Faults are about the **output** (missing target folder, malformed path) or **COM** (orphaned `WINWORD.EXE` / locked input), not the document content.
 
+## Append Text
+
+`Append Text` (`WordAppendText`) appends text to the document. Like Read Text, it has two surfaces: the **App-Integration** `Append Text` appends to the document held open by a surrounding `Word Application Scope` / `Use Word File` (no file input of its own); the **standalone** `Append Text` under the **Word Document** category takes a file path directly (no container, no Word install needed).
+
 ## Key Activities
 
 - **Word Application Scope** (`WordApplicationScope`, display name "Word Application Scope") — open a Word document via Interop and run child activities against it. **COM-only** — requires desktop Word. Properties include the document `Path`, `CreateIfNotExists` (generate the file when absent), and `Password`.
@@ -47,6 +51,7 @@ Key properties: `ImagePath` ("Picture to insert" — fully-qualified absolute pa
 - **Replace Text in Document** (modern `ReplaceTextInDocument` inside `Use Word File`, classic `WordReplaceText` inside `Word Application Scope`) — find a `Search` string and substitute `Replace`. Classic versions cap `Search`/`Replace` at 256 characters.
 - **Read Text** (display name "Read Text") — extract the document's text. Word-pack `Read Text` reads the document held open by a surrounding `Use Word File` / `Word Application Scope` (no file input of its own); the standalone `System > File > Word Document` `Read Text` takes a file path directly but is OpenXML `.docx`-only.
 - **Export to PDF** (`WordExportToPdf`, display name "Export to PDF" / "Save Document as PDF") — export the open document to a PDF at a target path, via Interop inside a `Word Application Scope`. Does **not** auto-create the output directory.
+- **Append Text** (`WordAppendText`, display name "Append Text") — append text to the document. App-Integration `Append Text` appends to the document held open by a surrounding `Word Application Scope` / `Use Word File` (no file input of its own); the standalone `Word Document` `Append Text` takes a file path directly (no container, no Word install needed).
 
 ## Common Failure Patterns
 
@@ -66,6 +71,8 @@ Key properties: `ImagePath` ("Picture to insert" — fully-qualified absolute pa
 - **Export to PDF — "Command Failed" (output directory missing)** — `Export to PDF` faults with a generic `Command Failed` because the target folder doesn't exist; the activity won't auto-create it. Fix: `Create Folder` before the export.
 - **Export to PDF — malformed output path / missing `.pdf`** — the File Path is built from unformatted concatenation (no `.pdf` suffix, missing/doubled separator, empty variable segment). Fix: `Path.Combine(folder, name & ".pdf")` and validate the pieces.
 - **Export to PDF — COM interop hang / crash / `COMException`** — an orphaned `WINWORD.EXE` or a locked input document blocks the export's COM call. Fix: Kill Process WINWORD before the scope, ensure the input is free; persistent → an Invoke Code C# `ExportAsFixedFormat` fallback.
+- **Append Text — "Activity is valid only inside WordApplicationScope"** — the App-Integration `Append Text` is outside a `Word Application Scope` / `Use Word File`; it has no file input of its own. Fix: nest it in a scope, or use the standalone `Word Document` `Append Text` (takes a file path).
+- **Append Text — "Archive file cannot be size zero"** — the target `.docx` is a 0-byte file (a renamed `.txt`, or a failed/truncated write), not a valid OpenXML package. Fix: delete it + `Create if not exists`, or fix the upstream that produced the empty file.
 
 ## Package
 
