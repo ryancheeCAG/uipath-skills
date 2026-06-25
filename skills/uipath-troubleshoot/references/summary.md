@@ -124,6 +124,15 @@ Namespaces: `UiPath.Database.Activities`
 - [activity-packages/database-activities/overview.md](./activity-packages/database-activities/overview.md) — Package overview, connection model, key activities, and common failure patterns
 - [activity-packages/database-activities/summary.md](./activity-packages/database-activities/summary.md) — All playbooks for Database Activities issues
 
+## Testing Activities
+
+Test-automation activities from `UiPath.Testing.Activities` — assertions/verifications (`Verify Expression`, `Verify Expression With Operator`, `Verify Range`), text comparison (`Compare Text`), test data queues (`Get Test Data Queue Item`), document attachment (`Attach Document`), and internal code-coverage merge. Built for test cases executed as **Test Jobs** from Orchestrator Test Sets / Test Manager; many activities behave differently from Studio or a plain process. Issues here involve designed assertion failures vs execution faults, operand `NullReferenceException`, assertion-reporting `HttpRequestException`, output-report `UnauthorizedAccessException`, attach-file `FileNotFoundException`, test-data-queue empty/not-found errors, and internal coverage-merge `InvalidOperationException`.
+
+Namespaces: `UiPath.Testing.Activities`, `UiPath.Testing.Exceptions`
+
+- [activity-packages/testing-activities/overview.md](./activity-packages/testing-activities/overview.md) — Package overview, execution-context model (Test Job vs Studio), and exception families
+- [activity-packages/testing-activities/summary.md](./activity-packages/testing-activities/summary.md) — All playbooks for Testing Activities issues
+
 
 ## Playbooks
 
