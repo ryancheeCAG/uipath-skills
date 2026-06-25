@@ -2,7 +2,9 @@
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:uipath="http://uipath.org/schema/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="OrderTriage-diagram" targetNamespace="http://www.omg.org/spec/BPMN/20100524/MODEL">
   <bpmn:process id="Process_1" isExecutable="false">
     <bpmn:extensionElements>
-      <uipath:variables version="v1" />
+      <uipath:variables version="v1">
+        <uipath:inputOutput id="risk" name="risk" type="integer" elementId="Activity_Classify" custom="true" />
+      </uipath:variables>
     </bpmn:extensionElements>
     <bpmn:startEvent id="Event_start">
       <bpmn:outgoing>flow_start_to_classify</bpmn:outgoing>
