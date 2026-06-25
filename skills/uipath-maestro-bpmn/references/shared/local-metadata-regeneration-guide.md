@@ -90,6 +90,10 @@ do not invent `contentFiles` as a substitute for `content`.
 }
 ```
 
+The `uniqueId` here is an **illustrative GUID** — use the start event's actual
+`<uipath:entryPointId value>` (a real GUID), never this literal. See Entry Point
+Rules below.
+
 `bindings_v2.json`:
 
 ```json

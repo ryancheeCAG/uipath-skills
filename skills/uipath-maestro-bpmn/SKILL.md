@@ -139,8 +139,12 @@ and honestly surfaced to the user as gaps when asked.
 
 1. **Registry owns every `uipath:*` payload.** Author from
    `registry get` templates; never hand-write `uipath:` XML from prose.
-2. **Never fabricate an identifier.** Connection IDs, process/queue/connector
-   keys, app IDs, folder ids/paths come from discovery or the user.
+2. **Never fabricate or copy an identifier.** Connection IDs, process/queue/connector
+   keys, app IDs, folder ids/paths come from discovery or the user. Every concrete
+   value in a skill example — GUIDs, connection/release keys, URLs, folder names,
+   variable ids — is an **illustrative placeholder**: replace each with a value you
+   discovered or generated (e.g. a fresh GUID for an entry-point `uniqueId`), never
+   the literal from the doc.
 3. **Structural BPMN is authored, not invented.** Follow the spec/canvas
    contract in [references/structural-bpmn.md](references/structural-bpmn.md);
    flag honestly what the registry does not expose.
