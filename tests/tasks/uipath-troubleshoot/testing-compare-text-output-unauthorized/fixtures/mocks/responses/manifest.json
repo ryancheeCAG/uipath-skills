@@ -1,0 +1,65 @@
+{
+  "version": 2,
+  "_doc": "Faithful-replay fixtures captured from a real RegressionTextCheck faulted job (Compare Text UnauthorizedAccessException writing its HTML differences report to a non-writable OutputFilePath 'C:\\Windows\\System32'). Scrubbed: host UIP-PW06WJSK -> MOCK-HOST, UIPATH\\DAN.MOROSANU -> UIPATH\\REPLACEMENT_USER, owner email -> original_email@test.com. Job key, folder key, error text + stack, OrchestratorUserIdentity newrobot, timestamps, ids kept verbatim.",
+  "rules": [
+    {
+      "match": "or folders list --output json",
+      "file": "or-folders-list-current-user-output-json.json"
+    },
+    {
+      "match": "or jobs list --folder-key \"defb8e05-e36b-4c36-bf11-0b4d08ce6cd1\" --state Faulted --output json",
+      "file": "or-jobs-list-folder-key-defb8e05-state-faulted-output-json.json"
+    },
+    {
+      "match": "or jobs list --folder-key defb8e05-e36b-4c36-bf11-0b4d08ce6cd1 --state Faulted --output json",
+      "file": "or-jobs-list-folder-key-defb8e05-state-faulted-output-json.json"
+    },
+    {
+      "match": "or jobs list",
+      "file": "or-jobs-list-folder-key-defb8e05-state-faulted-output-json.json",
+      "_doc": "Generic jobs list falls through to the single-target faulted list (only the RegressionTextCheck job is in scope for this scenario)."
+    },
+    {
+      "match": "or jobs get \"2569ee8e-449a-42b8-a761-4dfd5ed2aa49\" --output json",
+      "file": "or-jobs-get-2569ee8e-output-json.json"
+    },
+    {
+      "match": "or jobs get 2569ee8e-449a-42b8-a761-4dfd5ed2aa49 --output json",
+      "file": "or-jobs-get-2569ee8e-output-json.json"
+    },
+    {
+      "match": "or jobs history \"2569ee8e-449a-42b8-a761-4dfd5ed2aa49\" --output json",
+      "file": "or-jobs-history-2569ee8e-output-json.json"
+    },
+    {
+      "match": "or jobs history 2569ee8e-449a-42b8-a761-4dfd5ed2aa49 --output json",
+      "file": "or-jobs-history-2569ee8e-output-json.json"
+    },
+    {
+      "match": "or jobs logs \"2569ee8e-449a-42b8-a761-4dfd5ed2aa49\" --level Error --output json",
+      "file": "or-jobs-logs-2569ee8e-level-error-output-json.json"
+    },
+    {
+      "match": "or jobs logs 2569ee8e-449a-42b8-a761-4dfd5ed2aa49 --level Error --output json",
+      "file": "or-jobs-logs-2569ee8e-level-error-output-json.json"
+    },
+    {
+      "match": "or jobs logs \"2569ee8e-449a-42b8-a761-4dfd5ed2aa49\" --output json",
+      "file": "or-jobs-logs-2569ee8e-level-error-output-json.json"
+    },
+    {
+      "match": "or jobs logs 2569ee8e-449a-42b8-a761-4dfd5ed2aa49 --output json",
+      "file": "or-jobs-logs-2569ee8e-level-error-output-json.json"
+    },
+    {
+      "match": "docsai ask",
+      "passthrough": true,
+      "_doc": "Proxy open-ended docsai queries to the real uip CLI; cache results in _cache/."
+    }
+  ],
+  "unmocked_default": {
+    "response": "[]\n",
+    "exit_code": 0,
+    "_doc": "Permissive fallback for unmatched commands. Both trace forms (a bare 'or jobs logs <key>' and 'or traces ...') fall through to [] here; the UnauthorizedAccessException signature is fully carried by 'or jobs get' (Info) and 'or jobs logs ... --level Error' (.NET stack)."
+  }
+}

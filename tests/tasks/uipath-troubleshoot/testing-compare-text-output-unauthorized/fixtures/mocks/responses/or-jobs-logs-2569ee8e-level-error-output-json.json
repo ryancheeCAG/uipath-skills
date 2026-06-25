@@ -1,0 +1,11 @@
+{
+  "Result": "Success",
+  "Code": "JobLogs",
+  "Data": [
+    {
+      "Level": "Error",
+      "TimeStamp": "2026-06-25T07:40:18.002Z",
+      "Message": "Compare Text: Access to the path 'C:\\Windows\\System32' is denied.\r\nin Main.xaml\r\n    at CompareText \"Compare Text\"\r\n    at Sequence \"Check Regression Text\"\r\n    at Main \"Main\"\r\n\r\n--- .NET stack trace ---\r\nSystem.UnauthorizedAccessException\r\n   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)\r\n   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)\r\n   at System.IO.File.OpenHandle(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize)\r\n   at System.IO.File.WriteToFile(String path, FileMode mode, String contents, Encoding encoding)\r\n   at UiPath.Testing.Activities.Services.GenerateCustomDiffService.GenerateHtmlOutput(List`1 differences, String outputPath)\r\n   at UiPath.Testing.Activities.Services.GenerateCustomDiffService.GenerateTextOutput(List`1 differences, IComparisonOutputConfig config)\r\n   at UiPath.Testing.Activities.Services.CompareTextService.CompareText(CompareTextSettings settings)\r\n   at UiPath.Testing.Activities.CompareText.ExecuteAsync(NativeActivityContext context, CancellationToken cancellationToken)\r\n   at UiPath.Shared.Activities.AsyncTaskNativeImplementation.BookmarkResumptionCallback(NativeActivityContext context, Object value)\r\n   at UiPath.Shared.Activities.AsyncTaskNativeActivity.BookmarkResumptionCallback(NativeActivityContext context, Bookmark bookmark, Object value)\r\n   at System.Activities.Runtime.BookmarkWorkItem.Execute(ActivityExecutor executor, BookmarkManager bookmarkManager)"
+    }
+  ]
+}

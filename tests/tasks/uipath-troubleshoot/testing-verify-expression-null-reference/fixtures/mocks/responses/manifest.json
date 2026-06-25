@@ -1,0 +1,65 @@
+{
+  "version": 2,
+  "_doc": "Faithful-replay fixtures for a real faulted ResultValidation job (key 685af108-640a-4766-a24c-e23b980d67fa, folder Shared). UiPath.Testing.Activities.VerifyExpression threw System.NullReferenceException during operand/expression evaluation (Expression `[loadedValue.Length > 0]` dereferences the uninitialized String variable `loadedValue`). Scrubbed: UIP-PW06WJSK -> MOCK-HOST, UIPATH\\DAN.MOROSANU -> UIPATH\\REPLACEMENT_USER, dan.morosanu@uipath.com -> original_email@test.com.",
+  "rules": [
+    {
+      "match": "or folders list --output json",
+      "file": "or-folders-list-output-json.json"
+    },
+    {
+      "match": "or jobs list --folder-key \"defb8e05-e36b-4c36-bf11-0b4d08ce6cd1\" --state Faulted --output json",
+      "file": "or-jobs-list-folder-key-defb8e05-state-faulted-output-json.json"
+    },
+    {
+      "match": "or jobs list --folder-key defb8e05-e36b-4c36-bf11-0b4d08ce6cd1 --state Faulted --output json",
+      "file": "or-jobs-list-folder-key-defb8e05-state-faulted-output-json.json"
+    },
+    {
+      "match": "or jobs list",
+      "file": "or-jobs-list-folder-key-defb8e05-state-faulted-output-json.json",
+      "_doc": "Generic jobs-list fallback returns only the single target job (this scenario isolates one faulted job)."
+    },
+    {
+      "match": "or jobs get \"685af108-640a-4766-a24c-e23b980d67fa\" --output json",
+      "file": "or-jobs-get-685af108-output-json.json"
+    },
+    {
+      "match": "or jobs get 685af108-640a-4766-a24c-e23b980d67fa --output json",
+      "file": "or-jobs-get-685af108-output-json.json"
+    },
+    {
+      "match": "or jobs history \"685af108-640a-4766-a24c-e23b980d67fa\" --output json",
+      "file": "or-jobs-history-685af108-output-json.json"
+    },
+    {
+      "match": "or jobs history 685af108-640a-4766-a24c-e23b980d67fa --output json",
+      "file": "or-jobs-history-685af108-output-json.json"
+    },
+    {
+      "match": "or jobs logs \"685af108-640a-4766-a24c-e23b980d67fa\" --level Error --output json",
+      "file": "or-jobs-logs-685af108-level-error-output-json.json"
+    },
+    {
+      "match": "or jobs logs 685af108-640a-4766-a24c-e23b980d67fa --level Error --output json",
+      "file": "or-jobs-logs-685af108-level-error-output-json.json"
+    },
+    {
+      "match": "or jobs logs \"685af108-640a-4766-a24c-e23b980d67fa\" --output json",
+      "file": "or-jobs-logs-685af108-output-json.json"
+    },
+    {
+      "match": "or jobs logs 685af108-640a-4766-a24c-e23b980d67fa --output json",
+      "file": "or-jobs-logs-685af108-output-json.json"
+    },
+    {
+      "match": "docsai ask",
+      "passthrough": true,
+      "_doc": "Proxy open-ended docsai queries to the real uip CLI; cache results in _cache/."
+    }
+  ],
+  "unmocked_default": {
+    "response": "[]\n",
+    "exit_code": 0,
+    "_doc": "Permissive fallback. Both trace forms (the Orchestrator Info stack and the job-log .NET stack) are already carried by the jobs get and jobs logs fixtures above; any unmatched command (including a bare/alternate trace lookup) falls through to [] with exit 0 — the NullReferenceException operand-evaluation signature does not depend on it."
+  }
+}

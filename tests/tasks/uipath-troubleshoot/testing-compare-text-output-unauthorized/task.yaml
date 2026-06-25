@@ -1,0 +1,163 @@
+task_id: skill-troubleshoot-testing-compare-text-output-unauthorized
+description: >
+  UiPath troubleshooting agent must diagnose a RegressionTextCheck process
+  faulting in Orchestrator (folder Shared) where the Compare Text activity
+  (UiPath.Testing.Activities.CompareText) throws
+  System.UnauthorizedAccessException ("Access to the path 'C:\Windows\System32'
+  is denied.") while WRITING its HTML differences report to a non-writable
+  OutputFilePath. The write fails inside
+  GenerateCustomDiffService.GenerateHtmlOutput -> CompareTextService.CompareText
+  -- before any assertion gate -- so the texts differing is irrelevant.
+  Success = agent matches compare-text-output-write-failures.md (OutputFilePath
+  is a protected/system directory the robot cannot write to), cites the
+  OutputFilePath from Main.xaml, and recommends pointing it at a writable FILE
+  path (project output / temp) -- without blaming a text mismatch, a failed
+  assertion, credentials, Orchestrator connectivity, or the comparison logic.
+tags: [uipath-troubleshoot, e2e, mode:diagnose, lifecycle:discover, faulted-jobs, orchestrator, rpa]
+
+agent:
+  type: claude-code
+  allowed_tools: ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "Agent", "AskUserQuestion", "TodoWrite"]
+
+run_limits:
+  expected_turns: 40
+  task_timeout: 5400
+  max_turns: 60
+  turn_timeout: 3600
+
+sandbox:
+  node: {}
+  template_sources:
+  - type: template_dir
+    path: ../_shared/mock_template
+  - type: template_dir
+    path: process
+  - type: template_dir
+    path: fixtures
+  mock_path_dirs:
+  - mocks
+
+reference:
+  file: RESOLUTION.md
+
+initial_prompt: |
+  My RegressionTextCheck process keeps faulting in Orchestrator (folder
+  Shared) on every run. Diagnose why and how to fix it.
+
+  I'm not on the Robot host (MOCK-HOST). The project source for the failing
+  process is in the current working directory.
+
+success_criteria:
+  - type: skill_triggered
+    description: "Agent invoked the uipath-troubleshoot skill"
+    skill_name: "uipath-troubleshoot"
+    expected_skill: "uipath-troubleshoot"
+    weight: 1.0
+
+  - type: llm_judge
+    description: "Agent identified the Compare Text OutputFilePath write failure (UnauthorizedAccessException on a non-writable protected path) and recommended a writable file path -- matching RESOLUTION.md -- without blaming a text mismatch/assertion, auth, or Orchestrator"
+    weight: 3.0
+    pass_threshold: 0.7
+    include_reference: true
+    include_agent_output: true
+    include_tool_calls: true
+    prompt: |
+      You are grading a UiPath troubleshooting agent against a known-correct
+      reference outcome. The Reference solution attached to this prompt is the
+      RESOLUTION.md for this scenario. Treat it as authoritative.
+
+      The user's request was:
+        "My RegressionTextCheck process keeps faulting in Orchestrator (folder
+         Shared) on every run. Diagnose why and how to fix it. I'm not on the
+         Robot host (MOCK-HOST). The project source for the failing process is
+         in the current working directory."
+
+      Grade ONLY the agent's final response to the user and its tool calls.
+      Do NOT inspect or require any internal investigation state under
+      .local/investigations/ (state.json, hypotheses.json, matched_playbooks,
+      scope.domain, requirements, is_root_cause, evidence shapes). What the
+      agent presents IS the contract.
+
+      DIMENSION A -- FAULT (what failed)
+        The job faulted with
+          System.UnauthorizedAccessException: Access to the path
+          'C:\Windows\System32' is denied.
+        thrown by the Compare Text activity
+        (UiPath.Testing.Activities.CompareText) while WRITING its differences
+        report -- the stack runs through
+          GenerateCustomDiffService.GenerateHtmlOutput ->
+          CompareTextService.CompareText -> CompareText.ExecuteAsync.
+        Critically, the write fails BEFORE any assertion gate: the texts
+        differing is irrelevant to this fault.
+
+      DIMENSION B -- CAUSE (root cause)
+        OutputFilePath is set to C:\Windows\System32, which is a protected /
+        system location the robot account cannot write to (and is also an
+        existing directory, not a file). The agent should cite the
+        OutputFilePath value read from Main.xaml. This matches
+          references/activity-packages/testing-activities/playbooks/compare-text-output-write-failures.md.
+        Evidence the agent reached this:
+          (1) the final response names the UnauthorizedAccessException on the
+              Compare Text output write AND ties it to OutputFilePath being a
+              non-writable protected directory; AND
+          (2) a tool call that Read Main.xaml (showing
+              OutputFilePath="C:\Windows\System32") and/or a playbook file
+              under references/activity-packages/testing-activities/playbooks/.
+
+      DIMENSION C -- RESOLUTION (the fix)
+        Set OutputFilePath to a writable FILE path the robot account can write
+        -- e.g. a file in the project output folder or a temp directory --
+        rather than a protected/system directory. (Pointing it at a writable
+        file, not a folder.)
+
+      ANTI-FABRICATION HARD GATE -- cap the score at 0.2 if the agent
+      concludes ANY of these as the root cause:
+        - The analyzed texts are different / a failed or unequal comparison /
+          an assertion failure ("The analyzed texts are different.") -- WRONG:
+          the write failed before any assertion result, so the texts differing
+          is irrelevant.
+        - A credentials / authentication / password / sign-in problem.
+        - An Orchestrator connectivity / API / tenant problem.
+        - A bug in the comparison logic, or a different activity.
+        - Any fabricated cause not supported by the evidence.
+
+      SCORING RUBRIC:
+        1.0  Agent (a) names the UnauthorizedAccessException on the Compare
+             Text output-report write (not an assertion), (b) attributes it to
+             OutputFilePath (C:\Windows\System32) being a non-writable
+             protected directory and cites that value from Main.xaml, AND
+             (c) recommends setting OutputFilePath to a writable file path
+             (project output / temp).
+        0.8  Correct cause (Compare Text output write denied because
+             OutputFilePath is not writable) AND the writable-path fix, but
+             omits citing the OutputFilePath value from Main.xaml or part of
+             the fix detail.
+        0.5  Recognized an UnauthorizedAccess / file-write / permission class
+             on the output but did not tie it to OutputFilePath being a
+             protected/non-writable path, or offered no actionable fix.
+        0.2  Surfaced the exception to the user without diagnosis, OR concluded
+             any of the ANTI-FABRICATION answers above.
+        0.0  Wrong cause unrelated to the output-file write, or the agent
+             fabricated an action it could not support.
+
+      Return JSON: {"score": <float>, "rationale": "<one sentence>"}
+
+simulation:
+  enabled: true
+  persona: |
+    You are the UiPath user who originally reported the failing
+    RegressionTextCheck process. You are away from the Robot host (MOCK-HOST)
+    and only have Orchestrator access plus the project source in the current
+    working directory. You trust the agent's expertise and are waiting for a
+    diagnosis and a concrete fix.
+  goal: |
+    Let the agent complete its troubleshooting flow without imposing
+    constraints. Approve every scope expansion or clarification the agent
+    requests so the investigation reaches the final resolution.
+  constraints:
+    - "If the agent asks whether to expand investigation scope (any new product domain such as orchestrator, activity-packages, testing-activities), always answer Yes - pick the recommended / first / affirmative option."
+    - "If the agent asks how to proceed when data is missing, tell it to proceed with best-effort findings using the evidence already gathered."
+    - "Never invent or provide new factual data - you don't know any details beyond your initial report."
+    - "Keep replies short (one sentence or pick a numbered option)."
+    - "Never instruct the agent to stop, abort, or skip phases."
+  max_turns: 6

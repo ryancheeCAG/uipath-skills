@@ -1,0 +1,26 @@
+{
+  "Result": "Success",
+  "Code": "JobList",
+  "Data": [
+    {
+      "Key": "685af108-640a-4766-a24c-e23b980d67fa",
+      "State": "Faulted",
+      "ProcessName": "ResultValidation",
+      "ReleaseKey": "",
+      "Source": "Manual",
+      "Type": "Unattended",
+      "Priority": "Normal",
+      "Machine": "MOCK-HOST",
+      "MachineKey": "",
+      "StartTime": "2026-06-25T07:39:14.757Z",
+      "EndTime": "2026-06-25T07:39:18.390Z",
+      "CreationTime": "2026-06-25T07:39:14.293Z"
+    }
+  ],
+  "Pagination": {
+    "Returned": 1,
+    "Limit": 50,
+    "Offset": 0,
+    "HasMore": false
+  }
+}

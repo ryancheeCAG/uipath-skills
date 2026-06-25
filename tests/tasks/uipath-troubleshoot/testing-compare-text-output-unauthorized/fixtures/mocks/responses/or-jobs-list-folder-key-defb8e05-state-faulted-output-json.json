@@ -1,0 +1,26 @@
+{
+  "Result": "Success",
+  "Code": "JobList",
+  "Data": [
+    {
+      "Key": "2569ee8e-449a-42b8-a761-4dfd5ed2aa49",
+      "State": "Faulted",
+      "ProcessName": "RegressionTextCheck",
+      "ReleaseKey": "",
+      "Source": "Manual",
+      "Type": "Unattended",
+      "Priority": "Normal",
+      "Machine": "MOCK-HOST",
+      "MachineKey": "",
+      "StartTime": "2026-06-25T07:40:16.913Z",
+      "EndTime": "2026-06-25T07:40:19.153Z",
+      "CreationTime": "2026-06-25T07:39:16.307Z"
+    }
+  ],
+  "Pagination": {
+    "Returned": 1,
+    "Limit": 50,
+    "Offset": 0,
+    "HasMore": false
+  }
+}
