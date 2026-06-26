@@ -26,6 +26,8 @@ This skill covers standalone IXP-project work. STOP and invoke the `uipath-maest
 
 Do not answer these from this skill. Re-activate `uipath-maestro-flow` and follow the commands it documents. This overrides Critical Rule 1.
 
+**Never answer a flow question with `uip ixp projects list` / `uip ixp projects list-models`.** Those return design-time IXP *projects* (including unpublished, duplicate, and test projects like `e2e-test-*` / `ixp-it-*`) — a different, over-broad population from the *flow-callable* extractor nodes, and they omit the published-version GUID + folder key a flow node needs. The only correct source for "what can a flow call" is `uip maestro flow registry search "uipath.ixp"` (in `uipath-maestro-flow`). Listing IXP projects in answer to a flow question is a **wrong answer**, not an alternative route.
+
 ## Critical Rules
 
 1. **ONLY use `uip ixp` CLI commands as documented in this skill** — do NOT use curl, do NOT call REST APIs directly, do NOT grep/read source code, do NOT explore the codebase. (Exception: defer flow/Maestro registry questions to `uipath-maestro-flow` — see *When NOT to Use This Skill* above.)
