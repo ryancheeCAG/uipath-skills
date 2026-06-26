@@ -9,8 +9,9 @@ The whole skills repo is published as an npm package, **`@uipath/skills`**, vers
 | File | Field | Purpose |
 |------|-------|---------|
 | `version-manifest.json` | `skillsVersion`, `targetCli` | CLI↔skills pairing record |
-| `.claude-plugin/plugin.json` | `version` | Claude Code plugin version (shared `major.minor`, independent patch) |
+| `.claude-plugin/plugin.json` | `version` | Claude Code plugin version (shared `major.minor`, independent patch) — the canonical plugin version |
 | `.claude-plugin/marketplace.json` | `plugins[0].version` | Always equals `plugin.json` `version` |
+| `.codex-plugin/plugin.json` | `version` | Codex plugin version — always equals `plugin.json` `version` |
 
 ### One `major.minor`, three patch counters
 
@@ -20,9 +21,9 @@ All channels share `major.minor` (the CLI-compatibility signal); the **patch div
 |---------|---------|---------------|
 | npm `latest` | `M.N.<release>` | per stable release — what the CLI pins |
 | npm `alpha` | `M.N.<release>-alpha.<date>.<run>` | per alpha dispatch |
-| plugin / `marketplace.json` | `M.N.<daily-counter>` | daily (`daily-version-bump.yml`) — drives Claude Code plugin auto-update |
+| plugin manifests (`.claude-plugin/plugin.json`, `marketplace.json`, `.codex-plugin/plugin.json`) | `M.N.<daily-counter>` | daily (`daily-version-bump.yml`) — drives Claude Code / Codex plugin auto-update |
 
-`sync-version.mjs` enforces the shared line: if the plugin `major.minor` differs from `package.json`, it resets the plugin/marketplace version to `M.N.0`; if they match, the daily counter is left untouched. The marketplace version must always equal the plugin version exactly. `--check` fails on any violation, so a hand-bumped plugin manifest cannot drift the line.
+`sync-version.mjs` enforces the shared line: if the plugin `major.minor` differs from `package.json`, it resets the plugin version to `M.N.0` (and **refuses to downgrade** if `package.json`'s minor is below the plugin's); if they match, `--bump-patch` advances the daily counter, otherwise the patch is left untouched. The marketplace and Codex versions must always equal the plugin version exactly. `--check` fails on any violation, so a hand-bumped plugin manifest cannot drift the line. The bump rule lives only in `sync-version.mjs` (`daily-version-bump.yml` calls `--bump-patch` rather than reimplementing it).
 
 Run after any version change:
 
