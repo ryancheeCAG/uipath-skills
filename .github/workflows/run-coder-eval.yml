@@ -40,6 +40,14 @@ on:
         description: '@uipath/cli version.'
         type: string
         default: alpha
+      aws_region:
+        description: 'Override AWS region to test Bedrock inference-profile sensitivity (e.g. eu-north-1 vs us-east-2). Blank = secret default.'
+        type: string
+        default: ''
+      bedrock_model:
+        description: 'Override BEDROCK_MODEL — pass a bare alias (e.g. claude-sonnet-4-6) so the region prefix is derived from aws_region. Blank = secret default.'
+        type: string
+        default: ''
 
 concurrency:
   group: run-coder-eval-${{ github.ref }}
@@ -198,8 +206,8 @@ jobs:
           SKILLS_REPO_PATH:         ${{ github.workspace }}
           API_BACKEND:              bedrock
           AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
-          AWS_REGION:               ${{ secrets.AWS_REGION }}
-          BEDROCK_MODEL:            ${{ secrets.BEDROCK_MODEL }}
+          AWS_REGION:               ${{ inputs.aws_region || secrets.AWS_REGION }}
+          BEDROCK_MODEL:            ${{ inputs.bedrock_model || secrets.BEDROCK_MODEL }}
           ANTHROPIC_API_KEY:        ${{ secrets.ANTHROPIC_API_KEY }}
           TRACES_SMOKE_PROCESS_KEY: ${{ secrets.TRACES_SMOKE_PROCESS_KEY }}
           E2E_PROCESS_KEY:          ${{ secrets.E2E_PROCESS_KEY }}
@@ -427,8 +435,8 @@ jobs:
           SKILLS_REPO_PATH:         ${{ github.workspace }}
           API_BACKEND:              bedrock
           AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
-          AWS_REGION:               ${{ secrets.AWS_REGION }}
-          BEDROCK_MODEL:            ${{ secrets.BEDROCK_MODEL }}
+          AWS_REGION:               ${{ inputs.aws_region || secrets.AWS_REGION }}
+          BEDROCK_MODEL:            ${{ inputs.bedrock_model || secrets.BEDROCK_MODEL }}
           ANTHROPIC_API_KEY:        ${{ secrets.ANTHROPIC_API_KEY }}
           TASK_GLOBS:               ${{ needs.partition.outputs.windows_globs }}
           # Redirect the temp root off the default %TEMP%. On the GH-hosted
