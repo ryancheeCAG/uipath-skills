@@ -29,8 +29,8 @@ Write: `.local/investigations/scope-check.json`
 1. **Read `references/summary.md`** — understand what product domains exist and what types of issues each covers. Follow links to product summaries, overviews, playbooks, and investigation guides as needed to understand domain boundaries.
 2. **Read `state.json`** — note the current `scope.domain` array.
 3. **Read all evidence files** in `.local/investigations/evidence/` and `hypotheses.json` if it exists.
-4. **Check missing** — against each domain in `references/summary.md`: does any evidence signal (job property, error code, entity type, message, behavioral pattern), hypothesis, playbook reference, or CLI command belong to a domain not in `state.json.scope.domain`? List it in `missing_domains`.
-5. **Check narrowing** — is any scoped domain only the reporting layer (e.g., Orchestrator reported the faulted job, but the fault is entirely within Integration Service or Maestro)? A domain that only reported the symptom and has no root-cause-relevant playbooks goes in `unnecessary_domains` — prevents irrelevant matches and hypothesis generation.
+4. **Check missing** — against each domain in `references/summary.md`: does any evidence signal (an entity property, error code, entity type, message, or behavioral pattern), hypothesis, playbook reference, or CLI command belong to a domain not in `state.json.scope.domain`? List it in `missing_domains`.
+5. **Check narrowing** — is any scoped domain only the reporting layer (e.g., the reporting domain surfaced the faulted entity, but the fault lives entirely within another domain)? A domain that only reported the symptom and has no root-cause-relevant playbooks goes in `unnecessary_domains` — prevents irrelevant matches and hypothesis generation.
 6. **Write `scope-check.json`** with your findings. If both `missing_domains` and `unnecessary_domains` are empty, the current scope is correct.
 
 ## Boundaries

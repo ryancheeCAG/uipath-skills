@@ -89,7 +89,7 @@ Fields per entry:
 - **Silent** (evidence neither supports nor contradicts any of the playbook's signals) → do NOT list. The playbook is uninformed by the available evidence; it cannot be tested productively until more data exists.
 - **Contradicted** (evidence directly disproves at least one CORE signal of the playbook signature) → do NOT list in `matched_playbooks`; instead record in `eliminated_playbooks` with the contradicting evidence. The hypothesis generator will not draft hypotheses from these.
 
-A "core signal" is one named in the playbook's `## Context` or `## Investigation` as a required precondition for the cause to apply (e.g., "asset is absent / HTTP 404", "robot has no matching credentials", "connection ID returns 'invalid'"). Surface-level signals shared across siblings (e.g., "Get Asset activity") are NOT core signals — they're descriptors, not preconditions.
+A "core signal" is one named in the playbook's `## Context` or `## Investigation` as a required precondition for the cause to apply (e.g., a "resource absent / HTTP 404" assertion, a "credential mismatch" assertion, an "invalid resource state" assertion). Surface-level signals shared across siblings (a generic "<activity> failed" category) are NOT core signals — they're descriptors, not preconditions.
 
 ## Eliminated Playbooks
 
@@ -100,7 +100,7 @@ Playbooks whose signature was contradicted by triage evidence. Each entry record
 
 The hypothesis generator MUST exclude these from consideration. The depth-verifier MUST NOT confirm a hypothesis that maps to an eliminated playbook.
 
-**Why count over confidence.** Multiple playbooks can match the same surface signal (e.g., "Get Asset activity failed" appears in five distinct get-asset playbooks at frontmatter `high`). Ranking purely on frontmatter confidence then surfaces 5-way false positives at HIGH. Counting actual signal hits per playbook discriminates between them: the one whose specific signature is most fully satisfied by the evidence wins. Frontmatter confidence still caps the root-cause certainty downstream (`high` matches can fast-path; `medium`/`low` require deeper testing) — but it does not decide ordering.
+**Why count over confidence.** Multiple playbooks can match the same surface signal (e.g., a generic "<activity> failed" category that several sibling playbooks under one package all carry at frontmatter `high`). Ranking purely on frontmatter confidence then surfaces multi-way false positives at HIGH. Counting actual signal hits per playbook discriminates between them: the one whose specific signature is most fully satisfied by the evidence wins. Frontmatter confidence still caps the root-cause certainty downstream (`high` matches can fast-path; `medium`/`low` require deeper testing) — but it does not decide ordering.
 
 ## Plan
 
