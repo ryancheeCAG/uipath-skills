@@ -118,7 +118,7 @@ Check every entity name in the formatted text against the presentation guides an
 
 If any matched playbook in `state.json.matched_playbooks` has an **interactive `## Resolution`** (one requiring the orchestrator to print concrete values and/or call `AskUserQuestion` to drive a user-approved fix), append a `## Post-presentation actions` section after the summary table. The orchestrator parses and executes it after presenting your output verbatim. Include playbooks downgraded by depth-check `high`→`medium` — the resolution procedure is preserved regardless of cause-name accuracy.
 
-Recognize an interactive resolution when the playbook (or a doc it links to, e.g. `interpretations/healing-agent-data.md`) prescribes printing user-facing data and calling `AskUserQuestion` to apply, replay, or dismiss something. The Healing Agent apply-fix flow is the canonical example.
+Recognize an interactive resolution when the matched playbook (or a procedure doc it links to) prescribes printing user-facing data and calling `AskUserQuestion` to apply, replay, or dismiss something. The playbook and its linked procedure supply every specific — the values to show, the warning text, the apply procedure; this section defines only the generic action shape.
 
 Format:
 
@@ -127,22 +127,15 @@ Format:
 
 The matched playbook's resolution is interactive. Orchestrator: execute the steps below in order; do not skip.
 
-### Action 1 — {short label, e.g. "Apply Healing Agent recovered selector"}
-- Source: {playbook path + linked procedure section, e.g. `selector-failure-healing-fix.md` → `interpretations/healing-agent-data.md` § "Applying Fixes — MUST Ask the User"}
+### Action 1 — {short label naming the fix, taken from the playbook}
+- Source: {matched playbook path + the linked procedure section it points to}
 - Print as plain text (NOT inside AskUserQuestion options or previews):
   ```
-  Failed selector:
-  {failed_selector_xml from evidence}
-
-  Recovered Partial selector:
-  {recovered_partial_selector_xml from evidence — or "(not available)" if empty}
-
-  Recovered Fuzzy selector:
-  {recovered_fuzzy_partial_selector_xml from evidence — or "(not available)" if empty}
+  {the concrete user-facing values the playbook's interactive resolution says to show — each labelled and taken verbatim from evidence; use "(not available)" for any value the evidence lacks}
   ```
-- Warning to include verbatim: {empty string OR "Healing Agent was running in recommendation-only mode (OrchestratorEnableHeal=false) — the recovered selector was inferred from the UI tree after the failure but was not validated at runtime. There is no guarantee it will work." OR analogous warning for RecoverySuccessful=false}
+- Warning to include verbatim: {empty string, OR the verbatim warning the playbook's procedure specifies for a recommendation-only / unproven / not-validated-at-runtime recovery mode}
 - AskUserQuestion: {exact question + options the orchestrator should ask, including the "I'll provide the project path" follow-up question if the project path is not already known from prior context}
-- On user accept: {procedure to follow — e.g., "follow `interpretations/healing-agent-data.md` § Applying `update-target` Fixes: check for `uia-improve-selector` skill at `<PROJECT_DIR>/.local/docs/packages/UiPath.UIAutomation.Activities/skills/uia-improve-selector/USAGE.md`; if present, use it; otherwise edit the XAML activity matched by `ActivityRefId` directly, applying XML encoding per the playbook's XAML Selector Encoding rules; then validate with `uip rpa validate --file-path "<WORKFLOW_FILE>" --output json`."}
+- On user accept: {the fix procedure the playbook's linked procedure documents. If it references a sub-skill, follow that skill's USAGE.md; otherwise apply the documented direct edit and run the documented validation command.}
 - On user decline: stop; do not modify files.
 
 ### Action 2 — ...

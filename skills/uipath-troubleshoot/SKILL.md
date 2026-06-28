@@ -149,14 +149,14 @@ Present the presenter's output verbatim to the user. After presenting:
 1. Print the "Print as plain text" block exactly as written, separate from the question (raw XML/selectors render poorly inside `AskUserQuestion` options/previews).
 2. Print the warning string verbatim if non-empty.
 3. Call `AskUserQuestion` with the action's question and options. Ask the project path (or other missing input the action declares) in the same call.
-4. If the user accepts, execute the "On user accept" procedure exactly as written — do not improvise. If it references a sub-skill (e.g., `uia-improve-selector`), follow its USAGE.md; otherwise apply the documented direct-edit path and run any validation command listed.
+4. If the user accepts, execute the "On user accept" procedure exactly as written — do not improvise. If it references a sub-skill, follow that skill's USAGE.md; otherwise apply the documented direct-edit path and run any validation command listed.
 5. If the user declines, stop the action; do not modify files. Move to the next.
 6. If the action's `Status` is `blocked` (missing evidence), surface it as a follow-up instead of asking the user to approve an incomplete fix — name the missing evidence field and the agent that should have populated it.
 
 Do NOT skip the Post-presentation actions block when:
 - The matched playbook was downgraded from `high` to `medium` by depth-check (the resolution procedure is preserved across confidence downgrades — see `agents/depth-verifier.md` on textual gaps).
 - The depth-verifier flagged a cause-name mismatch (textual gap). A reclassified cause does NOT invalidate the playbook's interactive resolution; both can be reported together.
-- The recovered/recommended data was produced in a recommendation-only or unproven mode (`InferredRecoveryInfo`, `RecoverySuccessful: false`). The action carries a warning string for exactly this case — present it and let the user decide.
+- The recovered/recommended data was produced in a recommendation-only or unproven mode (per the playbook's criteria). The action carries a warning string for exactly this case — present it and let the user decide.
 
 Only after all actions are complete (accepted, declined, or surfaced as blocked) proceed to the generic follow-up:
 
