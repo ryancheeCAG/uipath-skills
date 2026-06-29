@@ -1,7 +1,8 @@
 # Solution Design Document — <APP_NAME>
 
 > **Template:** UiPath Apps (low-code). The on-prem alternative to Coded Apps and the documented fallback when Coded Apps is blocked (Automation Suite / standalone — see [platform-availability-guide.md](../../references/platform-availability-guide.md)).
-> **No CLI or skill in this toolchain builds a low-code App.** This SDD designs the app fully; the **build is a manual deliverable** in the UiPath Apps designer (a future `uipath-apps` builder skill is tracked separately). The app's data sources and bound processes ARE buildable and route to their specialists via Lane A.
+> **Scope: a STANDALONE low-code App** (page/dashboard/data-entry web app). No CLI or skill in this toolchain builds one — this SDD designs it fully; the **build is a manual deliverable** in the UiPath Apps designer (a future `uipath-apps` builder skill is tracked separately). The app's data sources and bound processes ARE buildable and route to their specialists via Lane A.
+> **Redirect — do NOT use this template** when the "app" is a HITL / approval form or an **agent-escalation** surface (Action Center task): route the HITL node to `uipath-human-in-the-loop`, an agent escalation to `uipath-agents`, or a Coded **Action** App to `uipath-coded-apps`. Those paths have real tooling; only the standalone case is a manual build. See §2.
 > **Phase 2 sections:** §2, §3, §4, §5, §6, §9. **Phase 3 sections:** all others.
 
 ---
@@ -105,9 +106,12 @@ EMIT THIS BLOCK ALWAYS (both execution modes). Durable copy of the Phase 1 Recom
 
 ## 2. App Type
 
-- [ ] **Page-based app** — users navigate pages (most common)
-- [ ] **Action app** — surfaced as an Action Center task for a HITL touchpoint
+This template covers **standalone** low-code UiPath Apps only:
+
+- [ ] **Page-based app** — users navigate pages / dashboards (most common)
 - [ ] **Process-launcher app** — primarily starts/monitors Orchestrator processes
+
+> **Redirect (not this template).** A **HITL / approval form** → `uipath-human-in-the-loop`. An **agent-escalation** Action Center surface → `uipath-agents` (it provisions the App solution-binding). A code-first **Action app** → `uipath-coded-apps` (`uip codedapp publish -t Action`). Those have tooling; a standalone low-code App does not.
 
 **Built in:** UiPath Apps low-code designer (drag-and-drop). No source repository, no NuGet, no `.uipath/` project — the build is manual (§10).
 
