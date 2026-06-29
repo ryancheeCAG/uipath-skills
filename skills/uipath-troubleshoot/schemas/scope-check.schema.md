@@ -10,7 +10,7 @@ Read by: Orchestrator
 ```json
 {
   "checked_after": "triage | test",
-  "current_domains": ["orchestrator"],
+  "current_domains": ["<domain>"],
   "missing_domains": [],
   "unnecessary_domains": [],
   "reasoning": "Why domains should be added/removed, or why current scope is correct"

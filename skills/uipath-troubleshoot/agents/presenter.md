@@ -41,11 +41,8 @@ For each domain in `state.json.scope.domain` that is part of the causal chain, c
 For each domain that propagated or surfaced the fault (but is not the root cause):
 
 1. **Check the matched playbook's `## Resolution`** — if present, use it as the fix for that domain
-2. **Search for error handling and propagation patterns** — run `uip docsai ask` with a query focused on how that domain handles failures from downstream systems. Frame the query around the domain's role, not the specific root cause. Examples:
-   - Maestro: "how to handle service task failures in Maestro BPMN processes" or "error boundary events for service tasks in Maestro"
-   - Orchestrator: "how to handle child job failures in Orchestrator" or "retry policies for faulted jobs"
-   - Integration Service: "how to handle connection failures in Integration Service" or "fallback configuration for connectors"
-3. **If docsai returns a concrete pattern** (e.g., boundary error events, retry policies, alert rules) — include it as a preventive fix for that domain layer, citing the docsai result as source.
+2. **Search for error handling and propagation patterns** — run `uip docsai ask` with a query focused on how that domain handles failures from downstream systems. Frame the query around the domain's failure-handling role, not the specific root cause (e.g., "how to handle downstream/child failures in `<domain>`", "retry or fallback options for `<domain>`"). The domain's own `presentation.md` and investigation guide name the concrete failure-handling constructs to ask about.
+3. **If docsai returns a concrete pattern** (e.g., error-boundary constructs, retry policies, alert rules) — include it as a preventive fix for that domain layer, citing the docsai result as source.
 4. **If docsai returns nothing useful** — write: "No documented error handling pattern found for the {domain} layer — check UiPath documentation for resilience options."
 
 **Do NOT write "No configuration change needed" for a propagation domain.** Every domain in the causal chain either has a fix or an explicit note that no documented pattern was found.

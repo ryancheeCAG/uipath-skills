@@ -30,7 +30,7 @@ Updated by: Hypothesis Tester (status, evidence, is_root_cause, open_gaps), Orch
       "test_plan": [
         {
           "n": 1,
-          "action": "uip <subcommand> --output json | tee raw/H1-<file>.json",
+          "action": "uip <subcommand> --output json > raw/H1-<file>.json",
           "purpose": "fetches a to_confirm or to_eliminate item",
           "feeds": "evidence/H1-<source>.json",
           "revise_if": "observed-field condition (empty if unconditional)",

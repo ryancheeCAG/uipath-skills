@@ -48,7 +48,7 @@ If a testable prerequisite is unmet and no plan step can satisfy it, the final s
 Reasoning step. The lookup order is signals first, raw files second:
 
 1. **Query the signal inventory** — read `evidence/triage-initial.json.signals` (the structured fact list triage produced). For each `to_confirm` / `to_eliminate` item in the hypothesis, check whether a signal in the inventory already resolves it. If yes:
-   - Add a plan step with `status: skipped`, the matching signal's `name` recorded in `purpose` (e.g., `"resolved by signal asset_exists=true"`).
+   - Add a plan step with `status: skipped`, the matching signal's `name` recorded in `purpose` (e.g., `"resolved by signal resource_exists=true"`).
    - Append the signal name to the hypothesis's `signals_supporting` (if it positively supports) or `signals_contradicting` (if it disproves).
    - Do NOT re-fetch the underlying raw data — signals are the canonical structured fact set.
 2. **Check raw / evidence files for non-signaled data.** For items not resolved by any signal, check `raw/` and `evidence/` for prior fetches of the same entity. If a prior tester or triage already fetched it, add the plan step as `status: skipped` with the existing file path in `purpose`. Do NOT re-run the same command.

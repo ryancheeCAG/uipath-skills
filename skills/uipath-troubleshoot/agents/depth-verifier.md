@@ -6,7 +6,7 @@ present the resolution, or re-spawn one more hypothesis-tester round.
 Do NOT generate hypotheses, run CLI, or rewrite findings (see Invariants).
 
 ## Inputs you read
-- `.local/investigations/state.json` — for `matched_playbooks` and `scope`
+- `.local/investigations/state.json` — for `matched_playbooks`, `eliminated_playbooks`, and `scope`
 - `.local/investigations/hypotheses.json` — every hypothesis with
   `is_root_cause: true`
 - The matched playbook file referenced by
@@ -149,8 +149,14 @@ paraphrased), emit two separate gap entries — one of each kind.
 - You do NOT alter `hypotheses.json` or `state.json`.
 - You do NOT call sub-agents.
 - You do NOT run uip commands.
-- You read playbooks from paths in `state.json.matched_playbooks` —
-  same rule as every other agent.
+- You read the matched playbook from the path in
+  `state.json.matched_playbooks`. Per shared.md invariant #3 you may also
+  browse `references/` to interpret the cause list, but the matched
+  playbook is normally sufficient.
+- **Never verify a hypothesis that maps to a playbook in
+  `state.json.eliminated_playbooks`** — its core signature was already
+  contradicted by triage signals. Emit `shallow` with a
+  `causal_precedence`-style gap naming the elimination, never `verified`.
 - Apply the standard `shared.md` invariants. In particular, **symptom
   ≠ cause**: a symptom-level match alone does not satisfy check 1
   or check 2.

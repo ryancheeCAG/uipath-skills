@@ -43,6 +43,8 @@ The plan is an array of objects with the keys in `schemas/state.schema.md` § Pl
 5. **Repeat** until all steps are `done`.
 6. **Write outputs** (see your agent's Outputs) and return to the orchestrator.
 
+**Realizing an `ask user` step.** When the next plan step is an `ask user` / `ask user (select)` step, do NOT block in-agent. Write `needs_input.json` (§ Requesting User Input) and STOP — that file is the signal the orchestrator detects; it asks the user via `AskUserQuestion` and re-spawns (or `SendMessage`-continues) you with the answer. On re-spawn, mark the `ask user` step `done` with the answer recorded and continue the loop.
+
 ## Startup
 
 1. Create `.local/investigations/`, `.local/investigations/evidence/`, `.local/investigations/raw/` if they don't exist

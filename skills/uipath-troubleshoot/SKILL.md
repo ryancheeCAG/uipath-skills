@@ -25,7 +25,7 @@ All state lives in `.local/investigations/` (relative to working directory). Sch
 
 | File | Purpose | Writers |
 |------|---------|---------|
-| `state.json` | Scope, phase, matched playbooks | triage, orchestrator |
+| `state.json` | Scope, phase, matched playbooks | triage, orchestrator, tester (`requirements.source_code_path` only) |
 | `hypotheses.json` | All hypotheses + status | generator, tester, orchestrator |
 | `evidence/*.json` | Interpreted summaries | triage, tester |
 | `raw/*.json` | Full raw CLI/API responses | triage, tester |
@@ -57,7 +57,7 @@ Update `state.json.phase` at each transition:
 1. **Spawn triage** (`agents/triage.md`). Pass the user's problem **as-is** — do NOT pre-classify or constrain scope.
 2. **Sanity gate.** Verify triage evidence relates to the reported problem (process/entity/time window). If it's about a different entity: discard, inform the user, re-spawn or ask for clarification.
 3. **Scope check.** Spawn scope-checker (`agents/scope-checker.md`); read its `scope-check.json`. Missing domains (`missing_domains`) → `AskUserQuestion` whether to expand; if approved, re-spawn triage with them. Unnecessary domains (`unnecessary_domains`) → remove from `state.json.scope.domain`.
-4. **User input.** If triage returned `needs_user_input: true`, ask via `AskUserQuestion`, then **continue the existing triage agent** via `SendMessage` — do NOT spawn a fresh one (a fresh spawn re-discovers everything from scratch). Re-spawn only if the answer fundamentally changes scope (different product/entity type).
+4. **User input.** If triage wrote `.local/investigations/needs_input.json` (`needs_user_input: true`), ask via `AskUserQuestion`, then **continue the existing triage agent** via `SendMessage` — do NOT spawn a fresh one (a fresh spawn re-discovers everything from scratch). Re-spawn only if the answer fundamentally changes scope (different product/entity type).
 
 **Never skip the hypothesis loop.** Even conclusive-looking triage evidence proceeds through GENERATE → TEST → EVALUATE. Triage classifies and gathers data — it does not determine root cause; a non-obvious cause surfaces only in the test cycle.
 
@@ -77,7 +77,7 @@ Test every hypothesis sequentially (highest confidence first). For each, spawn h
 
 **Classify and act:**
 
-Before classifying as **explains-WHY**, apply the upstream-cause gate. The mechanism (explicit-event check + implicit-presupposition check) is owned by the depth-verifier — see [`agents/depth-verifier.md` § Causal precedence](agents/depth-verifier.md). Orchestrator decision rule: if the gate identifies any upstream condition that has a `pending` or `supported` sibling hypothesis answering it, classify the current hypothesis as **describes-WHAT** regardless of evidence strength.
+Before classifying as **explains-WHY**, apply the upstream-cause gate. The mechanism (explicit-event check + implicit-presupposition check) is owned by the depth-verifier — see [`agents/depth-verifier.md` § Causal precedence](agents/depth-verifier.md). Orchestrator decision rule: if the gate identifies any upstream condition that has a sibling hypothesis (`pending` or `confirmed`) answering it, classify the current hypothesis as **describes-WHAT** regardless of evidence strength.
 
 **Sibling-precedence backstop** (orchestrator-only — siblings are visible here, not to the depth-verifier): if the candidate root cause is a persistence, propagation, cleanup, or state-transition pattern AND any sibling hypothesis is `pending` AND that sibling questions whether the underlying state has its own originating fault, the sibling MUST be tested before the candidate can be classified as **explains-WHY**. Stopping at the first confirmed hypothesis is incorrect when that hypothesis is downstream.
 

@@ -39,7 +39,7 @@ Always the first step. Reasoning step (no tool call). Read the user's message an
 Cross-check the candidate values against `references/summary.md` — if either is not a known system/entity-type, the classification has failed.
 
 **revise_if for this step:**
-- *Either value unidentifiable or ambiguous* → next step is `ask user (select)` with the plausible (system, entity) pairs. Do NOT broad-scan or run exploratory `docsai ask` to guess. Write the partial classification to `state.json`. STOP; the orchestrator re-spawns you with the answer.
+- *Either value unidentifiable or ambiguous* → next step is `ask user (select)` with the plausible (system, entity) pairs. Do NOT broad-scan or run exploratory `docsai ask` to guess. Write the partial classification to `state.json`, then realize the `ask user` step per shared.md § Plan Loop (write `needs_input.json` and STOP); the orchestrator detects it, asks the user, and re-spawns you with the answer.
 - *Both values identified confidently* → next step is `look up investigation guide for <system>`.
 
 ### B. Look up investigation guide
@@ -105,7 +105,7 @@ For each candidate playbook in scope, read its `## Context` and `## Investigatio
 
 - **Positively supported** — at least one signal from the inventory satisfies a signature signal of the playbook. List the playbook in `state.json.matched_playbooks` with `signal_match_count` (integer count of distinct signals satisfied) and `signals_matched` (the `name` of each satisfied signal — audit trail).
 - **Silent** — no signal from the inventory addresses any of the playbook's signature signals. Do NOT list. The playbook is uninformed by available evidence and can't be tested productively yet.
-- **Contradicted** — a signal from the inventory directly disproves at least one CORE signal of the playbook's signature (a signal named in `## Context` or `## Investigation` as a required precondition for the cause to apply). Do NOT list in `matched_playbooks`. Record in `state.json.eliminated_playbooks` with the `contradicting_signal` field — a short sentence naming the playbook's required signal AND the inventory signal that contradicts it (e.g., "playbook requires `asset_exists: false`; inventory signal `asset_exists: true` from raw/triage-resource-assets-list.json").
+- **Contradicted** — a signal from the inventory directly disproves at least one CORE signal of the playbook's signature (a signal named in `## Context` or `## Investigation` as a required precondition for the cause to apply). Do NOT list in `matched_playbooks`. Record in `state.json.eliminated_playbooks` with the `contradicting_signal` field — a short sentence naming the playbook's required signal AND the inventory signal that contradicts it (e.g., "playbook requires `resource_exists: false`; inventory signal `resource_exists: true` from raw/triage-resource-list.json").
 
 Surface-level signals shared across sibling playbooks (e.g., a generic "<activity> failed" category that several siblings all carry) are NOT core signals — they're descriptors, not preconditions. Use the playbook's specific named signals from `## Context` / `## Investigation`.
 
@@ -128,7 +128,7 @@ The step's `action` is `evaluate Pass 2 triggers against matched_playbooks and g
 
 **Pass 2 procedure when a trigger fires:**
 
-1. **Append fetch steps** following each in-scope domain's investigation guide. Each appended step carries `purpose` and `feeds` like any other plan step. Do not invent fetches outside what the guides document. Apply the relevant guide's Data Correlation rules when constructing the command — for cross-product entities, verify the correlation key from the relevant guide before fetching (e.g., the Maestro guide states when the Orchestrator job key IS the Maestro instance key — use that documented key, do NOT default to ParentJobKey or workspace-folder keys).
+1. **Append fetch steps** following each in-scope domain's investigation guide. Each appended step carries `purpose` and `feeds` like any other plan step. Do not invent fetches outside what the guides document. Apply the relevant guide's Data Correlation rules when constructing the command — for cross-product entities, verify the correlation key from the relevant guide before fetching. Use the exact key the guide documents for that entity linkage; do NOT default to a plausible-looking key field.
 2. **Execute the appended steps.** After each, evaluate its `revise_if`. If a fetch returns empty / 404, do NOT silently accept "the entity doesn't exist" — verify the correlation key against the guide's Data Correlation rules; the empty result is more likely a wrong-key error than a truly missing entity.
 3. **Re-run step D** on the now-richer evidence — same MANDATORY scope check.
 4. **Re-run step E** on the updated scope.

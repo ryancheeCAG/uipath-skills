@@ -70,19 +70,19 @@ Each evidence file:
       "name": "exception_class",
       "value": "System.NullReferenceException",
       "category": "exception",
-      "source": "raw/triage-job-logs.json"
+      "source": "raw/triage-logs.json"
     },
     {
       "name": "package_version",
-      "value": "UiPath.System.Activities 22.10.5",
+      "value": "<Package.Namespace> <version>",
       "category": "package_version",
-      "source": "raw/triage-job-traces.json"
+      "source": "raw/triage-traces.json"
     },
     {
-      "name": "asset_exists",
+      "name": "resource_exists",
       "value": true,
       "category": "entity_state",
-      "source": "raw/triage-resource-assets-list.json"
+      "source": "raw/triage-resource-list.json"
     }
   ]
 }
@@ -90,8 +90,8 @@ Each evidence file:
 
 ### Fields
 
-- `name` — short identifier for the signal (e.g., `exception_class`, `error_code`, `asset_exists`, `package_version`). Snake_case, descriptive.
-- `value` — observed value. String, number, or boolean. For boolean signals like `asset_exists`, `true` means "asset is present"; `false` means "asset is absent".
+- `name` — short identifier for the signal (e.g., `exception_class`, `error_code`, `resource_exists`, `package_version`). Snake_case, descriptive.
+- `value` — observed value. String, number, or boolean. For boolean signals like `resource_exists`, `true` means "the resource is present"; `false` means "the resource is absent".
 - `category` — one of: `exception | error_code | http_status | activity_label | entity_state | package_version | runtime_type | error_fragment | cross_product_ref | folder_context`. Use the closest match; do not invent new categories without need.
 - `source` — relative path to the raw file the signal was extracted from. The signal MUST be traceable back to actual observed data.
 

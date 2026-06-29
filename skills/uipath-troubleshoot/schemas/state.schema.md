@@ -4,7 +4,7 @@ File: `.local/investigations/state.json`
 
 Created by: Triage sub-agent
 Read by: All sub-agents, orchestrator
-Updated by: Orchestrator (phase transitions)
+Updated by: Orchestrator (phase transitions); hypothesis-tester (`requirements.source_code_path` only)
 
 ## Structure
 
@@ -15,48 +15,47 @@ Updated by: Orchestrator (phase transitions)
   "phase": "triage | hypotheses | test | evaluate | deepen | depth_check | resolution | complete",
   "scope": {
     "level": "platform | product | feature | process | activity",
-    "domain": ["orchestrator", "maestro", "integration-service", "ui-automation"],
+    "domain": ["<reporting-domain>", "<originating-domain>"],
     "confidence": "high | medium | low"
   },
   "entry_point": {
-    "type": "job_id | error_message | queue_name | natural_language",
+    "type": "entity_id | error_message | entity_name | natural_language",
     "value": "the raw identifier or description the user provided"
   },
   "triage_summary": "One-paragraph classification of the problem",
   "user_context": "Original problem description from the user",
   "investigation_guides": [
     "references/investigation_guide.md",
-    "references/products/orchestrator/investigation_guide.md",
-    "references/products/maestro/investigation_guide.md"
+    "references/products/<product>/investigation_guide.md"
   ],
   "matched_playbooks": [
     {
       "confidence": "low",
-      "path": "references/products/maestro/playbooks/bpmn-job-stuck.md",
+      "path": "references/products/<product>/playbooks/<playbook>.md",
       "signal_match_count": 3,
-      "signals_matched": ["job state is Running", "runtime type is ProcessOrchestration", "no incident error code"]
+      "signals_matched": ["<entity> state is <state>", "runtime type is <type>", "no incident error code"]
     },
     {
       "confidence": "low",
-      "path": "references/products/orchestrator/playbooks/job-stuck.md",
+      "path": "references/products/<product>/playbooks/<other-playbook>.md",
       "signal_match_count": 2,
-      "signals_matched": ["job state is Running", "no error logs present"]
+      "signals_matched": ["<entity> state is <state>", "no error logs present"]
     }
   ],
   "eliminated_playbooks": [
     {
-      "path": "references/activity-packages/system-activities/playbooks/get-asset-not-found.md",
-      "contradicting_signal": "playbook signature requires asset absent / HTTP 404 / error code 1002; evidence shows asset exists in the resolved folder"
+      "path": "references/activity-packages/<package>/playbooks/<playbook>.md",
+      "contradicting_signal": "playbook signature requires <resource> absent / HTTP 404 / error code <code>; evidence shows <resource> exists in the resolved scope"
     }
   ],
   "requirements": {
-    "folder_id": 2157426,
+    "scope_id": 2157426,
     "source_code_path": "/path/to/project"
   },
   "plan": [
     {
       "n": 1,
-      "action": "uip <subcommand> --output json | tee raw/<file>.json",
+      "action": "uip <subcommand> --output json > raw/<file>.json",
       "purpose": "what signal the step yields",
       "feeds": "which downstream step / playbook / decision the result routes to",
       "revise_if": "observed-field condition that mutates the remaining plan (empty if unconditional)",
@@ -96,7 +95,7 @@ A "core signal" is one named in the playbook's `## Context` or `## Investigation
 Playbooks whose signature was contradicted by triage evidence. Each entry records:
 
 - `path` — playbook path.
-- `contradicting_signal` — short sentence naming the playbook's required signal AND the contradicting evidence (e.g., "playbook requires asset absent; evidence shows asset exists in folder").
+- `contradicting_signal` — short sentence naming the playbook's required signal AND the contradicting evidence (e.g., "playbook requires the resource absent; evidence shows the resource exists in the resolved scope").
 
 The hypothesis generator MUST exclude these from consideration. The depth-verifier MUST NOT confirm a hypothesis that maps to an eliminated playbook.
 
@@ -133,13 +132,14 @@ The plan structure is reusable: any sub-agent that gathers data (triage, hypothe
 
 Generic key-value store for data gathered during the investigation. Any agent can read it; triage and orchestrator write to it.
 
-- Keys are freeform — use descriptive names (e.g., `folder_id`, `source_code_path`, `queue_name`)
+- Keys are freeform — use descriptive names (e.g., `scope_id`, `source_code_path`, `entity_name`)
 - Values are whatever was collected (string, number, etc.)
+- The hypothesis-tester writes `source_code_path` here when it resolves the project path (see `agents/hypothesis-tester.md` § Source-code availability check); triage and the orchestrator write the rest.
 
 ## Rules
 
 - Triage sub-agent creates this file and resolves investigation guides, matched playbooks, and requirements
 - Other agents read paths from `state.json` — they do NOT browse `references/` themselves (exception: triage, scope-checker, depth-verifier, and presenter browse references — see `shared.md` invariant 3)
 - Orchestrator updates `phase` as the investigation progresses
-- Any agent can read `requirements`; triage and orchestrator write to it
+- Any agent can read `requirements`; triage and orchestrator write to it, and the hypothesis-tester writes `requirements.source_code_path`
 - The `scope` may be updated by the orchestrator when scope adjustment occurs
