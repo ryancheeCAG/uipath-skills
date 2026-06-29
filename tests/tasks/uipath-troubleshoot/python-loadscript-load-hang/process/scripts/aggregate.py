@@ -11,9 +11,6 @@ def aggregate(rows=None):
 
 
 # --- module-level warm-up executed at import time ---
-# Load Python Script runs the module body, so this builds a 5M-entry lookup AND
-# prints every row to stdout at load. The stdout flood saturates the engine pipe
-# and the scope never returns within the 30s Timeout.
 _LOOKUP = {}
 for _i in range(5_000_000):
     _LOOKUP[_i] = _i * _i

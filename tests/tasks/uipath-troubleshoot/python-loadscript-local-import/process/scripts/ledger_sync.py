@@ -3,7 +3,7 @@
 Depends on the sibling helper module ledger_utils.py in this same scripts/ folder.
 """
 
-import ledger_utils   # local sibling module; resolves only if its folder is on sys.path
+import ledger_utils   # local sibling module in this scripts/ folder
 
 
 def sync(entries=None):

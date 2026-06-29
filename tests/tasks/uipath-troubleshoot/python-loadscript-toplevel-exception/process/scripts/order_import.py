@@ -16,7 +16,5 @@ def import_orders(csv_path="orders.csv"):
 
 
 # --- module-level configuration executed at import time ---
-# Load Python Script runs the module body, so this line runs the moment the
-# module loads. It raises ZeroDivisionError before any function is invoked.
 DEFAULT_DISCOUNT = 100 / 0
 print("default discount:", DEFAULT_DISCOUNT)

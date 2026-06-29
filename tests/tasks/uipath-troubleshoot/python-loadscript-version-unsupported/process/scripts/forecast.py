@@ -1,7 +1,7 @@
 """Forecasting helpers for the PyForecast process.
 
 forecast() is defined at module level so Load Python Script can bind it and
-Invoke Python Method can call it. No top-level executable code.
+Invoke Python Method can call it.
 """
 
 
