@@ -1,0 +1,73 @@
+{
+  "_doc": "Minimal Integration Service decision tree (pilot). Deterministic spine: resolve folder/job -> gather job+logs -> branch on DAP error code -> leaf. llm nodes mark where evidence can't decide.",
+  "entry": "resolve_folder",
+  "nodes": {
+    "resolve_folder": {
+      "kind": "gather",
+      "cmd": "or folders list",
+      "bind": { "folder_key": { "path": "$.Data[?Name~={folder_name}].Key" } },
+      "on_missing": "llm_identity",
+      "next": "resolve_job"
+    },
+    "resolve_job": {
+      "kind": "gather",
+      "cmd": "or jobs list --folder-key {folder_key} --state {state}",
+      "bind": { "job_key": { "path": "$.Data[0].Key" } },
+      "on_missing": "llm_identity",
+      "next": "get_job"
+    },
+    "get_job": {
+      "kind": "gather",
+      "cmd": "or jobs get {job_key}",
+      "bind": {},
+      "next": "get_logs"
+    },
+    "get_logs": {
+      "kind": "gather",
+      "cmd": "or jobs logs {job_key}",
+      "bind": { "error_code": { "regex": "DAP-(?:GE|RT)-[0-9]+" } },
+      "on_missing": "llm_signature",
+      "next": "branch_code"
+    },
+    "branch_code": {
+      "kind": "branch",
+      "on": "error_code",
+      "cases": [
+        { "when": { "op": "eq", "value": "DAP-GE-3005" }, "goto": "leaf_disabled" },
+        { "when": { "op": "eq", "value": "DAP-GE-3000" }, "goto": "llm_disambiguate_3000" },
+        { "when": { "op": "matches", "value": "^DAP-RT-(1002|1003|1052)$" }, "goto": "leaf_rt_binding" }
+      ],
+      "default": "llm_signature"
+    },
+    "leaf_disabled": {
+      "kind": "leaf",
+      "cause": "Integration Service connection is disabled (GeneralException DAP-GE-3005).",
+      "fix": "Re-enable the connection in the Integration Service UI (or `uip is connections edit <id>`). If it auto-disabled after repeated auth failures, re-authenticate the connection.",
+      "confidence": "high",
+      "playbook": "references/products/integration-service/playbooks/connector-general-exception.md"
+    },
+    "leaf_rt_binding": {
+      "kind": "leaf",
+      "cause": "Connector activity binding/input/trigger failure (RuntimeException DAP-RT-1002/1003/1052).",
+      "fix": "Per the DAP-RT code: supply the empty Connection ID (1002), populate the required field (1003), or fix the trigger match (1052).",
+      "confidence": "high",
+      "playbook": "references/products/integration-service/playbooks/connector-runtime-exception.md"
+    },
+    "llm_disambiguate_3000": {
+      "kind": "llm",
+      "mode": "continue",
+      "reason": "DAP-GE-3000 has multiple sub-causes (invalid / no-access / Connections.View / Bad Gateway). LLM reads the '-'-delimited message detail and the connection resource file to pick the child branch.",
+      "playbook": "references/products/integration-service/playbooks/connector-general-exception.md"
+    },
+    "llm_signature": {
+      "kind": "llm",
+      "mode": "jump",
+      "reason": "No deterministic DAP code in the gathered evidence (opaque/wrapper exception, or a signature not in this tree). Hand to the LLM hypothesis loop seeded with the trace."
+    },
+    "llm_identity": {
+      "kind": "llm",
+      "mode": "jump",
+      "reason": "Could not resolve the folder/job deterministically (ambiguous or empty). LLM resolves identity, possibly asking the user, then re-enters the tree."
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "_doc": "Cross-system maestro tree (pilot). Proves deterministic parent->child->domain traversal: a stuck ProcessOrchestration job (symptom) -> Maestro instance incident 170002 (symptom, raised BY a child fault) -> child UI Automation NodeNotFoundException -> dispatch to UIA leaf. Symptom nodes are FORBIDDEN as terminal (mandatory goto into the child). Branches are on structured tokens (RuntimeType/State enums, errorCode, exception FQN) - the deterministic-extractable kind; the exact selector correction is the LLM/source last mile. job_key IS the Maestro instance key (documented cross-product correlation).",
+  "entry": "get_parent_job",
+  "nodes": {
+    "get_parent_job": {
+      "kind": "gather",
+      "cmd": "or jobs get {job_key} --output json",
+      "bind": {
+        "runtime": { "regex": "ProcessOrchestration" },
+        "state": { "regex": "\"State\":\\s*\"[A-Za-z]+\"" }
+      },
+      "on_missing": "llm_identity",
+      "next": "branch_runtime"
+    },
+    "branch_runtime": {
+      "kind": "branch",
+      "on": "runtime",
+      "cases": [ { "when": { "op": "matches", "value": "ProcessOrchestration" }, "goto": "branch_stuck" } ],
+      "default": "llm_signature"
+    },
+    "branch_stuck": {
+      "kind": "branch",
+      "_note": "stuck ProcessOrchestration parent = SYMPTOM, not terminal -> traverse to the Maestro instance (job_key == instance_key)",
+      "on": "state",
+      "cases": [ { "when": { "op": "matches", "value": "Running" }, "goto": "maestro_incidents" } ],
+      "default": "llm_signature"
+    },
+    "maestro_incidents": {
+      "kind": "gather",
+      "cmd": "maestro bpmn instance incidents {job_key}",
+      "bind": {
+        "incident_code": { "regex": "170002" },
+        "child_exception": { "regex": "UiPath\\.[A-Za-z.]+Exceptions\\.[A-Za-z]+Exception" }
+      },
+      "on_missing": "llm_signature",
+      "next": "branch_incident"
+    },
+    "branch_incident": {
+      "kind": "branch",
+      "_note": "incident 170002 = 'Failure in the Orchestrator Job', raised BY the child fault. SYMPTOM, forbidden terminal -> dispatch on the child exception.",
+      "on": "incident_code",
+      "cases": [ { "when": { "op": "eq", "value": "170002" }, "goto": "dispatch_child" } ],
+      "default": "llm_signature"
+    },
+    "dispatch_child": {
+      "kind": "branch",
+      "_note": "cross-domain dispatch on the child exception FQN package - same mechanism a top-level prompt uses to route to a domain subtree",
+      "on": "child_exception",
+      "cases": [
+        { "when": { "op": "matches", "value": "UIAutomationNext" }, "goto": "leaf_uia_selector" },
+        { "when": { "op": "matches", "value": "IntegrationService" }, "goto": "leaf_is_handoff" },
+        { "when": { "op": "matches", "value": "Excel" }, "goto": "leaf_excel_handoff" }
+      ],
+      "default": "llm_signature"
+    },
+    "leaf_uia_selector": {
+      "kind": "leaf",
+      "cause": "Root cause is in the CHILD automation, not the stuck parent: a UI Automation strict-selector mismatch (NodeNotFoundException) faulted the child RPA job; with no BPMN boundary error event the Maestro instance hung, leaving the parent ProcessOrchestration job Running.",
+      "fix": "Correct the failing activity's selector, and add an error boundary event on the BPMN service task so a child fault can't hang the instance.",
+      "last_mile_llm": "The EXACT selector correction (which attribute/value, e.g. aaname 'set' -> 'Collaboration') requires reading the child .xaml against the live element — an LLM/source step, NOT a deterministic branch.",
+      "confidence": "high",
+      "playbook": "references/products/maestro/playbooks/service-task-child-job-faulted.md + ui-automation selector playbook"
+    },
+    "leaf_is_handoff": { "kind": "leaf", "cause": "Child fault is an Integration Service exception.", "fix": "Dispatch to the IS subtree on the child exception.", "confidence": "medium", "playbook": "references/products/integration-service/" },
+    "leaf_excel_handoff": { "kind": "leaf", "cause": "Child fault is an Excel exception.", "fix": "Dispatch to the Excel subtree on the child exception.", "confidence": "medium", "playbook": "references/activity-packages/excel-activities/" },
+    "llm_signature": { "kind": "llm", "mode": "jump", "reason": "Evidence did not match a deterministic branch — hand to the LLM hypothesis loop seeded with the trace." },
+    "llm_identity": { "kind": "llm", "mode": "jump", "reason": "Could not resolve the entity deterministically — LLM resolves identity (possibly asking the user), then re-enters the tree." }
+  }
+}
