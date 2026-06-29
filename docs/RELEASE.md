@@ -64,19 +64,21 @@ Both tracks are **manually triggered** — there is no auto-publish on push to `
 
 ### Automated sprint cut (`sprint-release-cut.yml`)
 
-Steps 1–2 are automated per sprint by `sprint-release-cut.yml`. It runs **Sunday 06:00 UTC**, gated to the **14-day cadence** anchored at `2026-06-14` — the same cadence as `UiPath/cli`, but **6 hours earlier** so the skills package lands before the CLI release. It is **self-driven**: the target line is the current skills minor **+ 1**; it never reads the CLI version (skills lead, never follow), so no cross-repo secret is required. On a release Sunday it:
+`sprint-release-cut.yml` runs **Sunday 06:00 UTC**, gated to the **14-day cadence** anchored at `2026-06-14`. The **release line is the version `main` is currently on** (no `+1` — `main` on `1.197.0` cuts `release/v1.197`). On a release Sunday it:
 
-1. cuts `release/v<minor>` from `main` at `M.N.0` (`sync-version.mjs` resets plugin/marketplace/Codex to `M.N.0` too);
-2. publishes `@uipath/skills@M.N.0` to npm `latest` — creates the GitHub Release `v<minor>.0` as the durable record, then **dispatches `publish.yml` on the tag** (`gh workflow run publish.yml --ref v<minor>.0 -f target=npmjs`). A release created with the default `GITHUB_TOKEN` does not trigger other workflows, so `release: published` would never start `publish.yml`; the explicit `workflow_dispatch` (which `GITHUB_TOKEN` *can* trigger) is what publishes. Guarded on `npm view` so a re-run doesn't re-dispatch an already-published version;
-3. opens the matching version-bump PR against `main`.
+1. **cuts `release/v<current>` from `main`** — a frozen snapshot of `main` at its current `M.N.0` (e.g. `release/v1.197` at `1.197.0`). No extra commit; the branch is just `main`'s pointer;
+2. **bumps `main` forward to the next minor** (`1.197.0 → 1.198.0`) via `npm version` + `sync-version.mjs`, **pushed directly to `main`**;
+3. **publishes an alpha of the new `main` line to GitHub Packages only** — dispatches `publish.yml target=github-alpha`, which stamps `<base>-alpha.<YYYYMMDD>.<run>` from `main`'s now-`1.198.0` `package.json` and publishes to `npm.pkg.github.com` under the `alpha` dist-tag.
 
-Off-cadence or ad-hoc cut: dispatch manually with `minor_override` (e.g. `1.198`) to skip the gate and the auto-increment, or `dry_run` to print the plan without pushing.
+**It never publishes to npmjs.** The stable npmjs release is always **manual** (see *Cutting a stable release* above): create a GitHub Release on the `release/v<minor>` branch, or dispatch `publish.yml target=npmjs --ref release/v<minor>`.
 
-> **Drift realignment.** The skills and CLI lines stay paired only because both cut on the same 14-day anchor; nothing reads the other side. If either repo skips a cut or cuts off-cadence, the minors drift permanently. The cut emits a **non-blocking warning** when its target isn't exactly one minor ahead of the CLI's latest npm release (`npm view @uipath/cli`) — the signal that the lines have drifted. **`minor_override` is the realignment lever:** dispatch the cut with `minor_override=<correct M.N>` to skip the gate and the auto-increment and cut exactly that line back into alignment.
+Off-cadence or ad-hoc cut: dispatch manually with `release_override` (e.g. `1.197`) to set the release line and skip the cadence gate, or `dry_run` to print the plan without pushing.
 
-> **Operational dependency — merge the bump PR before the next cut.** The target line is `current + 1` read from `main`'s `package.json`. If the bump PR from step 3 is not merged before the next release Sunday, `main` is still on the old line, so the cut re-targets the line it already created: it finds `release/v<minor>` already at `M.N.0` and **resumes idempotently** (skips the publish since npm already has the version, leaves the existing PR open) — no new line is cut. Safe, but a forgotten bump PR silently **stalls the cadence**. Merge sprint-cut bump PRs promptly. (If the branch exists at a *different* version, the cut stops loudly with `already exists at version <X> (expected <Y>)` for manual resolution.)
+> **Required repo setup (both are hard prerequisites):**
+> - Branch protection must allow the Actions identity (`github-actions[bot]` via `GITHUB_TOKEN`) to **push `main` directly** and to push `release/v*` — otherwise the bump push and the cut 403. (Configure a branch-protection/ruleset bypass for the Actions app, or switch the bump to a PAT/GitHub App token.)
+> - `actions: write` permission on this workflow (already set) so it can dispatch `publish.yml`.
 
-> **Repo setup:** branch protection must allow the Actions identity to push `release/v*` branches.
+> **Recovery if a run fails *after* the main bump.** Because the bump pushes straight to `main`, once `main` has advanced a re-run of the whole cut would target the *new* line. So if a run bumps `main` but the alpha dispatch fails, **don't re-run the cut** — re-dispatch just the publisher: `gh workflow run publish.yml --ref main -f target=github-alpha`. (The 14-day cadence gate prevents an accidental scheduled re-run in the meantime.)
 
 ## Required setup
 
