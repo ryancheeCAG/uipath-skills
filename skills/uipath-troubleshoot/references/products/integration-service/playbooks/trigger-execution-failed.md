@@ -41,7 +41,7 @@ What to look for:
 
 ## Resolution
 
-- **`DAP-RT-1051` — connection inactive:** re-authenticate via `uip is connections edit <connection-id>` (see [token-refresh-failed.md](./token-refresh-failed.md) for auth-expiry).
+- **`DAP-RT-1051` — connection inactive:** re-authenticate via `uip is connections edit <connection-id>` (see [connection-auth-expired.md](./connection-auth-expired.md) for auth-expiry).
 - **`DAP-RT-1051` — endpoint issue:** verify the trigger object/operation is still supported by the connector; reconfigure if the connector changed.
 - **`DAP-RT-1050`:** verify the subscription in the external service emits the expected event shape; recreate the trigger subscription if the payload contract drifted.
 - **`DAP-RT-1053` (customer-resolvable):** fix the trigger's filter/parameter configuration — correct invalid filter expressions or required parameters, then re-save the trigger.

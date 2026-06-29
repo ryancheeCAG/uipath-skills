@@ -17,7 +17,7 @@ The DAP code alone does not name the root cause — **the `ProviderErrorCode` (t
 
 | Provider status | Meaning | Direction |
 |---|---|---|
-| 401 | Token rejected by the provider | Auth — see [token-refresh-failed.md](./token-refresh-failed.md) if IS-side refresh failed; otherwise re-authenticate |
+| 401 | Token rejected by the provider | Auth — the connection's OAuth token is expired/revoked; re-authenticate (see [connection-auth-expired.md](./connection-auth-expired.md)) |
 | 403 | Authenticated but not permitted | Connection scope/permissions too narrow for the operation |
 | 404 | Object/record not found | Input references a resource that does not exist in the external service |
 | 429 | Rate limited | Quota exceeded — retries (max 2) already exhausted |
@@ -35,7 +35,7 @@ What to look for:
 2. **Read the connection resource file** — if source code is available, find the connection JSON (see "Connection Resource File" in [overview.md](../overview.md)) to get the connector name, connection ID, and `authenticationType`.
 3. `uip is connections ping <connection-id>` — confirm the connection itself is active (rules out auth-vs-operation).
 4. Branch on `ProviderErrorCode`:
-   - **401:** check whether the token refresh failed (`DAP-GE-3004` would co-occur — see [token-refresh-failed.md](./token-refresh-failed.md)). If ping is healthy but the provider still returns 401, the granted scope is wrong.
+   - **401:** the connection's OAuth token was rejected by the provider — re-authenticate the connection (see [connection-auth-expired.md](./connection-auth-expired.md)). If ping is healthy but the provider still returns 401, the granted scope is wrong. (Note: `DAP-GE-3004` is unrelated — it is a first-party-service token failure, not a connection token; see [token-refresh-failed.md](./token-refresh-failed.md).)
    - **403:** `uip is resources describe <connector-key> <object-name>` — check the operation's required permissions/scopes against what the connection was granted.
    - **404:** verify the record/object ID in the activity input exists in the external service.
    - **429/5xx:** check `RequestId` against the provider's status; if `retry-exception` fired, retries were exhausted.

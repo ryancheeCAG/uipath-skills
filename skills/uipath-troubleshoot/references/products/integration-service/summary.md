@@ -15,7 +15,7 @@ Keyed on the IS-native `DAP-RT`/`DAP-GE` code emitted in execution telemetry (an
 | Codes | Bucket | Confidence | Description | Playbook |
 |-------|:---:|:---:|-------------|----------|
 | `DAP-RT-1101` | 👤 A / 🛠 B2 | High | RequestFailed — route by `ProviderErrorCode`: 4xx auth/input → A; 429/5xx → B2 | [request-failed.md](./playbooks/request-failed.md) |
-| `DAP-GE-3004` | 👤 A | High | FailedToGetAccessToken — OAuth token refresh failed (expired/revoked credentials) | [token-refresh-failed.md](./playbooks/token-refresh-failed.md) |
+| `DAP-GE-3004` | 🛠 B1 | High | FailedToGetAccessToken — IS could not get a **first-party UiPath service** token (Orchestrator, Feature Flag service), NOT a connection credential; retry, escalate if sustained | [token-refresh-failed.md](./playbooks/token-refresh-failed.md) |
 | `DAP-GE-3000` `DAP-GE-3005` `DAP-RT-1002` | 👤 A | High | Connection not resolved — deleted/cross-workspace, disabled, or no connection bound | [connection-not-resolved.md](./playbooks/connection-not-resolved.md) |
 | `DAP-RT-1003` `DAP-RT-1007` | 👤 A | High | Missing required input argument or property | [missing-required-input.md](./playbooks/missing-required-input.md) |
 | `DAP-RT-1103` | 🛠 B2 | High | HttpClientException — network-level failure, target host unreachable (DNS/firewall/TLS) | [http-client-exception.md](./playbooks/http-client-exception.md) |

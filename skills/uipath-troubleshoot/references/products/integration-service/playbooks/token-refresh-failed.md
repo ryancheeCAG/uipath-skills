@@ -4,38 +4,39 @@ confidence: high
 
 # Token Refresh Failed (DAP-GE-3004)
 
-> **Fault bucket: 👤 A — Customer-resolvable.** Expired/revoked credentials on the customer's connection. Lead with: "This is a credential issue on your side — re-authenticate the connection." See [dap-error-codes-reference.md](../dap-error-codes-reference.md#fault-ownership--the-two-bucket-decision).
+> **Fault bucket: 🛠 B1 — IS platform / service-side (not customer-fixable → escalate).** `DAP-GE-3004` is IS failing to obtain an access token it needs to call a **first-party UiPath service** (e.g. Orchestrator, the Feature Flag service) while executing the activity. **This token is NOT the customer's connection credential** — it is issued by the platform for the first-party service, so re-authenticating the connection does nothing. Lead with: "This is a service-side token issue inside the platform, not your connection — retry; if it persists, contact the owner team (Integration Service)." See [dap-error-codes-reference.md](../dap-error-codes-reference.md#fault-ownership--the-two-bucket-decision).
 
 ## Context
 
 What this looks like:
 - Error code `DAP-GE-3004` (FailedToGetAccessToken)
-- IS could not obtain a valid OAuth access token to make the call — fails before the provider request
-- Maps to the `OAuthTokenRefresh-failures` SRE alert
-- May co-occur with `DAP-RT-1101` + `ProviderErrorCode: 401` (provider rejected the stale token)
+- IS could not obtain an access token for a **first-party UiPath service** it calls at runtime (Orchestrator, Feature Flag service, …) — fails before any third-party provider request
+- Occurs only at specific times — it is a first-party-service token-acquisition/refresh failure, typically transient
+- `IsServiceError: false` — an IS-side exception, before the connection or provider layer
+- Maps to the `FailedToGetAccessToken` SRE signal
 
 What can cause it:
-- OAuth access token expired and the refresh token is also expired or revoked
-- The user who created the connection revoked app access in the external service
-- External service rotated or invalidated credentials
-- Connector auth misconfiguration (wrong client credentials, changed redirect/scope)
+- The platform identity/token service could not issue or refresh the token for the first-party service (transient outage or token-lifecycle window)
+- The first-party service (Orchestrator / Feature Flag service) was briefly unavailable when IS requested the token
+- A platform-side configuration or trust issue between IS and the first-party service
+
+> **This is NOT a connection-credential problem.** The customer's connection OAuth token is unrelated to `DAP-GE-3004`. If the symptom is a genuine connection whose third-party OAuth token expired or was revoked, that surfaces as a provider `401` ([request-failed.md](./request-failed.md)) or the Maestro-surfaced [connection-auth-expired.md](./connection-auth-expired.md) — re-authenticate the connection there, not here.
 
 What to look for:
-- `ConnectionId` in the customEvent — identifies the failing connection
-- Connection was working previously (rules out first-time misconfiguration)
-- Time gap between last successful run and first failure (typical of refresh-token expiry)
-
-> This is the IS-native (`DAP-GE-3004`) view of the same root cause as the Maestro-surfaced [connection-auth-expired.md](./connection-auth-expired.md). Prefer this playbook when the DAP code is present.
+- **No `ConnectionId` tied to a failing third-party auth** — the failure is platform-internal, not connection-scoped
+- Whether the failure is intermittent / clustered in time (points to a transient first-party-service token window) vs sustained (points to a platform fault)
+- Whether other tenants/processes hit the same code in the same window (a platform-wide signal, not a single workflow)
 
 ## Investigation
 
-1. **Read the connection resource file** — if source code is available, find the connection JSON (see "Connection Resource File" in [overview.md](../overview.md)) to get the connector name and connection ID.
-2. `uip is connections ping <connection-id>` — confirm the connection returns inactive / error status.
-3. Check when the connection last worked successfully (from job/instance history in triage evidence) to confirm refresh-token expiry vs config error.
+1. **Confirm it is the first-party-service token path, not a connection.** `IsServiceError: false`, no third-party `ProviderErrorCode`. Do **not** chase the connection — a healthy `uip is connections ping` here does not rule the cause out, and an unhealthy one is a separate issue.
+2. **Establish timing and blast radius.** Check whether `DAP-GE-3004` is intermittent and whether it correlates with a known Orchestrator / Feature Flag service disruption window in the triage evidence.
+3. **Check for recurrence.** A single occurrence that does not repeat on retry is a transient first-party-service token blip. Repeated/sustained occurrences indicate a platform fault to escalate.
 
 ## Resolution
 
-- Re-authenticate the connection via `uip is connections edit <connection-id>` or the Integration Service UI.
-- If the external service revoked app access, re-authorize the app in the external service settings **before** re-authenticating.
-- If the connector's client credentials/scope changed, fix the connector auth configuration, then re-authenticate.
-- For production connections, set up health monitoring so token expiry is caught before a run fails.
+**Primary: retry, then escalate — do NOT re-authenticate the connection.** The token comes from a first-party service, not the customer's connection.
+
+- **Transient (single / intermittent):** re-run the job. First-party-service token acquisition usually recovers on its own; the run should succeed on retry.
+- **Sustained / repeated:** escalate to the Integration Service owner team with the `DAP-GE-3004` code, `RequestId`, timestamps, and the affected first-party service (Orchestrator / Feature Flag service). This is a platform token-acquisition fault the customer cannot resolve from their workflow.
+- **Do not** attempt connection re-authentication, connection editing, or connector auth-config changes for this code — they do not address a first-party-service token failure.
