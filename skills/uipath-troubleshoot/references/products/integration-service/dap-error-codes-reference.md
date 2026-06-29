@@ -84,7 +84,7 @@ Bugs in the activity pack or connector metadata; the customer cannot work around
 | `DAP-RT-1008` | InvalidActivityConfiguration | Activity configuration is malformed | [activity-configuration-corrupt.md](./playbooks/activity-configuration-corrupt.md) |
 | `DAP-RT-1100` | HttpMethodMissing | Generated activity has no HTTP method — incomplete connector metadata | [activity-configuration-corrupt.md](./playbooks/activity-configuration-corrupt.md) |
 | `DAP-RT-1001` | ServiceProviderNull | Runtime DI/service provider unavailable — internal error | [activity-configuration-corrupt.md](./playbooks/activity-configuration-corrupt.md) |
-| `DAP-GE-3001` `DAP-GE-3002` `DAP-GE-3003` | InvalidMigration / FilterTree / FieldArguments | Activity failed to migrate to a newer schema version | [activity-configuration-corrupt.md](./playbooks/activity-configuration-corrupt.md) |
+| `DAP-GE-3001` | InvalidMigration | Activity failed to migrate to a newer schema version | [activity-configuration-corrupt.md](./playbooks/activity-configuration-corrupt.md) |
 | `DAP-RT-1005` | ApiResponseMismatch | Response shape ≠ activity output type — connector schema drift | [response-mapping-mismatch.md](./playbooks/response-mapping-mismatch.md) |
 | `DAP-RT-1155` `DAP-RT-1156` | DataTableFieldTypeMismatch / TypedDataTableNotConstructedProperly | Output couldn't map into the expected TypedDataTable | [response-mapping-mismatch.md](./playbooks/response-mapping-mismatch.md) |
 
