@@ -1,0 +1,61 @@
+task_id: skill-sdd-e2e-aged-invoice-solution
+description: >
+  End-to-end evaluation: agent uses the uipath-planner skill to read a
+  comprehensive Woolworths-style aged-invoice PDD, select multi-project
+  Solution scope, and generate a solution-level SDD set. A Python check script
+  validates planner handoff markers, solution decomposition across Case,
+  Maestro Flow, Coded Apps, API Workflows, Agents, and RPA, plus key AP-domain
+  content from the PDD.
+tags: [uipath-planner, e2e, mode:build, lifecycle:generate]
+
+run_limits:
+  expected_turns: 24
+  # Comprehensive Solution-scope PDDs produce a solution overview plus several
+  # per-project SDDs. Keep this above the long autonomous authoring turn so the
+  # grader can run after the files land.
+  task_timeout: 4200
+  turn_timeout: 3000
+
+# Stage the PDD as `pdd.md` in the sandbox root. The real-file PDD signal is
+# stronger than inline text and exercises the planner's file-reading path.
+sandbox:
+  template_sources:
+    - type: template_dir
+      path: fixtures
+
+initial_prompt: |
+  I've saved the Process Design Document for Smit's Woolworths-style Aged
+  Invoice Payment Case Management proof of value as `pdd.md` in the current
+  directory. Read `pdd.md` and use it as the source of truth to produce the
+  complete Solution Design Document set.
+
+  Assume UiPath Automation Cloud and use Autonomous mode. Before starting, load
+  the uipath-planner skill and follow its workflow.
+
+  For any [SME REVIEW] items, use sensible defaults and proceed. Do not create
+  UiPath projects or implementation files; the only deliverables are the SDD
+  markdown files. Stop after writing the SDD files.
+
+success_criteria:
+  - type: skill_triggered
+    skill_name: "uipath-planner"
+    expected_skill: "uipath-planner"
+    description: "Agent invoked the uipath-planner skill before generating the SDD"
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Generated SDD set is solution-scoped, decomposed by product, and preserves the aged-invoice domain design"
+    command: "python3 $TASK_DIR/check_aged_invoice_solution_sdd.py"
+    timeout: 30
+    expected_exit_code: 0
+    weight: 6.0
+    pass_threshold: 1.0
+
+  - type: run_command
+    description: "Stopped at SDD authoring and did not run ahead into implementation artifacts"
+    command: "bash -c '! find . \\( -name caseplan.json -o -name \"*.flow\" -o -name \"*.xaml\" -o -name agent.json -o -name project.json -o -name \"*.uipx\" -o -name \"*tasks.md\" \\) -not -path \"*/.venv/*\" | grep -q .'"
+    timeout: 10
+    expected_exit_code: 0
+    weight: 1.5
+    pass_threshold: 1.0
