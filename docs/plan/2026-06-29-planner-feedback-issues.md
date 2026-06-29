@@ -2,7 +2,7 @@
 
 **Branch:** `fix/uipath-planner/fix_feedback_issues`
 **Date:** 2026-06-29
-**Status:** Analysis complete; scope decided with owner. Fixes NOT yet applied. This doc is the implementer handover.
+**Status:** Implemented (2026-06-29). PILOT-6046 + PILOT-6045 residuals applied in this branch; PILOT-6044 descoped (no code). Phases 1–4 below are done; §6 out-of-scope items stand.
 **Audience:** an AI agent implementing the fixes. Work per-issue; each task is independently verifiable.
 **Re-verify all line numbers with Grep before editing** — files shift.
 

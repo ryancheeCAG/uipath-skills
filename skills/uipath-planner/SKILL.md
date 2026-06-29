@@ -143,6 +143,8 @@ High-level view of what each specialist owns. **Do not describe internal flows o
 | [RPA Product Guide](references/rpa-product-guide.md) | RPA **Level 1.5** (sub-type), **Level 2** (authoring mode), **Level 2.5 Part A** (RPA decomposition), R-07 naming, REFramework. Load when Level 1 = RPA or a Solution includes RPA. |
 | [Package Selection Guide](references/package-selection-guide.md) | NuGet package selection; Integration Service vs NuGet rules; per-product dependency manager. Load when filling §14 Packages or equivalent. |
 | [Tenant Library Search Guide](references/tenant-library-search-guide.md) | Step 2.5 procedure for discovering deployed libraries via `uip or libraries list` + JMESPath filtering — auth preflight, ranking, zero-results branch, manual fallback. |
+| [Attended Re-auth Pattern Guide](references/attended-reauth-pattern-guide.md) | Design contract for portal automations with a human-only login (hardware 2FA token, smart card, biometric): handoff point, state-verified resume, attended robot, routing to `uipath-rpa`. Load when the PDD signals a non-scriptable interactive sign-in. |
+| [ASDD Crosswalk Guide](references/asdd-crosswalk-guide.md) | Maps this skill's SDD sections onto an official UiPath ASDD skeleton for Word delivery. Load at Step 2.5 only when the user needs the official ASDD section structure (user supplies the skeleton). |
 
 ### SDD templates
 
@@ -153,6 +155,7 @@ High-level view of what each specialist owns. **Do not describe internal flows o
 | [Case Management Template](assets/templates/case-sdd-template.md) | SDD template for Case Management |
 | [Agent Template](assets/templates/agent-sdd-template.md) | SDD template for UiPath Agents |
 | [Coded App Template](assets/templates/coded-app-sdd-template.md) | SDD template for Coded Apps (web) |
+| [Low-code Apps Template](assets/templates/apps-lowcode-sdd-template.md) | SDD template for UiPath Apps (low-code) — on-prem / Coded-Apps-blocked alternative; build is a manual Apps-designer deliverable |
 | [API Workflow Template](assets/templates/api-workflow-sdd-template.md) | SDD template for API Workflows |
 
 ### Scripts (Phase D)

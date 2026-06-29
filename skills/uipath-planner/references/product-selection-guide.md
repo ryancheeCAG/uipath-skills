@@ -340,7 +340,10 @@ Based on the Level 1 primary, select one template:
 | Case Management | `../assets/templates/case-sdd-template.md` |
 | Agents | `../assets/templates/agent-sdd-template.md` |
 | Coded Apps | `../assets/templates/coded-app-sdd-template.md` |
+| UiPath Apps (low-code) | `../assets/templates/apps-lowcode-sdd-template.md` |
 | API Workflows | `../assets/templates/api-workflow-sdd-template.md` |
+
+> **Low-code Apps is design-only here** — no CLI/skill builds it; the template marks the build as a manual UiPath Apps-designer deliverable. Use it when the primary is an app touchpoint AND Coded Apps is blocked (Automation Suite / standalone), or when the PDD explicitly asks for low-code Apps.
 
 ### Solution scope (Level 1 = Solution or user picked Solution (customize))
 

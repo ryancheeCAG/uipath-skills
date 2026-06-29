@@ -72,6 +72,9 @@ fi
 echo "Word document: $output"
 if grep -q '```mermaid' "$input"; then
   echo "NOTE: the SDD contains mermaid diagrams — they are embedded as code" >&2
-  echo "blocks, not rendered images. Render separately if the deliverable" >&2
-  echo "needs visuals." >&2
+  echo "blocks, not rendered images (no built-in rendering, by design). They" >&2
+  echo "are valid as-is. For diagram images: paste each mermaid block into a" >&2
+  echo "renderer (Mermaid Live Editor, or a locally-installed mmdc), export" >&2
+  echo "PNG/SVG, and replace the block in the .docx. Do not paste sensitive" >&2
+  echo "architecture into a third-party web renderer." >&2
 fi

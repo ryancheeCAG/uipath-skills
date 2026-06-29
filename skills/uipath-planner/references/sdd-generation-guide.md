@@ -473,8 +473,9 @@ When the user asks for a Word deliverable (client-facing SDD, "official template
 bash <SKILL_DIR>/scripts/sdd-to-docx.sh "<SDD_PATH>.md"
 ```
 
-- **Corporate styling:** if the user has an official SDD Word template, pass it as a style reference — `--reference-doc "<TEMPLATE_PATH>.docx"`. The output picks up its fonts, heading styles, and margins. Section *structure* still follows this skill's markdown SDD; mapping content into a different section skeleton is a manual step — say so.
-- **Mermaid diagrams** stay as code blocks in the .docx (the script warns). Offer the user the choice: leave as-is, or render externally and insert manually.
+- **Corporate styling:** if the user has an official SDD Word template, pass it as a style reference — `--reference-doc "<TEMPLATE_PATH>.docx"`. The output picks up its fonts, heading styles, and margins. Section *structure* still follows this skill's markdown SDD. To map content into the official **ASDD** section skeleton, see [asdd-crosswalk-guide.md](asdd-crosswalk-guide.md) — the user supplies their ASDD skeleton; section structure is not auto-generated.
+- **Mermaid diagrams** stay as code blocks in the .docx (the script warns) — there is no built-in image rendering, by design (a renderer would add a heavy Node/Chromium dependency, and a remote renderer would leak customer architecture). They are valid SDD content as-is. If the deliverable needs diagram *images*, tell the user the manual path: copy each ` ```mermaid ` block into a Mermaid renderer (e.g. the Mermaid Live Editor, or a local `mmdc` they install themselves), export PNG/SVG, and replace the code block in the .docx. Caution the user not to paste sensitive architecture into a third-party web renderer.
+- **Diagram "reflow" is automatic on regeneration, not a hand-edit.** The planner builds each Mermaid diagram from the current step/node set every run (e.g. RPA §2 Process Map is built strictly from the Phase 1 steps). To change a diagram after nodes are added/removed, regenerate the SDD — do not hand-edit Mermaid nodes in the .docx.
 - If the script reports pandoc missing, relay its install command. Do not fall back to COM, HTML-to-doc tricks, or hand-built XML.
 
 Skip this step entirely when the user did not ask for Word output.
