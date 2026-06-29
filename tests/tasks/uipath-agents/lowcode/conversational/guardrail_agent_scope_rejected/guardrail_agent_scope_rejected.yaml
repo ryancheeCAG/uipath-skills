@@ -77,7 +77,7 @@ success_criteria:
     pass_threshold: 1.0
 
   - type: run_command
-    description: "No guardrail uses Agent or Llm scope in agent.json root or per-tool resource.json (Rule 23)"
+    description: "No guardrail uses Agent or Llm scope in agent.json root or per-tool resource.json (conversational Critical Rule 1)"
     command: "python3 $TASK_DIR/check_conversational_guardrail_scope.py"
     timeout: 30
     expected_exit_code: 0

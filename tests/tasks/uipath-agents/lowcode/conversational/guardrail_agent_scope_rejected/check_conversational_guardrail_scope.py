@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Conversational guardrail scope check (Rule 23).
+"""Conversational guardrail scope check (conversational Critical Rule 1).
 
 Scans the conversational agent's `agent.json` root `guardrails[]` AND every
 `resources/<Tool>/resource.json` → `guardrail.policies[]` and asserts that
@@ -79,7 +79,7 @@ def main() -> None:
     else:
         print("OK: no resources/ directory — no per-tool guardrails to scan")
 
-    print("\nAll guardrail scope checks passed (Rule 23).")
+    print("\nAll guardrail scope checks passed (conversational Critical Rule 1).")
 
 
 if __name__ == "__main__":
