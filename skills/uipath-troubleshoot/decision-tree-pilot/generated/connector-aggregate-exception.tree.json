@@ -1,0 +1,56 @@
+{
+  "entry": "g_folders",
+  "playbook": "skills/uipath-troubleshoot/references/products/integration-service/playbooks/connector-aggregate-exception.md",
+  "classification": "hybrid",
+  "nodes": [
+    { "id": "g_folders", "kind": "gather", "cmd": "uip or folders list --output json",
+      "reads": { "shared_folder_key": { "path": "$.Data[?(@.Name=='Shared')].Key" } }, "next": "g_faulted_jobs" },
+    { "id": "g_faulted_jobs", "kind": "gather", "cmd": "uip or jobs list --folder-key {{shared_folder_key}} --state Faulted --output json",
+      "reads": { "job_key": { "path": "$.Data[0].Key" }, "release_name": { "path": "$.Data[0].ReleaseName" } }, "next": "g_job_get" },
+    { "id": "g_job_get", "kind": "gather", "cmd": "uip or jobs get {{job_key}} --output json",
+      "reads": { "state": { "path": "$.Data.State" }, "info": { "path": "$.Data.Info" },
+        "wrapper_fqn": { "regex": "(System\\.AggregateException)" },
+        "activity_kind": { "regex": "at (Connector(?:Trigger)?Activity)" } }, "next": "b_is_aggregate" },
+
+    { "id": "b_is_aggregate", "kind": "branch", "on": "wrapper_fqn",
+      "children": [ { "when": { "field": "wrapper_fqn", "op": "eq", "value": "System.AggregateException" }, "evaluator": "exact", "goto": "g_unwrap_inner" } ],
+      "default": "llm_not_this_playbook" },
+
+    { "id": "g_unwrap_inner", "kind": "gather", "cmd": "uip or jobs get {{job_key}} --output json",
+      "_doc": "UNWRAP. The aggregate is a wrapper — never the cause. Extract InnerExceptions[0] (the first FQN after the ' ---> ' marker in the stack) and the inner message. If that inner is itself a wrapper (RemoteException / nested AggregateException), recurse here before classifying.",
+      "reads": {
+        "inner_fqn": { "regex": "---> ([\\w.]+Exception)" },
+        "inner_message": { "regex": "---> [\\w.]+Exception: ([^\\r\\n]+)" },
+        "inner_dap_code": { "regex": "Error code: (DAP-\\w{2}-\\d+)" }
+      }, "next": "b_unwrap_dispatch" },
+
+    { "id": "b_unwrap_dispatch", "kind": "branch", "on": "inner_fqn",
+      "_doc": "Dispatch on the unwrapped inner exception FQN. FQN match is exact and deterministic — route to the inner exception's owning playbook subtree, carrying the bound inner_fqn/inner_dap_code/inner_message so the target re-classifies from there.",
+      "children": [
+        { "when": { "field": "inner_fqn", "op": "matches", "value": "IntegrationService\\.Activities\\.Runtime\\.Exceptions\\.GeneralException" }, "evaluator": "exact", "routes_to": "connector-general-exception", "goto": "route_general" },
+        { "when": { "field": "inner_fqn", "op": "matches", "value": "IntegrationService\\.Activities\\.Runtime\\.Exceptions\\.RuntimeException" }, "evaluator": "exact", "routes_to": "connector-runtime-exception", "goto": "route_runtime" },
+        { "when": { "field": "inner_fqn", "op": "matches", "value": "(?:CoreIpc|Ipc)\\..*RemoteException|RemoteException" }, "evaluator": "exact", "routes_to": "connector-remote-exception", "goto": "route_remote" },
+        { "when": { "field": "inner_fqn", "op": "matches", "value": "System\\.NullReferenceException" }, "evaluator": "exact", "routes_to": "connector-null-reference", "goto": "route_nullref" },
+        { "when": { "field": "inner_fqn", "op": "matches", "value": "System\\.AggregateException" }, "evaluator": "exact", "goto": "g_unwrap_inner" } ],
+      "default": "llm_inner_unmapped" },
+
+    { "id": "route_general", "kind": "leaf",
+      "cause": "AggregateException wrapper on {{activity_kind}}; unwrapped inner is an IS GeneralException (code {{inner_dap_code}}): \"{{inner_message}}\". The aggregate carries no cause — root is the inner GeneralException. Re-classify in the connector-general-exception subtree (DAP-GE table).",
+      "resolution_ref": "connector-aggregate-exception.md#resolution", "confidence": "low" },
+    { "id": "route_runtime", "kind": "leaf",
+      "cause": "AggregateException wrapper on {{activity_kind}}; unwrapped inner is an IS RuntimeException (code {{inner_dap_code}}): \"{{inner_message}}\". Re-classify in the connector-runtime-exception subtree (DAP-RT table).",
+      "resolution_ref": "connector-aggregate-exception.md#resolution", "confidence": "low" },
+    { "id": "route_remote", "kind": "leaf",
+      "cause": "AggregateException wrapper; unwrapped inner is an Ipc/CoreIpc RemoteException (token/transport/HTTP boundary): \"{{inner_message}}\". This inner is itself a wrapper — re-classify in the connector-remote-exception subtree and recurse to its inner.",
+      "resolution_ref": "connector-aggregate-exception.md#resolution", "confidence": "low" },
+    { "id": "route_nullref", "kind": "leaf",
+      "cause": "AggregateException wrapper; unwrapped inner is a NullReferenceException: \"{{inner_message}}\". Re-classify in the connector-null-reference subtree.",
+      "resolution_ref": "connector-aggregate-exception.md#resolution", "confidence": "low" },
+
+    { "id": "llm_inner_unmapped", "kind": "llm", "mode": "continue",
+      "judgment_q": "InnerExceptions[0] ({{inner_fqn}}: \"{{inner_message}}\") maps to no IS sub-playbook. Read the verbatim innermost concrete exception from the Info stack; if it is a downstream service or non-IS .NET error, name the concrete fault and hand to the matching domain tree or the free-form hypothesis loop. Report each inner exception if several faulted in parallel.",
+      "reason": "Unwrapped inner exception FQN is not in the aggregate dispatch table; needs judgment to reach the innermost concrete cause." },
+    { "id": "llm_not_this_playbook", "kind": "llm", "mode": "jump",
+      "reason": "Faulted job exception is not a System.AggregateException wrapper. Route to a different IS playbook (e.g. the raw inner exception's playbook) or hand back to triage." }
+  ]
+}

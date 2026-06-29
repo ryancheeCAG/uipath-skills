@@ -1,0 +1,43 @@
+{
+  "playbook": "skills/uipath-troubleshoot/references/activity-packages/excel-activities/playbooks/read-range-null-reference.md",
+  "classification": "judgment-dominated",
+  "confidence": "low",
+  "entry": "g_jobs_get",
+  "nodes": [
+    { "id": "g_jobs_get", "kind": "gather", "cmd": "uip or jobs get <JOB_KEY> --output json",
+      "reads": { "exception_info": { "path": "Data.Info" }, "job_error_type": { "path": "Data.JobError.Type" }, "job_error_code": { "path": "Data.JobError.ErrorCode" }, "activity_name": { "path": "Data.JobError.ActivityName" }, "activity_display": { "path": "Data.JobError.ActivityDisplayName" }, "workflow_file": { "path": "Data.JobError.WorkflowFilePath" }, "folder_key": { "path": "Data.FolderKey" }, "state": { "path": "Data.State" } },
+      "next": "g_jobs_logs" },
+    { "id": "g_jobs_logs", "kind": "gather", "cmd": "uip or jobs logs <JOB_KEY> --output json",
+      "reads": { "open_trace": { "regex": "workbook opened \\(no sensitivity label detected; encryption: not enabled\\)" }, "workbook_path": { "regex": "reading ([^ ]+\\.xlsx)" }, "provenance_note": { "regex": "generated nightly by upstream Python script" }, "read_range_props": { "regex": "SheetName='[^']*'; Range='([^']*)'" }, "error_line": { "regex": "TargetInvocationException.*NullReferenceException" } },
+      "next": "b_exception_signature" },
+    { "id": "b_exception_signature", "kind": "branch", "on": "exception_info",
+      "children": [
+        { "when": { "field": "exception_info", "op": "matches", "value": "System\\.IO\\." }, "evaluator": "exact", "goto": "leaf_wrong_playbook_io" },
+        { "when": { "field": "exception_info", "op": "matches", "value": "UiPath\\.Excel\\.WorkbookActivities\\.ReadRangeImpl\\.ResolveSheet" }, "evaluator": "exact", "goto": "leaf_wrong_playbook_sheet" },
+        { "when": { "field": "exception_info", "op": "matches", "value": "(NullReferenceException|TargetInvocationException).*UiPath\\.Excel\\.Activities\\." }, "evaluator": "exact", "goto": "b_inner_exception_class" } ],
+      "default": "b_inner_exception_class" },
+    { "id": "b_inner_exception_class", "kind": "branch", "on": "exception_info",
+      "children": [
+        { "when": { "field": "exception_info", "op": "matches", "value": "OpenXmlPackageException|DocumentFormat\\.OpenXml\\." }, "evaluator": "exact", "goto": "llm_narrowed_openxml" },
+        { "when": { "field": "exception_info", "op": "matches", "value": "COMException|Microsoft\\.Office\\.Interop\\.Excel\\." }, "evaluator": "exact", "goto": "llm_narrowed_com" },
+        { "when": { "field": "exception_info", "op": "matches", "value": "NullReferenceException" }, "evaluator": "exact", "goto": "b_label_check" } ],
+      "default": "b_label_check" },
+    { "id": "b_label_check", "kind": "branch", "on": "open_trace",
+      "children": [
+        { "when": { "field": "open_trace", "op": "matches", "value": "no sensitivity label detected" }, "evaluator": "exact", "goto": "b_range_check" },
+        { "when": { "field": "open_trace", "op": "matches", "value": "sensitivity label|Purview|AIP|classification banner" }, "evaluator": "judgment", "judgment_q": "Does the workbook carry a Microsoft Purview / AIP sensitivity label whose policy excludes the Robot identity (interactive admin can open; Robot service cannot)?", "goto": "leaf_branch1_label" } ],
+      "default": "b_range_check" },
+    { "id": "b_range_check", "kind": "branch", "on": "read_range_props",
+      "children": [
+        { "when": { "field": "read_range_props", "op": "matches", "value": "Range=''|used range" }, "evaluator": "exact", "goto": "llm_handoff_checklist" },
+        { "when": { "field": "read_range_props", "op": "matches", "value": "Range='[A-Za-z_][A-Za-z0-9_]*'" }, "evaluator": "judgment", "judgment_q": "Does the configured Range reference a defined name (named range) whose Name Manager 'Refers to' shows #REF!/#NAME?/#VALUE!, or a formula with a #REF! reference? Requires Ctrl+F3 inspection.", "goto": "leaf_branch3_named_range" } ],
+      "default": "llm_handoff_checklist" },
+    { "id": "llm_narrowed_openxml", "kind": "llm", "mode": "continue", "reason": "Stack inside DocumentFormat.OpenXml.* narrows to branch 2 (structural corruption) vs branch 4 (unsupported OpenXML feature) — not distinguishable by wording. Hand the user the corruption check (Excel 'Repaired' dialog / provenance) AND the Compatibility-Checker check." },
+    { "id": "llm_narrowed_com", "kind": "llm", "mode": "continue", "reason": "Stack inside Microsoft.Office.Interop.Excel.* (COMException) narrows to branch 4 (COM parse) vs branch 5 (COM memory limit). Hand the user the Compatibility-Checker check and the size/populated-cell check (>100 MB or >1M cells)." },
+    { "id": "llm_handoff_checklist", "kind": "llm", "mode": "continue", "reason": "Opaque path confirmed: plain NRE/TIE from inside UiPath.Excel.Activities.*, no label (branch 1 out), used-range not a named range (branch 3 out). Remaining branches 2/4/5 are NOT CLI-distinguishable. Present the workbook-inspection checklist (size/LastWriteTime; open in Excel -> 'Repaired' dialog [b2]; Check Compatibility [b4]; populated-cell count [b5]) and STOP guessing. Strong corruption signal: the .xlsx is 'generated nightly by upstream Python script' (openpyxl-class writer) — prioritize the branch-2 check." },
+    { "id": "leaf_branch1_label", "kind": "leaf", "cause": "Branch 1 — Microsoft Purview / AIP sensitivity label blocks programmatic access for the Robot identity.", "resolution_ref": "read-range-null-reference.md#branch-1-sensitivity-label-blocks-the-robot-user", "confidence": "medium-needs-inspection" },
+    { "id": "leaf_branch3_named_range", "kind": "leaf", "cause": "Branch 3 — broken named range / formula reference (#REF! defined name or formula referencing a deleted sheet/cell).", "resolution_ref": "read-range-null-reference.md#branch-3-broken-named-range--formula-reference", "confidence": "medium-needs-inspection" },
+    { "id": "leaf_wrong_playbook_io", "kind": "leaf", "cause": "Not this playbook — stack origin in System.IO.* points at file-not-found / file-locked. Re-route.", "resolution_ref": "excel-activities/summary.md", "confidence": "high" },
+    { "id": "leaf_wrong_playbook_sheet", "kind": "leaf", "cause": "Not this playbook — stack origin in ReadRangeImpl.ResolveSheet points at sheet-not-found. Re-route.", "resolution_ref": "excel-activities/summary.md", "confidence": "high" }
+  ]
+}

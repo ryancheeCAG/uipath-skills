@@ -1,0 +1,42 @@
+{
+  "entry": "g_folders",
+  "playbook": "skills/uipath-troubleshoot/references/products/integration-service/playbooks/connector-runtime-exception.md",
+  "classification": "hybrid",
+  "nodes": [
+    { "id": "g_folders", "kind": "gather", "cmd": "uip or folders list --output json",
+      "reads": { "shared_folder_key": { "path": "$.Data[?(@.Name=='Shared')].Key" } }, "next": "g_faulted_jobs" },
+    { "id": "g_faulted_jobs", "kind": "gather", "cmd": "uip or jobs list --folder-key {{shared_folder_key}} --state Faulted --output json",
+      "reads": { "job_key": { "path": "$.Data[0].Key" }, "release_name": { "path": "$.Data[0].ReleaseName" } }, "next": "g_job_get" },
+    { "id": "g_job_get", "kind": "gather", "cmd": "uip or jobs get {{job_key}} --output json",
+      "reads": { "state": { "path": "$.Data.State" }, "info": { "path": "$.Data.Info" },
+        "dap_rt_code": { "regex": "Error code: (DAP-RT-\\d+)" },
+        "exception_fqn": { "regex": "(UiPath\\.IntegrationService\\.Activities\\.Runtime\\.Exceptions\\.RuntimeException)" },
+        "activity_kind": { "regex": "at (Connector(?:Trigger)?Activity)" } }, "next": "b_is_runtime_exception" },
+    { "id": "b_is_runtime_exception", "kind": "branch", "on": "exception_fqn",
+      "children": [ { "when": { "field": "exception_fqn", "op": "matches", "value": "IntegrationService\\.Activities\\.Runtime\\.Exceptions\\.RuntimeException" }, "evaluator": "exact", "goto": "b_dap_rt_code" } ],
+      "default": "llm_not_this_playbook" },
+    { "id": "b_dap_rt_code", "kind": "branch", "on": "dap_rt_code",
+      "children": [
+        { "when": { "field": "dap_rt_code", "op": "eq", "value": "DAP-RT-1002" }, "evaluator": "exact", "goto": "leaf_1002" },
+        { "when": { "field": "dap_rt_code", "op": "eq", "value": "DAP-RT-1003" }, "evaluator": "exact", "goto": "g_1003_field" },
+        { "when": { "field": "dap_rt_code", "op": "eq", "value": "DAP-RT-1052" }, "evaluator": "exact", "goto": "leaf_1052" },
+        { "when": { "field": "dap_rt_code", "op": "eq", "value": "DAP-RT-1101" }, "evaluator": "exact", "goto": "g_1101_provider" } ],
+      "default": "llm_unknown_code" },
+    { "id": "leaf_1002", "kind": "leaf", "cause": "No connection bound to the activity — ConnectionId never set, or its binding/asset resolved empty at runtime.", "resolution_ref": "connector-runtime-exception.md#resolution-dap-rt-1002", "confidence": "high" },
+    { "id": "g_1003_field", "kind": "gather", "cmd": "uip or jobs get {{job_key}} --output json", "reads": { "required_field": { "regex": "(\\S+) field is required\\." } }, "next": "leaf_1003" },
+    { "id": "leaf_1003", "kind": "leaf", "cause": "Required input field of the connector operation ('{{required_field}}') is empty/null at runtime.", "resolution_ref": "connector-runtime-exception.md#resolution-dap-rt-1003", "confidence": "high" },
+    { "id": "leaf_1052", "kind": "leaf", "cause": "ConnectorTriggerActivity sample/debug lookup returned zero events — no matching records in the sampled window. Usually benign during setup/debug.", "resolution_ref": "connector-runtime-exception.md#resolution-dap-rt-1052", "confidence": "medium" },
+    { "id": "g_1101_provider", "kind": "gather", "cmd": "uip or jobs get {{job_key}} --output json",
+      "reads": { "http_status": { "regex": "Status code: (\\w+)\\. Error code: DAP-RT-1101" }, "provider_error_code": { "regex": "ProviderErrorCode : (\\d+)" }, "provider_reason": { "regex": "reason=(\\w+)" }, "provider_location": { "regex": "location=(\\w+)" }, "provider_message": { "regex": "message=([^,}]+)" } }, "next": "b_1101_subcause" },
+    { "id": "b_1101_subcause", "kind": "branch", "on": "provider_reason",
+      "children": [
+        { "when": { "field": "http_status", "op": "eq", "value": "NotFound" }, "evaluator": "judgment", "judgment_q": "Does the ProviderMessage block (reason/location/message) indicate the referenced record/file does NOT exist, as opposed to a malformed/invalid input?", "goto": "leaf_1101_notfound" },
+        { "when": { "field": "http_status", "op": "eq", "value": "BadRequest" }, "evaluator": "judgment", "judgment_q": "Does the ProviderMessage block indicate the input did not match the operation's schema (bad/missing/renamed parameter) rather than a missing resource?", "goto": "leaf_1101_badrequest" } ],
+      "default": "leaf_1101_generic" },
+    { "id": "leaf_1101_notfound", "kind": "leaf", "cause": "Connector operation reached the external service which returned NotFound — referenced record/file does not exist (provider reason=notFound at '{{provider_location}}').", "resolution_ref": "operation-failed.md", "confidence": "high" },
+    { "id": "leaf_1101_badrequest", "kind": "leaf", "cause": "External service rejected the request (BadRequest) — input does not match the operation's schema.", "resolution_ref": "operation-failed.md", "confidence": "high" },
+    { "id": "leaf_1101_generic", "kind": "leaf", "cause": "Connector operation reached the external service which rejected the request (HTTP {{http_status}}, provider code {{provider_error_code}}).", "resolution_ref": "operation-failed.md", "confidence": "medium" },
+    { "id": "llm_unknown_code", "kind": "llm", "mode": "continue", "reason": "RuntimeException carries a DAP-RT code not in the playbook table. Read the full Info inner detail and reason from the verbatim message before concluding." },
+    { "id": "llm_not_this_playbook", "kind": "llm", "mode": "jump", "reason": "Faulted job exception is not an IS RuntimeException (no DAP-RT). Route to a different IS playbook or hand back to triage." }
+  ]
+}

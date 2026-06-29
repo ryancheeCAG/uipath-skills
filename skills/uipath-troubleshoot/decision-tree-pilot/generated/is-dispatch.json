@@ -1,0 +1,30 @@
+{
+  "_doc": "Integration Service dispatch root. After the shared trunk gathers the failing job + exception/logs and extracts the signature, this node routes to the per-playbook subtree. evaluator:exact for code/FQN tokens; judgment for the message-match entries (the LLM-walk confirms those). Each goto is a generated subtree under generated/. Built from references/exception-table.md (IS rows) + the per-playbook trees.",
+  "domain": "integration-service",
+  "entry": "is_dispatch",
+  "nodes": [
+    {
+      "id": "is_dispatch",
+      "kind": "branch",
+      "on": "signature",
+      "_reads_from": "the shared trunk's job-get/logs gather: error_code (regex DAP-(GE|RT)-\\d+), exception_fqn, and the verbatim message",
+      "children": [
+        { "when": { "field": "error_code", "op": "matches", "value": "^DAP-GE-" }, "evaluator": "exact", "goto": "connector-general-exception.tree.json" },
+        { "when": { "field": "error_code", "op": "matches", "value": "^DAP-RT-" }, "evaluator": "exact", "goto": "connector-runtime-exception.tree.json" },
+        { "when": { "field": "exception_fqn", "op": "matches", "value": "System\\.AggregateException" }, "evaluator": "exact", "goto": "connector-aggregate-exception.tree.json" },
+        { "when": { "field": "exception_fqn", "op": "matches", "value": "(UiPath\\.Ipc|UiPath\\.CoreIpc)\\.RemoteException" }, "evaluator": "exact", "goto": "connector-remote-exception.tree.json" },
+        { "when": { "field": "exception_fqn", "op": "matches", "value": "System\\.NullReferenceException" }, "evaluator": "judgment", "judgment_q": "Is the NRE on/after a connector activity (stack shows ForEach over a SWEntities.*_List connector output)? If yes route to the IS NRE tree; if the NRE is in another package (Excel/UIA), dispatch to that domain instead.", "goto": "connector-null-reference.tree.json" },
+        { "when": { "field": "message", "op": "contains", "value": "connection is invalid or you do not have access" }, "evaluator": "judgment", "judgment_q": "Does the verbatim error name the IS 'connection invalid or no access' condition (vs a disabled connection, which is DAP-GE-3005 -> general-exception)?", "goto": "connection-invalid.tree.json" }
+      ],
+      "default": "llm_is_uncovered"
+    },
+    {
+      "id": "llm_is_uncovered",
+      "kind": "llm",
+      "mode": "jump",
+      "reason": "IS signature not covered by a built subtree (e.g. connection-auth-expired, operation-failed, trigger-not-firing — no tree yet). Hand to the LLM hypothesis loop seeded with the trace + the matched IS playbook from references/exception-table.md."
+    }
+  ],
+  "_uncovered_playbooks": ["connection-auth-expired", "operation-failed (reached via DAP-RT-1101 leaf cross-ref)", "trigger-not-firing"],
+  "_coverage": "6 of 9 IS playbooks have generated subtrees (the 3 uncovered have no dedicated test fixture to ground a build; they fall to the LLM loop via the default)."
+}

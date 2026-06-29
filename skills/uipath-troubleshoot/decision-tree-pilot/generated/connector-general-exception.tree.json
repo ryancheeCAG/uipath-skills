@@ -1,0 +1,71 @@
+{
+  "entry": "g_folders",
+  "playbook": "skills/uipath-troubleshoot/references/products/integration-service/playbooks/connector-general-exception.md",
+  "classification": "hybrid",
+  "nodes": [
+    { "id": "g_folders", "kind": "gather", "cmd": "uip or folders list --output json",
+      "reads": { "shared_folder_key": { "path": "$.Data[?(@.Name=='Shared')].Key" } }, "next": "g_faulted_jobs" },
+    { "id": "g_faulted_jobs", "kind": "gather", "cmd": "uip or jobs list --folder-key {{shared_folder_key}} --state Faulted --output json",
+      "reads": { "job_key": { "path": "$.Data[0].Key" }, "release_name": { "path": "$.Data[0].ReleaseName" } }, "next": "g_job_get" },
+    { "id": "g_job_get", "kind": "gather", "cmd": "uip or jobs get {{job_key}} --output json",
+      "reads": { "state": { "path": "$.Data.State" }, "info": { "path": "$.Data.Info" },
+        "exception_fqn": { "regex": "(UiPath\\.IntegrationService\\.Activities\\.Runtime\\.Exceptions\\.GeneralException)" },
+        "dap_ge_code": { "regex": "Error code: (DAP-GE-\\d+)" },
+        "activity_kind": { "regex": "at (Connector\\w*Activity)" },
+        "connection_folder_guid": { "regex": "\\(Folder: ([0-9a-f-]+)\\)" } }, "next": "b_is_general_exception" },
+    { "id": "b_is_general_exception", "kind": "branch", "on": "exception_fqn",
+      "children": [ { "when": { "field": "exception_fqn", "op": "matches", "value": "IntegrationService\\.Activities\\.Runtime\\.Exceptions\\.GeneralException" }, "evaluator": "exact", "goto": "b_dap_ge_code" } ],
+      "default": "llm_not_this_playbook" },
+    { "id": "b_dap_ge_code", "kind": "branch", "on": "dap_ge_code",
+      "children": [
+        { "when": { "field": "dap_ge_code", "op": "eq", "value": "DAP-GE-3005" }, "evaluator": "exact", "goto": "leaf_3005_disabled" },
+        { "when": { "field": "dap_ge_code", "op": "eq", "value": "DAP-GE-3000" }, "evaluator": "exact", "goto": "b_3000_subdetail" } ],
+      "default": "llm_unknown_code" },
+
+    { "id": "leaf_3005_disabled", "kind": "leaf",
+      "cause": "Connection is bound correctly but disabled — connector activity faulted resolving it (DAP-GE-3005). Someone disabled it, or it auto-disabled after repeated auth failures. Confirm with `uip is connections ping {{connection_id}}` (State=Disabled).",
+      "resolution_ref": "connector-general-exception.md#resolution",
+      "confidence": "high" },
+
+    { "id": "b_3000_subdetail", "kind": "branch", "on": "info",
+      "children": [
+        { "when": { "field": "info", "op": "contains", "value": "Connections.View" }, "evaluator": "judgment",
+          "judgment_q": "Does the '-'-delimited detail after 'Failed to retrieve connection.' state the runner/robot lacks the Connections.View permission in the connection's folder (RBAC), as opposed to the connection being missing/invalid or an upstream 5xx? The detail names a folder GUID and gives the grant-or-move instruction verbatim.",
+          "goto": "g_3000_identity" },
+        { "when": { "field": "info", "op": "contains", "value": "Bad Gateway" }, "evaluator": "judgment",
+          "judgment_q": "Does the '-'-delimited detail indicate an upstream platform/Identity 5xx (e.g. 'Bad Gateway' or other transient upstream text) while resolving the connection, rather than a missing connection or a permission problem?",
+          "goto": "leaf_3000_badgateway" },
+        { "when": { "field": "info", "op": "matches", "value": "is invalid or you do not have access" }, "evaluator": "judgment",
+          "judgment_q": "Does the '-'-delimited detail say the connection '[<id>] is invalid or you do not have access to it' — i.e. the connection is missing/deleted or lives outside the runner's workspace — rather than a specific Connections.View RBAC gap or an upstream 5xx?",
+          "goto": "g_3000_connection_resource" } ],
+      "default": "llm_3000_unknown_detail" },
+
+    { "id": "g_3000_identity", "kind": "gather", "cmd": "uip or jobs get {{job_key}} --output json",
+      "reads": { "orchestrator_identity": { "path": "$.Data.OrchestratorUserIdentity" }, "source_type": { "path": "$.Data.SourceType" } }, "next": "leaf_3000_connectionsview" },
+    { "id": "leaf_3000_connectionsview", "kind": "leaf",
+      "cause": "RBAC gap: the runner identity ('{{orchestrator_identity}}', a robot account in deployed mode) lacks Connections.View in the folder where the connection lives ({{connection_folder_guid}}). Debug works under user identity; deployed mode fails under robot identity.",
+      "resolution_ref": "connector-general-exception.md#resolution",
+      "confidence": "high" },
+
+    { "id": "g_3000_connection_resource", "kind": "gather", "cmd": "uip is connections list --output json",
+      "reads": { "connection_id": { "path": "$.Data[0].Id" }, "connection_owner": { "path": "$.Data[0].Name" } },
+      "gather_more": "Glob the project for **/connection/<connector-key>/*.json; extract resource.key (must match the connection ID in the error), resource.name (owner), resource.folders[*].fullyQualifiedName (binding). This distinguishes 'deleted' from 'cross-workspace ownership'. If no source available, proceed on the error text.",
+      "next": "leaf_3000_invalid" },
+    { "id": "leaf_3000_invalid", "kind": "leaf",
+      "cause": "Connection invalid / no access — deleted/renamed after publish, or lives in a different user's personal workspace than the runner, or bindings point at the wrong folder. Activity-side surfacing of connection-invalid.",
+      "resolution_ref": "connector-general-exception.md#resolution",
+      "confidence": "high" },
+
+    { "id": "leaf_3000_badgateway", "kind": "leaf",
+      "cause": "Transient Integration Service / Identity 5xx (Bad Gateway) while resolving the connection — retryable, not a config error.",
+      "resolution_ref": "connector-general-exception.md#resolution",
+      "confidence": "medium" },
+
+    { "id": "llm_3000_unknown_detail", "kind": "llm", "mode": "continue",
+      "reason": "DAP-GE-3000 but the '-'-delimited detail does not match the known sub-causes (invalid/no-access, Connections.View, Bad Gateway). Read the verbatim Info detail and reason from it before concluding; ping the connection to corroborate state." },
+    { "id": "llm_unknown_code", "kind": "llm", "mode": "continue",
+      "reason": "GeneralException carries a DAP-GE code not in the playbook table (3000/3005). Read the full Info inner detail and reason from the verbatim message before concluding." },
+    { "id": "llm_not_this_playbook", "kind": "llm", "mode": "jump",
+      "reason": "Faulted job exception is not an IS GeneralException (no DAP-GE / different FQN). Route to a different IS playbook (e.g. RuntimeException DAP-RT) or hand back to triage." }
+  ]
+}

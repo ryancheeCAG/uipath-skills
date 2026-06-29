@@ -1,0 +1,53 @@
+{
+  "_doc": "COMMON TRUNK — the domain-agnostic spine every job-based investigation runs FIRST, before any per-domain subtree. Resolve identity -> get the failing entity -> get its logs/exception -> extract the signature -> TOP-LEVEL dispatch on the exception package -> per-domain dispatch. This is the shared prefix; per-domain subtrees should START at their first branch (post-extract), not re-gather. The same ambiguous prompt reaches IS/Excel/UIA/Maestro here, routed by the ACTUAL exception found, not by the prompt.",
+  "entry": "resolve_identity",
+  "nodes": [
+    {
+      "id": "resolve_identity",
+      "kind": "gather",
+      "_mode": "llm/guided — identity resolution is the judgment step (per the system guide's Data Correlation: pin folder, then job; ASK the user if ambiguous, never enumerate). Not a deterministic branch.",
+      "cmd": "<per system guide: resolve folder, then the failing job/instance>",
+      "reads": { "job_key": { "path": "<resolved entity key>" } },
+      "on_missing": "llm_identity",
+      "next": "get_entity"
+    },
+    {
+      "id": "get_entity",
+      "kind": "gather",
+      "cmd": "uip or jobs get {{job_key}} --output json",
+      "reads": {
+        "state": { "path": "$.Data.State" },
+        "runtime_type": { "regex": "ProcessOrchestration" },
+        "info": { "path": "$.Data.Info" }
+      },
+      "next": "get_logs"
+    },
+    {
+      "id": "get_logs",
+      "kind": "gather",
+      "cmd": "uip or jobs logs {{job_key}} --level Error --output json",
+      "reads": {
+        "exception_fqn": { "regex": "(?:UiPath|System|Microsoft)\\.[A-Za-z0-9_.]+(?:Exception|NotFoundException)" },
+        "error_code": { "regex": "DAP-(?:GE|RT)-\\d+" },
+        "message": { "path": "$.Data[0].Message" }
+      },
+      "next": "top_dispatch"
+    },
+    {
+      "id": "top_dispatch",
+      "kind": "branch",
+      "_doc": "TOP-LEVEL cross-product router. Routes on the exception FQN package (structured token = exact) to the per-domain dispatch. Stuck ProcessOrchestration parent (no leaf-level exception) routes to the maestro cross-system traversal.",
+      "on": "exception_fqn",
+      "children": [
+        { "when": { "field": "exception_fqn", "op": "matches", "value": "UiPath\\.IntegrationService" }, "evaluator": "exact", "goto": "is-dispatch.json" },
+        { "when": { "field": "exception_fqn", "op": "matches", "value": "UiPath\\.Excel" }, "evaluator": "exact", "goto": "excel-dispatch.json (not built -> llm)" },
+        { "when": { "field": "exception_fqn", "op": "matches", "value": "UiPath\\.UIAutomationNext" }, "evaluator": "exact", "goto": "uia-dispatch.json (not built -> llm)" },
+        { "when": { "field": "error_code", "op": "matches", "value": "^DAP-" }, "evaluator": "exact", "goto": "is-dispatch.json" },
+        { "when": { "field": "runtime_type", "op": "matches", "value": "ProcessOrchestration" }, "evaluator": "judgment", "judgment_q": "Is this a stuck/Running ProcessOrchestration job with NO leaf-level exception (a Maestro-orchestrated parent)? If so it's a cross-system symptom — traverse to the Maestro instance + child fault.", "goto": "maestro-tree.json" }
+      ],
+      "default": "llm_uncovered_domain"
+    },
+    { "id": "llm_identity", "kind": "llm", "mode": "jump", "reason": "Could not resolve the failing entity deterministically — LLM resolves identity (asking the user if needed), then re-enters the trunk at get_entity." },
+    { "id": "llm_uncovered_domain", "kind": "llm", "mode": "jump", "reason": "Exception package maps to a domain with no built dispatch/subtree yet (Excel/UIA/etc.). Hand to the LLM hypothesis loop seeded with the trunk's gathered signature + the matched playbook from references/exception-table.md." }
+  ]
+}

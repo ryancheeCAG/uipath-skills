@@ -1,0 +1,86 @@
+{
+  "entry": "g_folders",
+  "playbook": "skills/uipath-troubleshoot/references/products/integration-service/playbooks/connector-null-reference.md",
+  "classification": "hybrid",
+  "_doc": "Opaque NRE on a connector activity. No error code; the only deterministic signal is NullReferenceException + the SWEntities.*_List ForEach stack frame. ENTRY match is exact (regex over structured-ish stack text). The four causes (null body / unmapped output / null input / stale binding) are not distinguishable from runtime telemetry alone — they require source inspection and judgment, so they are llm hand-off, NOT false-exact branches.",
+  "nodes": [
+    { "id": "g_folders", "kind": "gather", "cmd": "uip or folders list --output json",
+      "reads": { "shared_folder_key": { "path": "$.Data[?(@.Name=='Shared')].Key" } }, "next": "g_faulted_jobs" },
+
+    { "id": "g_faulted_jobs", "kind": "gather", "cmd": "uip or jobs list --folder-key {{shared_folder_key}} --state Faulted --output json",
+      "reads": { "job_key": { "path": "$.Data[0].Key" }, "release_name": { "path": "$.Data[0].ReleaseName" } }, "next": "g_job_get" },
+
+    { "id": "g_job_get", "kind": "gather", "cmd": "uip or jobs get {{job_key}} --output json",
+      "reads": {
+        "state": { "path": "$.Data.State" },
+        "info": { "path": "$.Data.Info" },
+        "entry_point": { "path": "$.Data.EntryPointPath" },
+        "exception_fqn": { "regex": "(System\\.NullReferenceException)" },
+        "foreach_frame": { "regex": "at (UiPath\\.Core\\.Activities\\.ForEachBase`1)" } },
+      "next": "b_is_null_reference" },
+
+    { "id": "b_is_null_reference", "kind": "branch", "on": "exception_fqn",
+      "_doc": "ENTRY signature — deterministic. NRE FQN present AND the ForEach frame present in the job Info. Both are structured-ish tokens matched by regex. This is the only exact discrimination in the tree.",
+      "children": [
+        { "when": { "field": "exception_fqn", "op": "matches", "value": "System\\.NullReferenceException" },
+          "evaluator": "exact", "goto": "g_job_logs" } ],
+      "default": "llm_not_this_playbook" },
+
+    { "id": "g_job_logs", "kind": "gather", "cmd": "uip or jobs logs {{job_key}} --output json",
+      "_doc": "Error-level logs expose the SWEntities connector-output type being enumerated — the only place the connector operation surfaces. This confirms the NRE is on a connector output (vs a plain non-connector ForEach).",
+      "reads": {
+        "faulted_activity_fqn": { "regex": "faulted activity: (UiPath\\.Core\\.Activities\\.ForEach`1\\[\\[UiPath\\.IntegrationService\\.Activities\\.SWEntities\\.[^,]+)" },
+        "connector_operation_type": { "regex": "SWEntities\\.([A-Za-z0-9]+_[A-Za-z]+_List)" } },
+      "next": "b_is_connector_output" },
+
+    { "id": "b_is_connector_output", "kind": "branch", "on": "faulted_activity_fqn",
+      "_doc": "Deterministic: confirm the ForEach is over an IntegrationService SWEntities connector output (the *_List bundle type). If present, the NRE is a connector-output enumeration — proceed to the cause hand-off. If absent, this is a non-connector NRE and not this playbook.",
+      "children": [
+        { "when": { "field": "faulted_activity_fqn", "op": "matches", "value": "IntegrationService\\.Activities\\.SWEntities\\..+_List" },
+          "evaluator": "exact", "goto": "llm_cause_handoff" } ],
+      "default": "llm_not_this_playbook" },
+
+    { "id": "llm_cause_handoff", "kind": "branch", "on": "source_inspection",
+      "_doc": "From here the four causes are NOT distinguishable from runtime telemetry. The signature is identical regardless of which root cause produced the null. Choosing among them requires inspecting the connector activity's output mapping, the consumer activity, the input arguments, and the publish history. These are judgment branches the LLM evaluates against source — no false determinism.",
+      "children": [
+        { "when": { "field": "source_inspection", "op": "matches", "value": "operation-can-return-empty" },
+          "evaluator": "judgment",
+          "judgment_q": "Can the connector operation legitimately return no rows for the given input (e.g. a query with no matches), and does the consuming ForEach/dereference lack a null/empty guard? If so the defect is the missing guard, not the connector.",
+          "goto": "leaf_null_body" },
+        { "when": { "field": "source_inspection", "op": "matches", "value": "output-unmapped" },
+          "evaluator": "judgment",
+          "judgment_q": "Inspecting the connector activity's output mapping: was the activity's result NEVER assigned to the variable the downstream ForEach/Assign reads (so the consumer reads an unset/null variable)?",
+          "goto": "leaf_unmapped_output" },
+        { "when": { "field": "source_inspection", "op": "matches", "value": "input-null" },
+          "evaluator": "judgment",
+          "judgment_q": "Was a required input object to the connector operation null/empty at runtime, so the operation returned nothing and the workflow then dereferenced the missing output?",
+          "goto": "leaf_null_input" },
+        { "when": { "field": "source_inspection", "op": "matches", "value": "stale-binding-after-republish" },
+          "evaluator": "judgment",
+          "judgment_q": "Was the project republished after the connector entity (SWEntities bundle type) changed, leaving a stale output binding that resolves null? (Distinct from InvalidCastException, which is an entity-type mismatch, not this playbook.)",
+          "goto": "leaf_stale_binding" } ],
+      "default": "llm_insufficient_evidence" },
+
+    { "id": "leaf_null_body", "kind": "leaf",
+      "cause": "Connector operation ('{{connector_operation_type}}') returned no body / null (not an empty collection) for the given input, and the consuming ForEach/dereference has no null/empty guard.",
+      "resolution_ref": "connector-null-reference.md#resolution", "confidence": "medium" },
+
+    { "id": "leaf_unmapped_output", "kind": "leaf",
+      "cause": "Unmapped output argument — the connector activity's result was never assigned to the variable the downstream ForEach reads, so the consumer enumerates a null variable.",
+      "resolution_ref": "connector-null-reference.md#resolution", "confidence": "medium" },
+
+    { "id": "leaf_null_input", "kind": "leaf",
+      "cause": "A required input object to the connector operation was null at runtime, so the operation returned nothing and the workflow then dereferenced the missing output.",
+      "resolution_ref": "connector-null-reference.md#resolution", "confidence": "medium" },
+
+    { "id": "leaf_stale_binding", "kind": "leaf",
+      "cause": "Project republished after the connector entity (SWEntities bundle type) changed, leaving a stale output binding that resolves null. (Not InvalidCastException — that is a distinct entity-type-mismatch failure.)",
+      "resolution_ref": "connector-null-reference.md#resolution", "confidence": "medium" },
+
+    { "id": "llm_insufficient_evidence", "kind": "llm", "mode": "continue",
+      "reason": "Signature confirms a connector-output NRE but none of the four causes reproduces a null from the source available. Treat as a low-confidence lead and gather more evidence — full stack, the exact connector activity, the input/output variable bindings — before concluding." },
+
+    { "id": "llm_not_this_playbook", "kind": "llm", "mode": "jump",
+      "reason": "Either the faulted exception is not a NullReferenceException, or the ForEach is not over an IntegrationService SWEntities connector output. Route to a different runtime-exception playbook or hand back to triage. If the exception is InvalidCastException over an SWEntities type, that is the entity-type-mismatch failure, not this playbook." }
+  ]
+}
