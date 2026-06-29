@@ -43,4 +43,4 @@ What to look for:
 - **`DAP-GE-3000` — connection missing in folder:** create a connection using the exact `connectorName` from the resource file; if `authenticationType` is `AuthenticateAfterDeployment`, authenticate it after creating.
 - **`DAP-GE-3000` — cross-workspace / wrong folder:** create a connection in the runner's workspace (or a shared folder for shared processes), update the workflow to reference its ID, and republish.
 - **`DAP-GE-3000` — robot lacks permission:** grant the robot account at least `Connections.View` in the folder where the connection resides.
-- **`DAP-GE-3005`:** re-enable the connection in the Integration Service UI. If it was auto-disabled after auth failures, re-authenticate first (see [token-refresh-failed.md](./token-refresh-failed.md)) or it will disable again.
+- **`DAP-GE-3005`:** re-enable the connection in the Integration Service UI. If it was auto-disabled after auth failures, re-authenticate first (see [connection-auth-expired.md](./connection-auth-expired.md)) or it will disable again.

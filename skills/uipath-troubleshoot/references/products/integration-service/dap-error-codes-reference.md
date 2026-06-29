@@ -64,7 +64,6 @@ IS auto-retries before surfacing a failure. Knowing this disambiguates transient
 
 | Code | Name | Root cause | Playbook |
 |------|------|------------|----------|
-| `DAP-GE-3004` | FailedToGetAccessToken | OAuth token refresh failed — expired/revoked credentials | [token-refresh-failed.md](./playbooks/token-refresh-failed.md) |
 | `DAP-GE-3000` | FailedToGetConnection | Connection deleted, inaccessible, or wrong one selected | [connection-not-resolved.md](./playbooks/connection-not-resolved.md) |
 | `DAP-GE-3005` | ConnectionDisabled | Connection is disabled | [connection-not-resolved.md](./playbooks/connection-not-resolved.md) |
 | `DAP-RT-1002` | ConnectionIdNull | No connection bound to the activity | [connection-not-resolved.md](./playbooks/connection-not-resolved.md) |
@@ -84,6 +83,7 @@ Bugs in the activity pack or connector metadata; the customer cannot work around
 | `DAP-RT-1008` | InvalidActivityConfiguration | Activity configuration is malformed | [activity-configuration-corrupt.md](./playbooks/activity-configuration-corrupt.md) |
 | `DAP-RT-1100` | HttpMethodMissing | Generated activity has no HTTP method — incomplete connector metadata | [activity-configuration-corrupt.md](./playbooks/activity-configuration-corrupt.md) |
 | `DAP-RT-1001` | ServiceProviderNull | Runtime DI/service provider unavailable — internal error | [activity-configuration-corrupt.md](./playbooks/activity-configuration-corrupt.md) |
+| `DAP-GE-3004` | FailedToGetAccessToken | IS could not obtain a **first-party UiPath service** token (Orchestrator, Feature Flag service) — NOT a connection credential; often transient | [token-refresh-failed.md](./playbooks/token-refresh-failed.md) |
 | `DAP-GE-3001` | InvalidMigration | Activity failed to migrate to a newer schema version | [activity-configuration-corrupt.md](./playbooks/activity-configuration-corrupt.md) |
 | `DAP-RT-1005` | ApiResponseMismatch | Response shape ≠ activity output type — connector schema drift | [response-mapping-mismatch.md](./playbooks/response-mapping-mismatch.md) |
 | `DAP-RT-1155` `DAP-RT-1156` | DataTableFieldTypeMismatch / TypedDataTableNotConstructedProperly | Output couldn't map into the expected TypedDataTable | [response-mapping-mismatch.md](./playbooks/response-mapping-mismatch.md) |
