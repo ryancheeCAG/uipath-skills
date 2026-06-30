@@ -477,7 +477,7 @@ bash <SKILL_DIR>/scripts/sdd-to-docx.sh "<SDD_PATH>.md" [--reference-doc "<TEMPL
 
 `--reference-doc` applies a customer template's fonts, heading styles, and margins. The section structure stays as the markdown SDD.
 
-**Official ASDD (client structure):** the markdown SDD is agent-first; the ASDD is the client deliverable in the customer's own section layout. Ask the user for the ASDD template path, then follow [asdd-crosswalk-guide.md](asdd-crosswalk-guide.md) to match the SDD into the ASDD sections and compute the missing pieces. Do not invent the official section structure.
+**Official client SDD/ASDD (customer's structure):** the markdown SDD is agent-first; the official Word document is the client deliverable in the customer's own section layout. Ask the user for the template path, then follow [asdd-crosswalk-guide.md](asdd-crosswalk-guide.md) to match the markdown SDD into the template's sections and compute the missing pieces. Do not invent the official section structure.
 
 **Diagrams:** keep them as Mermaid and make them readable — clear node labels, one node per step, a logical direction. They convert as code blocks. Rendering them to images and styling the final document are not this skill's job — leave that to the user or their doc tooling.
 

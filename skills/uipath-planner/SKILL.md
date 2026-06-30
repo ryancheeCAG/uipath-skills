@@ -144,7 +144,7 @@ High-level view of what each specialist owns. **Do not describe internal flows o
 | [Package Selection Guide](references/package-selection-guide.md) | NuGet package selection; Integration Service vs NuGet rules; per-product dependency manager. Load when filling §14 Packages or equivalent. |
 | [Tenant Library Search Guide](references/tenant-library-search-guide.md) | Step 2.5 procedure for discovering deployed libraries via `uip or libraries list` + JMESPath filtering — auth preflight, ranking, zero-results branch, manual fallback. |
 | [Attended Re-auth Pattern Guide](references/attended-reauth-pattern-guide.md) | Design contract for portal automations with a human-only login (hardware 2FA token, smart card, biometric): handoff point, state-verified resume, attended robot, routing to `uipath-rpa`. Load when the PDD signals a non-scriptable interactive sign-in. |
-| [ASDD Crosswalk Guide](references/asdd-crosswalk-guide.md) | Generate the client-facing ASDD: warn the user for the ASDD template path, match the SDD into its sections, compute missing pieces. Load at Step 2.5 when the user wants the official ASDD. |
+| [ASDD Crosswalk Guide](references/asdd-crosswalk-guide.md) | Generate the client-facing Word SDD/ASDD: warn the user for the template path, match the markdown SDD into its sections, compute missing pieces. Includes the crosswalk for the standard UiPath SDD template. Load at Step 2.5 when the user wants the official document. |
 
 ### SDD templates
 
