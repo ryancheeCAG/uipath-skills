@@ -33,3 +33,4 @@ The workflow ran as an Orchestrator job. Troubleshooting data comes from:
 |-----------|-------------|
 | `System.NullReferenceException` | Code attempted to use an object reference that is null |
 | `System.ArgumentNullException` | A method received a null argument where non-null was required |
+| `Expression Activity type 'VisualBasicValue`1' requires compilation` | An expression activity was not AOT-compiled and runtime JIT is disabled (modern `Windows`/`Portable` .NET projects) — caused by invalid/smart quotes, expression-language mismatch, or post-`Legacy` migration |
