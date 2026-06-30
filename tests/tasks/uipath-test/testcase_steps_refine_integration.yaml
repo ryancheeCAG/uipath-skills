@@ -1,0 +1,123 @@
+task_id: skill-test-testcase-steps-refine-integration
+description: >
+  Integration test: a QA author refines the manual steps of an existing test
+  case after a review, exercising the edit verbs of the new
+  `uip tm testcases steps` family (TMHUB-32134) that the authoring smoke test
+  does not touch. The agent self-seeds a uniquely-named test case in the
+  existing CLAIM project and batch-adds three starter steps with the repeatable
+  `--step '<json>'` form, then applies the reviewer's changes: corrects one
+  step's expected result (`steps update --step-id`), reorders a step to a new
+  0-based position (`steps move --step-id --target-position`), and removes an
+  obsolete step (`steps delete --step-id --yes`), listing the steps at the end
+  to confirm the final order. It deletes the seeded test case afterward (with a
+  post_run safety net). Asserts the JSON multi-step add (`--step`) plus the edit
+  verbs. The prompt carries no skill-load hint — the JSON multi-step add shape,
+  the `--step-id <UUID>` requirement for edits, the 0-based `--target-position`,
+  and that `delete` needs `--yes` are all left to the skill.
+tags: [uipath-test, integration, mode:operate, lifecycle:setup, feature:test-case]
+
+run_limits:
+  expected_turns: 30
+  max_turns: 70
+  # This flow chains ~8 live uip calls (seed steps → discover ids → update/move/
+  # delete → cleanup); under tenant latency/504-retries a single turn can exceed
+  # the experiment's 900s default, so give it headroom (task_timeout > turn_timeout).
+  turn_timeout: 1500
+  task_timeout: 1800
+
+post_run:
+  - command: |
+      if [ -f testcase-key.txt ]; then
+        KEY=$(tr -d '[:space:]' < testcase-key.txt)
+        if [ -n "$KEY" ]; then
+          uip tm testcases delete --project-key CLAIM --test-case-key "$KEY" --yes --output json || true
+        fi
+      fi
+    timeout: 60
+
+initial_prompt: |
+  I've got a manual test case in our CLAIM project in Test Manager that needs
+  cleaning up after a review — can you set it up and apply the changes? First
+  create it with a clear, unique name and give it these three steps all at once
+  to start:
+    1. "Log in as a standard user" / "Dashboard loads"
+    2. "Open the transfers page" / "Transfers form shown"
+    3. "Submit a transfer over the daily limit" / "Transfer is accepted"
+
+  Now the review changes:
+    - The third step's expected result is wrong — it should read
+      "Transfer is rejected with a limit-exceeded error". Fix that step.
+    - Pin the "Log in as a standard user" step to the very first position.
+    - We've dropped "Open the transfers page" from scope, so remove it.
+
+  When that's done, list the steps so I can confirm the final order. Save the
+  test case key to testcase-key.txt and delete the case afterward so the tenant's
+  back to normal. No need to wait on me.
+
+success_criteria:
+  - type: command_executed
+    description: "Agent checked login status with --output json (Critical Rule #1)"
+    tool_name: "Bash"
+    command_pattern: 'uip\s+login\s+status.*--output\s+json'
+    min_count: 1
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # Assert the agent SEEDS a disposable case first — so the destructive edit
+  # verbs (update/move/delete) operate on fresh, throwaway data, never on a
+  # pre-existing shared CLAIM case the agent might otherwise resolve.
+  - type: command_executed
+    description: "Agent created the disposable seed test case (`testcases create --project-key CLAIM`)"
+    tool_name: "Bash"
+    command_pattern: '(?=[\s\S]*--project-key\s+\S)(?=[\s\S]*--output\s+json)uip\s+tm\s+testcases?\s+create\b'
+    min_count: 1
+    weight: 1.0
+    pass_threshold: 1.0
+
+  # `steps list` (final confirm) is owned by testcase_steps_authoring_smoke.yaml
+  # and is not re-asserted here. This task owns the JSON multi-step `add` (the
+  # `--step` form, distinct from the smoke task's flag-mode `--description` add)
+  # plus the edit verbs (update / move / delete).
+
+  - type: command_executed
+    description: "Agent seeded the case via the JSON multi-step add form (`steps add --step '<json>'`)"
+    tool_name: "Bash"
+    command_pattern: '(?=[\s\S]*--project-key\s+\S)(?=[\s\S]*--test-case-id\s+\S)(?=[\s\S]*--step\s+\S)(?=[\s\S]*--output\s+json)uip\s+tm\s+testcases?\s+steps\s+add\b'
+    min_count: 1
+    weight: 1.5
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent corrected a step's expected result (`steps update --step-id <UUID>`)"
+    tool_name: "Bash"
+    command_pattern: '(?=[\s\S]*--project-key\s+\S)(?=[\s\S]*--step-id\s+\S)(?=[\s\S]*--output\s+json)uip\s+tm\s+testcases?\s+steps\s+update\b'
+    min_count: 1
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent reordered a step to a 0-based position (`steps move --step-id --target-position`)"
+    tool_name: "Bash"
+    command_pattern: '(?=[\s\S]*--project-key\s+\S)(?=[\s\S]*--step-id\s+\S)(?=[\s\S]*--target-position\s+\d)(?=[\s\S]*--output\s+json)uip\s+tm\s+testcases?\s+steps\s+move\b'
+    min_count: 1
+    weight: 2.0
+    pass_threshold: 1.0
+
+  - type: command_executed
+    description: "Agent deleted the obsolete step with --yes (`steps delete --step-id <UUID> --yes`)"
+    tool_name: "Bash"
+    command_pattern: '(?=[\s\S]*--project-key\s+\S)(?=[\s\S]*--step-id\s+\S)(?=[\s\S]*(--yes|-y)\b)(?=[\s\S]*--output\s+json)uip\s+tm\s+testcases?\s+steps\s+delete\b'
+    min_count: 1
+    weight: 2.0
+    pass_threshold: 1.0
+
+  # Cleanup is graded: the agent deletes the seeded case itself (not just via the
+  # post_run safety net), so editing/deleting steps never leaves junk on a shared
+  # CLAIM case. `testcases delete` (the CASE) is project-scoped + --yes + JSON.
+  - type: command_executed
+    description: "Agent deleted the seeded test case for cleanup (`testcases delete --test-case-key ... --yes --output json`)"
+    tool_name: "Bash"
+    command_pattern: '(?=[\s\S]*--project-key\s+\S)(?=[\s\S]*--test-case-key\s+\S)(?=[\s\S]*(--yes|-y)\b)(?=[\s\S]*--output\s+json)uip\s+tm\s+testcases?\s+delete\b'
+    min_count: 1
+    weight: 1.0
+    pass_threshold: 1.0
