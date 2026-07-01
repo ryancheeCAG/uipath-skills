@@ -98,7 +98,7 @@ For every task, trigger, and condition in the sdd.md:
 | `wait-for-connector` | `plugins/tasks/connector-trigger/` |
 | `wait-for-timer` | `plugins/tasks/wait-for-timer/` |
 
-> **`agent` & `api-workflow` — create-on-missing.** An `agent` or `api-workflow` can be built inline when its registry lookup is empty (user-confirmed at the Rule 17 gate): an in-solution sibling → [plugins/tasks/agent/planning.md § Creating an Agent inline](plugins/tasks/agent/planning.md#creating-an-agent-inline) / [plugins/tasks/api-workflow/planning.md § Creating an API workflow inline](plugins/tasks/api-workflow/planning.md#creating-an-api-workflow-inline). See [§ 3.4](#34-unresolved-resources). All other kinds (regular RPA `process`, action, connectors, agentic process) use the §3.4 placeholder path.
+> **`agent` & `api-workflow` — create-on-missing.** Both kinds can be built inline at the Rule 17 gate — flow in [§ 3.4](#34-unresolved-resources); type specifics: [agent](plugins/tasks/agent/planning.md#creating-an-agent-inline) / [api-workflow](plugins/tasks/api-workflow/planning.md#creating-an-api-workflow-inline). All other kinds (regular RPA `process`, action, connectors, agentic process) use the §3.4 placeholder path.
 
 ### 3.2 Trigger Type catalog (case-level)
 

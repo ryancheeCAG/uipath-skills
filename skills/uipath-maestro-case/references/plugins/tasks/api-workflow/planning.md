@@ -23,7 +23,7 @@ Pick this plugin when the sdd.md labels a task as `API_WORKFLOW` — typically a
 
 1. **Primary cache file:** `api-index.json`.
 2. **Identifier field:** `entityKey`.
-3. **Match priority:** exact name + exact folder > exact name, multiple folders (pick matching) > exact name only > **no match**. An exact-name hit in a **different** folder — including a child of the sdd.md folder (which only seeds the lookup and **may be a parent/truncated path**, see field table) — is an **exact name only** match: **resolve it** (bind `folder-path` to the registry entry's full path per step 4). Do NOT treat a folder difference as no-match or fall through to the Create gate; the gate (step 4 / [§ in-solution check](#no-tenant-index-match--check-in-solution-siblings-before-the-gate)) is for when **no** registry entry has the name at all.
+3. **Match priority:** exact name + exact folder > exact name, multiple folders (pick matching) > exact name only > **no match**. An exact-name hit in a **different** folder — including a child of the sdd.md folder (which only seeds the lookup and **may be a parent/truncated path**, see field table) — is an **exact name only** match: **resolve it** (bind `folder-path` to the registry entry's full path per step 4). Do NOT treat a folder difference as no-match or fall through to the Create gate — the gate is only for names **no** registry entry carries at all. A true no-match runs the [§ in-solution check](#no-tenant-index-match--check-in-solution-siblings-before-the-gate) first, then the Rule 17 gate; only a task left unresolved after the gate falls back to the sdd.md folder (step 4).
 4. **`folder-path` = the SELECTED entry's `folders[0].fullyQualifiedName`** (not the sdd.md "Folder" — see the field table above). Fall back to the sdd.md folder only when there is no registry match (Unresolved path).
 5. Discover inputs/outputs via `tasks describe` — see [bindings-and-expressions.md § Discovering output names](../../../bindings-and-expressions.md).
 
@@ -35,7 +35,7 @@ When steps 1–3 find nothing in the tenant index **and** the CLI supports `regi
 uip maestro case registry search "<name>" --type api --local --output json
 ```
 
-An exact-name match with `Resource.Source == "local"` means the API workflow **already exists as an in-solution sibling** — built by a prior run, built by the user, or built earlier in this run. **Resolve it directly; do NOT enter the [Rule 17 Create gate](../../../registry-discovery.md#must-confirm-before-placeholder-fallback):** bind by name+folder with the `solution_folder` sentinel (`resourceKey="solution_folder.<name>"`), reading I/O from the sibling's raw `entry-points.json` (per [§ Creating an API workflow inline](#creating-an-api-workflow-inline)). Only when **both** the tenant index and the local siblings lack the API workflow does it reach the gate / Create. This makes planning **idempotent** — a re-run (or a pre-existing sibling) resolves here instead of triggering a duplicate build.
+Same pre-gate check as agents — [agent/planning.md § No tenant-index match](../agent/planning.md#registry-resolution): an exact-name match with `Resource.Source == "local"` is an existing in-solution sibling — **resolve it directly (bind `resourceKey="solution_folder.<name>"`); do NOT enter the [Rule 17 Create gate](../../../registry-discovery.md#must-confirm-before-placeholder-fallback)**. Only a name absent from **both** the tenant index and the local siblings reaches the gate (keeps re-runs idempotent). **api-workflow-specific I/O read:** the sibling's raw `entry-points.json` `entryPoints[0].input/.output.properties`; a **user-built** sibling may carry `null` there (no CLI verb syncs that file) — fall back to the `Workflow.json` root input/output schema properties and warn in the completion report.
 
 ## Unresolved Fallback
 
@@ -59,7 +59,7 @@ Same as agents — [agent/planning.md § Creating an Agent inline, Step 1b](../a
 
 ### Step 2 — Hand the builder a self-contained brief
 
-```
+```text
 Build a UiPath API workflow by following the uipath-api-workflow skill. Non-interactive:
 do not ask for approval; do not publish/upload/deploy; do NOT execute the workflow
 (`uip api-workflow run` reaches real vendor systems when authenticated) — offline
@@ -77,6 +77,10 @@ do not ask for approval; do not publish/upload/deploy; do NOT execute the workfl
   `init` scaffolds the entry-point input/output as null, no CLI verb fills them, and
   `validate` does not flag drift; the caller reads the finished contract from
   `entry-points.json`.
+  Back-filling entry-points.json this way is a sanctioned exception to that skill's
+  rule 19a "Then edit Workflow.json only" (and to its "input/output may be null") —
+  the populated entry-point I/O contract is part of your deliverable; null is NOT
+  acceptable here.
   Design everything else — activities, expressions, control flow, and any additional I/O —
   as the purpose needs. Build compute-only: no Integration Service connector activities
   (they require a live pinged connection + login; never ship placeholder connector configs).
@@ -98,7 +102,7 @@ Identical to [agent Step 3](../agent/planning.md#creating-an-agent-inline) excep
 
 Same contract as agents — [agent/planning.md § Failure](../agent/planning.md#creating-an-agent-inline): on `built:false` (or a dead sub-agent) show its `error` verbatim, then AskUserQuestion `Retry create` / `Skip (defer)`; on Skip or repeated failure fall to the Unresolved Fallback above (placeholder + completion-report note) — never halt. A verify-time I/O mismatch is a **warning**, not a failure: rewire matched fields, report missing/extra, continue.
 
-> **"Already exists" is NOT a failure** (idempotency residual). A `uip api-workflow init` *"directory exists / not empty"* error or a `project add` *"Project name already exists"* means an interrupted prior run built the sibling but the pre-gate local check missed it (never registered in the `.uipx`, so `--local` didn't see it). Do **not** route to Retry/Skip — register it (`uip solution project add`, if not already registered), then rediscover + bind (Step 3 / orchestration §4). It's already built.
+> **"Already exists" is NOT a failure** (idempotency residual) — same adoption contract as agents ([agent/planning.md § Failure](../agent/planning.md#creating-an-agent-inline)); api-workflow error verbs: `uip api-workflow init` *"directory exists / not empty"*, `uip solution project add` *"Project name already exists"*. **Kind-check before adopting:** `uip maestro case registry list --local --output json` — if the colliding name's `Category` is not `api`, an existing sibling of another kind owns the name (cross-kind collision, NOT a prior build): rename this workflow ([registry-discovery.md § 1](../../../registry-discovery.md#create-on-missing-build-and-rediscovery)) and rebuild. Otherwise adopt: register if needed, rediscover, bind (Step 3 / orchestration §4).
 
 ## tasks.md Entry Format
 
