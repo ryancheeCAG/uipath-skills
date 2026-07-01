@@ -199,13 +199,14 @@ After debug completes, return to Phase 5 prompt so user can re-run or move on. P
 1. File path of `caseplan.json`.
 2. What was built — summary of stages, tasks, conditions, SLA.
 3. Validation status — `validate` pass / remaining warnings.
-4. Placeholder tasks + unresolved resources — list every placeholder (TaskId, type, display-name, stage) + external resource user must register (task-type-id / connection-id) + wiring-notes from `tasks.md`. Also list **resources built inline** (agents / RPA processes built as in-solution siblings, already bound — for an RPA scaffold, note the workflow logic is still the user's to implement in Studio) and any **built but unreferenced** (reject case) separately — they need no user action to wire. See [placeholder-tasks.md § Completion-Report Shape](placeholder-tasks.md#completion-report-shape).
+4. Placeholder tasks + unresolved resources — list every placeholder (TaskId, type, display-name, stage) + external resource user must register (task-type-id / connection-id) + wiring-notes from `tasks.md`. Also list **resources built inline** (agents / RPA processes built as in-solution siblings, already bound — for an RPA scaffold, note the workflow logic is still the user's to implement in Studio and that `case debug` does not provision it, per Debug notes below) and any **built but unreferenced** (reject case) separately — they need no user action to wire. See [placeholder-tasks.md § Completion-Report Shape](placeholder-tasks.md#completion-report-shape).
 5. Missing connections — connector tasks needing IS connections that don't exist yet.
 
 ### Debug notes
 
 - `uip solution resources refresh` MUST run before debug — syncs resources from `bindings_v2.json` so Studio Web can resolve connector dependencies (Rule 14).
 - Debug verifies the build actually runs end-to-end before the user commits to a publish. If debug surfaces a fixable issue, see [Step 13a — Troubleshoot failed case](implementation.md#step-13a--troubleshoot-failed-case) and re-run.
+- **Inline-built RPA siblings are NOT provisioned by `case debug`** — that task faults with incident `170007` ("job's associated process could not be found") by design; agent siblings do resolve in debug. Verify inline RPA runtime via a full solution deploy instead. See [rpa/planning.md § Creating an RPA process inline](plugins/tasks/rpa/planning.md#creating-an-rpa-process-inline).
 
 ## Phase 6 — Publish
 

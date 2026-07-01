@@ -6,7 +6,7 @@ An RPA robot task. The sdd.md component type is `RPA`. The task node's `type` fi
 
 Pick this plugin when the sdd.md explicitly labels a task as `RPA` (e.g., "RPA robot does X"). The distinction from `process` is **semantic** (sdd.md intent) rather than structural (registry representation).
 
-If sdd.md is ambiguous between `PROCESS` and `RPA`, default to `process` unless the sdd.md mentions UI automation, desktop apps, or robot-specific concerns.
+If sdd.md is ambiguous between `PROCESS` and `RPA`, default to `process` unless the sdd.md mentions UI automation, desktop apps, or robot-specific concerns. **Exception when the resource is missing:** if the registry lookup for an ambiguous task comes back empty, surface the ambiguity (AskUserQuestion) instead of silently defaulting — an `rpa` reading is creatable at the Rule 17 gate; a `process` reading is placeholder-only.
 
 ## Required Fields from sdd.md
 
@@ -26,12 +26,13 @@ Same shape as [process/planning.md](../process/planning.md):
 2. **Identifier field:** `entityKey`.
 3. Use the sdd.md `RPA` label to set `type: "rpa"` on the task node; the cache `entityKey` is recorded in `registry-resolved.json` (not written to the node — the task references the resource via `data.name` / `data.folderPath` = `=bindings.<id>`).
 4. If no match in `process-index.json`, search all other cache files as a fallback.
-5. **`folder-path` = the SELECTED entry's `folders[0].fullyQualifiedName`** (not the sdd.md "Folder" — see the field table above). Fall back to the sdd.md folder only when there is no registry match (Unresolved path).
-6. Discover inputs/outputs via `tasks describe` — see [bindings-and-expressions.md § Discovering output names](../../../bindings-and-expressions.md).
+5. **Match priority:** exact name + exact folder > exact name, multiple folders (pick matching) > exact name only > **no match**. An exact-name hit in a **different** folder — including a child of the sdd.md folder (which only seeds the lookup and **may be a parent/truncated path**, see field table) — is an **exact name only** match: **resolve it** (bind `folder-path` to the registry entry's full path per step 6). Do NOT treat a folder difference as no-match or fall through to the Create gate — the gate is only for names **no** registry entry carries at all. A true no-match runs the [§ in-solution check](#no-tenant-index-match--check-in-solution-siblings-before-the-gate) first, then the Rule 17 gate; only a task left unresolved after the gate falls back to the sdd.md folder (step 6).
+6. **`folder-path` = the SELECTED entry's `folders[0].fullyQualifiedName`** (not the sdd.md "Folder" — see the field table above). Fall back to the sdd.md folder only when there is no registry match (Unresolved path).
+7. Discover inputs/outputs via `tasks describe` — see [bindings-and-expressions.md § Discovering output names](../../../bindings-and-expressions.md).
 
 ### No tenant-index match → check in-solution siblings BEFORE the gate
 
-When steps 1–4 find nothing in the tenant index **and** the CLI supports `registry --local`, check for an existing in-solution sibling before treating the task as unresolved:
+When steps 1–5 find nothing in the tenant index **and** the CLI supports `registry --local`, check for an existing in-solution sibling before treating the task as unresolved:
 
 ```bash
 uip maestro case registry search "<name>" --type process --local --output json
@@ -82,13 +83,17 @@ Map is proposed-canonical: at verify, treat a differing-but-compatible .NET type
 
 ### Step 2 — Hand the builder a self-contained brief
 
-```
+```text
 Build a UiPath RPA process by following the uipath-rpa skill. Non-interactive:
 do not ask for approval; do not publish/upload/deploy.
   Solution dir:     <abs path to the solution>
   Process name:     <ProcessName>
   Required inputs:  <Step-1 pinned inputs: [{name, type?}, ...]>   (case vocabulary; map to .NET arguments — honor type when given)
   Required outputs: <Step-1 pinned outputs: [{name, type?}, ...]>
+  Type map (case→.NET): string→System.String, integer→System.Int32, float→System.Single,
+    double→System.Double, boolean→System.Boolean, date/datetime→System.DateTime,
+    jsonSchema→System.Collections.Generic.Dictionary<System.String,System.Object>;
+    file→no fixed mapping (pick what fits the purpose; reconciled at verify).
   Scaffold: uip rpa init --name "<ProcessName>" --location "<solution dir>"
     --target-framework Portable --expression-language VisualBasic
     --skip-solution-registration --output json
@@ -114,17 +119,17 @@ The brief is self-contained — no other case context (do not dump `caseplan.jso
 
 ### Step 3 — Binding (drops `resourceSubType`)
 
-After the sibling is built, registered, and verified, bind the task by name+folder: two bindings `resource:"process"`, **NO `resourceSubType` key** (omit entirely — not `""`, not null; contrast agent `"Agent"`), shared `resourceKey="solution_folder.<ProcessName>"`; `name` default `<ProcessName>`, **`folderPath` default `""` (empty string — the `solution_folder` sentinel belongs ONLY in `resourceKey`; a literal `solution_folder` folderPath passes `validate` but fails invocation with `folder not exist`)**. Node `type` stays `"rpa"`. In `bindings_v2.json`, omit `metadata.subType`. The result is byte-identical to a tenant-resolved RPA binding except `folderPath:""` + the sentinel `resourceKey`.
+Runs **after** § Step 4's read-back confirms the sibling (execution order per [registry-discovery.md § 4](../../../registry-discovery.md#create-on-missing-build-and-rediscovery) is rediscover → verify → bind; the numbering here follows the agent leg's doc layout, not execution order). Bind the task by name+folder: two bindings `resource:"process"`, **NO `resourceSubType` key** (omit entirely — not `""`, not null; contrast agent `"Agent"`), shared `resourceKey="solution_folder.<ProcessName>"`; `name` default `<ProcessName>`, **`folderPath` default `""` (empty string — the `solution_folder` sentinel belongs ONLY in `resourceKey`; a literal `solution_folder` folderPath passes `validate` but fails invocation with `folder not exist`)**. Node `type` stays `"rpa"`. In `bindings_v2.json`, omit `metadata.subType`. The result is byte-identical to a tenant-resolved RPA binding except `folderPath:""` + the sentinel `resourceKey`.
 
 > **Provisioning ≠ debug (runtime-verified).** The sibling ships inside the solution `.uipx` and is provisioned as a runnable Orchestrator process by a full **`uip solution deploy run`** — invocation then succeeds end-to-end (StartJob finds the process; outputs round-trip into case vars; runtime argument-name matching is case-insensitive, so camelCase XAML args match the engine's PascalCase `JobArguments` — do NOT "fix" casing at verify). **`uip maestro case debug` does NOT provision non-agent siblings**: an inline RPA task in debug fails with incident `170007` "The job's associated process could not be found". That is a debug-path limitation, not a binding error — verify invocation via a full deploy, and warn the user when they debug a case with an inline RPA sibling.
 
 ### Step 4 — Read-back and verify
 
-Rediscover with `uip maestro case registry search "<ProcessName>" --type process --local --output json` (§ sibling check above — token is `process`). RPA siblings have **no `entry-points.json`**: read the case-preserving argument names + .NET types from the sibling's on-disk **`project.json` `entryPoints[].input/output`** (never from the PascalCased `--local` `Resource.{Inputs,Outputs}`), reconcile against the pinned contract via the Step-1 map → matched / missing-in-sibling / extra-in-sibling. Warn+diff into the completion report; never block. The `--local` `EntityKey` is audit-only — the node binds by name+folder.
+The orchestration owns rediscover → verify → bind ([registry-discovery.md § Create-on-Missing § 4](../../../registry-discovery.md#create-on-missing-build-and-rediscovery) — incl. warn-don't-block and `EntityKey` audit-only). RPA deltas only: the rediscovery token is **`--type process`** (§ sibling check above), and RPA siblings have **no `entry-points.json`** — read the case-preserving argument names + .NET types from the on-disk **`project.json` `entryPoints[].input/output`** (never from the PascalCased `--local` `Resource.{Inputs,Outputs}`), reconciling .NET→case via the Step-1 map.
 
 ### Failure — surface and re-prompt, never stall
 
-Same contract as the agent leg: on `built:false` (or a dead sub-agent), show the `error` verbatim, then AskUserQuestion `Retry create` / `Skip (defer)`. On Skip or repeated failure → Unresolved Fallback above (placeholder + completion-report note) — never halt. Verify-time I/O mismatch = **warning** (rewire matched fields, report the rest). **"Already exists" is NOT a failure:** *"directory exists"* from `init` or *"Project name already exists"* from `project add` means an interrupted prior run built it but never registered it — register it (`uip solution project add`), then rediscover + bind. It's already built.
+Same contract as the agent leg: on `built:false` (or a dead sub-agent), show the `error` verbatim, then AskUserQuestion `Retry create` / `Skip (defer)`. On `Skip` or after the 2nd consecutive failed `Retry create` → Unresolved Fallback above (placeholder + completion-report note) — never halt. Verify-time I/O mismatch = **warning** (rewire matched fields, report the rest). **"Already exists" is NOT a failure:** *"directory exists"* from `init` or *"Project name already exists"* from `project add` means an interrupted prior run built it but never registered it — register it (`uip solution project add`, if not already registered), then rediscover + bind (Step 3/4). It's already built. **Kind-check before adopting** (two creatable kinds share the name namespace): `uip maestro case registry list --local --output json` — if the colliding name's `Category` is not `process`, a sibling of another kind owns it (cross-kind collision, NOT a prior build): rename this process ([registry-discovery.md § 1](../../../registry-discovery.md#create-on-missing-build-and-rediscovery)) and rebuild.
 
 ## tasks.md Entry Format
 

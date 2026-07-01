@@ -40,12 +40,12 @@ Options:
   - Create the missing resource(s) inline   # shown ONLY when ≥1 still-empty is creatable (`agent`/`rpa`) AND the CLI has `registry --local`
       → multi-select which to build as in-solution siblings (agent → uipath-agents,
         rpa → uipath-rpa); build them (§ Create-on-Missing). Unselected items + all
-        non-creatable empties (generic `process`, action, connectors, agentic processes) → placeholder.
+        non-creatable empties (generic `process`, action, connectors, agentic processes, …) → placeholder.
   - Skip and use placeholders
       → proceed to per-plugin Unresolved Fallback paths for the unmatched lookups.
 ```
 
-**Apply once per planning batch, not per-task.** Each option is batch-level — never a per-task yes/no chain. Force pull loops back to this same prompt for whatever stays empty. The **Create** option covers **agents and RPA processes (`rpa`)** (never generic `process` tasks, action apps, connectors, or agentic processes); it appears only when ≥1 still-empty is creatable AND the CLI supports `registry --local` (capability probe — see [§ Create-on-Missing](#create-on-missing-build-and-rediscovery)). When `--local` is absent the gate degrades to Force pull / Skip exactly as before.
+**Apply once per planning batch, not per-task.** Each option is batch-level — never a per-task yes/no chain. Force pull loops back to this same prompt for whatever stays empty. The **Create** option covers **agents and RPA processes (`rpa`)** — never anything else (generic `process` tasks, action apps, connectors, agentic processes, …); it appears only when ≥1 still-empty is creatable AND the CLI supports `registry --local` (capability probe — see [§ Create-on-Missing](#create-on-missing-build-and-rediscovery)). When `--local` is absent the gate degrades to Force pull / Skip exactly as before.
 
 **Do NOT pre-judge.** Resource-name heuristics ("looks vendor-specific, won't be in registry anyway", "this is an obvious custom connector") are the user's call to make, not the agent's. Always ask. SKILL.md Rule 17.
 
@@ -68,7 +68,7 @@ Each file is a JSON array of resource entries.
 
 ## Create-on-Missing build and rediscovery
 
-When the user picks **Create** at the gate, the skill builds each selected resource as an **in-solution sibling** (during Phase-1 planning) and wires it in as a normal resolved task — no placeholder. **Two types are buildable — `agent` (via `uipath-agents`) and `rpa` (via `uipath-rpa`)**; the orchestration below is type-agnostic so other non-connector kinds can be enabled later via their own type skill. Connectors, action apps, generic `process` tasks, and agentic processes (Process Orchestration) are never built here.
+When the user picks **Create** at the gate, the skill builds each selected resource as an **in-solution sibling** (during Phase-1 planning) and wires it in as a normal resolved task — no placeholder. **Two types are buildable — `agent` (via `uipath-agents`) and `rpa` (via `uipath-rpa`)**; the orchestration below is type-agnostic so other non-connector kinds can be enabled later via their own type skill. Connectors, action apps, generic `process` tasks, agentic processes (Process Orchestration), and every other kind are never built here.
 
 > **Create depends on the type skill being installed.** The build runs in a sub-agent that invokes the type skill (`uipath-agents` / `uipath-rpa`). The Step-2 brief instructs the sub-agent: if it cannot locate/load that skill, return `{built:false, error:"skill <name> not installed"}` — do NOT improvise a build. That `built:false` (or a sub-agent that dies) degrades to a placeholder via the per-plugin Failure contract, and §4 rediscovery is the backstop (no exact-name `--local` match → Failure contract regardless of what the sub-agent reports) — Create never hard-fails the run.
 
@@ -80,7 +80,7 @@ When the user picks **Create** at the gate, the skill builds each selected resou
 
 ### 1 — Select
 
-On Create, present an `AskUserQuestion` **multiSelect** of the still-empty **creatable** resources — agents and RPA processes (label each option with its type, e.g. `<Name> (rpa)`). The option list is capped at 4; when >4 creatable resources are empty, batch the selection across successive prompts (≤4 each). Checked → build. Unchecked items **and all non-creatable empties** (generic `process`, action, connectors, agentic processes, …) → `<UNRESOLVED>` placeholder. If two selected resources share a name, AskUserQuestion to rename one before building — the `solution_folder.<name>` sentinel resourceKey and the exact-name `search --local` rediscovery (§4) both key on the name and must be unique.
+On Create, present an `AskUserQuestion` **multiSelect** of the still-empty **creatable** resources — agents and RPA processes (label each option with its type, e.g. `<Name> (rpa)`). The option list is capped at 4; when >4 creatable resources are empty, batch the selection across successive prompts (≤4 each). Checked → build. Unchecked items **and all non-creatable empties** (generic `process`, action, connectors, agentic processes, …) → `<UNRESOLVED>` placeholder. If two selected resources share a name — or a selected resource's name is already used by an existing in-solution sibling of another kind (`registry list --local`) — AskUserQuestion to rename before building: the `solution_folder.<name>` sentinel resourceKey and the exact-name `search --local` rediscovery (§4) both key on the name, which must be unique across kinds (the namespace is shared).
 
 ### 1b — Choose build kind
 

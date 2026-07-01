@@ -133,7 +133,7 @@ Read the relevant cache file directly per [registry-discovery.md](registry-disco
 
 ### 3. Fetch the schema
 
-For non-connector tasks, run `uip maestro case tasks describe --type <type> --id <entityKey> --output json` to get the per-resource input/output schema. For connector tasks, run `uip maestro case registry get-connection` to obtain the `connectionId`, then `uip maestro case spec --type <activity|trigger> --activity-type-id <typeId> --connection-id <connId>` to get the unified spec output (identity, connection, inputs, outputs, filter, references, and a populated `caseShape` when `--input-details` is supplied).
+For non-connector tasks, run `uip maestro case tasks describe --type <type> --id <entityKey> --output json` to get the per-resource input/output schema. **Local siblings skip this step** — an in-solution sibling's `EntityKey` is local-only (no tenant resource; tenant `tasks describe` fails on it): the schema is the on-disk contract already read in step 2. For connector tasks, run `uip maestro case registry get-connection` to obtain the `connectionId`, then `uip maestro case spec --type <activity|trigger> --activity-type-id <typeId> --connection-id <connId>` to get the unified spec output (identity, connection, inputs, outputs, filter, references, and a populated `caseShape` when `--input-details` is supplied).
 
 ### 4. Edit the placeholder in place
 
@@ -141,7 +141,7 @@ Read `caseplan.json`, locate the placeholder task by `id`, and mutate its `data`
 
 | Task class | `data` mutation |
 |---|---|
-| `process`, `agent`, `rpa`, `api-workflow`, `case-management` | Set `data.name`, `data.folderPath` (both `=bindings.<id>` refs). Write `data.inputs[]` / `data.outputs[]` from the `tasks describe` schema (each input `value: ""` to start). |
+| `process`, `agent`, `rpa`, `api-workflow`, `case-management` | Set `data.name`, `data.folderPath` (both `=bindings.<id>` refs). Write `data.inputs[]` / `data.outputs[]` from the step-3 schema (`tasks describe`; local sibling: the step-2 on-disk contract) — each input `value: ""` to start. |
 | `action` | Set `data.name`, `data.folderPath` (`=bindings.<id>`), `data.taskTitle`, `data.priority`, `data.recipient` (if known). Write `data.inputs[]` / `data.outputs[]` from the schema. |
 | `execute-connector-activity`, `wait-for-connector` | Set `data.typeId`, `data.connectionId`. Write `data.inputs[]` / `data.outputs[]` from the `case spec` schema (per the connector plugin's `impl-json.md`). |
 

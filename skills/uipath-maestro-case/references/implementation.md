@@ -321,6 +321,8 @@ When a debug or process run fails, read **[troubleshooting-guide.md](troubleshoo
 2. **Fixable outside `caseplan.json`** (missing/expired connection, unregistered task type, missing Orchestrator asset, permissions): halt agent edits. Report exact resource + remediation steps to user via **AskUserQuestion** with options — `Resource fixed, re-run debug`, `Abort`.
 3. **Inconclusive** (no actionable cause): proceed to next round per retry policy.
 
+> **Known by-design debug fault:** an inline-built RPA sibling's task failing with incident `170007` ("job's associated process could not be found") under `case debug` is expected — debug does not provision RPA siblings (agent siblings do resolve). Do not spend troubleshoot rounds on it, and do NOT "fix" the task's `folderPath:""` binding (it is runtime-correct); verify via a full solution deploy instead. See [plugins/tasks/rpa/planning.md § Creating an RPA process inline](plugins/tasks/rpa/planning.md#creating-an-rpa-process-inline).
+
 **Retry policy.** Up to 3 troubleshoot → fix → debug rounds per failed run. Each round must add new context (different element ID, broader scope, fallback command) or apply different fix — do not repeat identical commands or re-apply same fix. Track round count.
 
 **Per-round timeout.** If debug run exceeds 10 minutes wall-clock, treat round as inconclusive and advance to next round (counts toward 3-round limit). Advisory — do not hard-kill subprocess; classify by elapsed time and move on.
