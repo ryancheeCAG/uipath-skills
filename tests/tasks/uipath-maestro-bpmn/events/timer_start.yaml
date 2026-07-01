@@ -18,29 +18,14 @@ sandbox:
 initial_prompt: |
   Load and follow the uipath-maestro-bpmn skill.
 
-  Author a single Maestro BPMN file `ScheduledReport.bpmn` for a process that is
-  started on a schedule:
-    - a timer start event that recurs every hour,
-    - leading to one task (e.g. a script task that builds a report),
-    - then an end event.
+  Author a Maestro BPMN file `ScheduledReport.bpmn` for a process that starts
+  automatically on a recurring schedule — every hour — then runs one task and
+  ends.
 
-  Requirements:
-  - The start event MUST carry a `bpmn:timerEventDefinition` with a recurring
-    `bpmn:timeCycle` of `R/PT1H` (every hour). It must be the process's only
-    start event.
-  - Author the structural BPMN (definitions/process scaffold, sequence flows)
-    per the skill's structural reference. Do not hand-author any `uipath:*`
-    payload from prose; if you add a UiPath extension node, pull its template
-    from the registry first.
-  - Include a `bpmndi:BPMNDiagram` with a BPMNShape for every node and a
-    BPMNEdge for every sequence flow.
-  - Validate the file with an explicit Bash command before finishing — a
-    well-formed-XML parse, e.g.:
-    `python3 -c "import xml.etree.ElementTree as ET; ET.parse('ScheduledReport.bpmn')"`.
-
-  Do NOT upload, publish, deploy, debug, run, or pack anything. Do NOT ask for
-  approval, confirmation, or feedback. Do NOT pause between planning and
-  implementation. Author the complete file end-to-end in a single pass.
+  Validate the file parses as well-formed XML before finishing, e.g.:
+  `python3 -c "import xml.etree.ElementTree as ET; ET.parse('ScheduledReport.bpmn')"`.
+  Do NOT upload, publish, deploy, debug, run, or pack anything, and do not ask for
+  approval or feedback — author it in a single pass.
 
 success_criteria:
   - type: command_executed

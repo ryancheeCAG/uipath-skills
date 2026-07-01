@@ -21,21 +21,14 @@ sandbox:
 initial_prompt: |
   Load and follow the uipath-maestro-bpmn skill.
 
-  The existing file `OrderTriage.bpmn` has a `classifyOrder` script task that
-  writes a single integer output `risk` via its BPMN.Variables mapping.
+  `OrderTriage.bpmn` is an existing Maestro BPMN process whose `classifyOrder`
+  step outputs a `risk` value. Add a second output named `category` (a string) to
+  `classifyOrder`, keeping `risk`.
 
-  Add a second output named `category` (a string) to the `classifyOrder` task so
-  the process surfaces an order category alongside `risk`. Keep the existing
-  `risk` output unchanged. Do not add or remove any node, and leave the gateway
-  routing and every element id untouched.
-
-  Validate the file with an explicit Bash command before finishing — a
-  well-formed-XML parse, e.g.:
+  Validate the file parses as well-formed XML before finishing, e.g.:
   `python3 -c "import xml.etree.ElementTree as ET; ET.parse('OrderTriage.bpmn')"`.
-
-  Do NOT upload, publish, deploy, debug, run, or pack anything. Do NOT ask for
-  approval, confirmation, or feedback. Do NOT pause between planning and
-  implementation. Make the complete edit end-to-end in a single pass.
+  Do NOT upload, publish, deploy, debug, run, or pack anything, and do not ask for
+  approval or feedback — make the edit in a single pass.
 
 success_criteria:
   - type: command_executed

@@ -18,30 +18,14 @@ sandbox:
 initial_prompt: |
   Load and follow the uipath-maestro-bpmn skill.
 
-  Author a single Maestro BPMN file `TerminateProcess.bpmn` for this process:
-    - a start event,
-    - a parallel gateway that forks into two branches,
-    - branch A leads straight to a terminate end event that hard-stops the
-      entire process,
-    - branch B runs one task (e.g. a script task) and then reaches a normal end
-      event.
+  Author a Maestro BPMN file `TerminateProcess.bpmn` for a process that forks into
+  two parallel branches: one branch immediately hard-stops the entire process,
+  and the other runs a task and ends normally.
 
-  Requirements:
-  - The terminate branch MUST end in a `bpmn:endEvent` carrying a
-    `bpmn:terminateEventDefinition`. The other branch MUST end in a normal
-    end event (no terminate definition).
-  - Author the structural BPMN (definitions/process scaffold, parallel gateway,
-    sequence flows) per the skill's structural reference. Do not hand-author any
-    `uipath:*` payload from prose.
-  - Include a `bpmndi:BPMNDiagram` with a BPMNShape for every node and a
-    BPMNEdge for every sequence flow.
-  - Validate the file with an explicit Bash command before finishing — a
-    well-formed-XML parse, e.g.:
-    `python3 -c "import xml.etree.ElementTree as ET; ET.parse('TerminateProcess.bpmn')"`.
-
-  Do NOT upload, publish, deploy, debug, run, or pack anything. Do NOT ask for
-  approval, confirmation, or feedback. Do NOT pause between planning and
-  implementation. Author the complete file end-to-end in a single pass.
+  Validate the file parses as well-formed XML before finishing, e.g.:
+  `python3 -c "import xml.etree.ElementTree as ET; ET.parse('TerminateProcess.bpmn')"`.
+  Do NOT upload, publish, deploy, debug, run, or pack anything, and do not ask for
+  approval or feedback — author it in a single pass.
 
 success_criteria:
   - type: command_executed

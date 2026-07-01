@@ -20,28 +20,16 @@ sandbox:
 initial_prompt: |
   Load and follow the uipath-maestro-bpmn skill.
 
-  The existing file `OrderTriage.bpmn` runs: start -> classifyOrder (script) ->
-  routeByRisk (exclusive gateway) -> flagForReview / autoApprove -> end.
+  `OrderTriage.bpmn` is an existing Maestro BPMN process. Insert a human-in-the-loop
+  approval step named `Approve order` between `classifyOrder` and the `routeByRisk`
+  gateway, so an approver gates the routing. Model it with the skill's documented
+  `Actions.HITL` task. Use synthetic placeholder resource names only — no tenant
+  URLs, folder keys, connection IDs, or real user names.
 
-  Insert a human-in-the-loop approval task named `Approve order` between
-  `classifyOrder` and the `routeByRisk` gateway, so the path becomes
-  classifyOrder -> Approve order -> routeByRisk. Rewire the sequence flows and
-  add a BPMNShape for the new node plus a BPMNEdge for every new flow. Preserve
-  every other node, id, and the gateway routing untouched.
-
-  Requirements:
-  - Model the approval as a `bpmn:userTask` using a documented `Actions.HITL`
-    `uipath:activity` shell. Pull the extension template from the registry; do
-    not hand-author the `uipath:*` payload from prose.
-  - Use synthetic placeholder resource names only — no tenant URLs, folder keys,
-    connection IDs, or real user names.
-  - Validate the file with an explicit Bash command before finishing — a
-    well-formed-XML parse, e.g.:
-    `python3 -c "import xml.etree.ElementTree as ET; ET.parse('OrderTriage.bpmn')"`.
-
-  Do NOT upload, publish, deploy, debug, run, or pack anything. Do NOT ask for
-  approval, confirmation, or feedback. Do NOT pause between planning and
-  implementation. Make the complete edit end-to-end in a single pass.
+  Validate the file parses as well-formed XML before finishing, e.g.:
+  `python3 -c "import xml.etree.ElementTree as ET; ET.parse('OrderTriage.bpmn')"`.
+  Do NOT upload, publish, deploy, debug, run, or pack anything, and do not ask for
+  approval or feedback — make the edit in a single pass.
 
 success_criteria:
   - type: command_executed
