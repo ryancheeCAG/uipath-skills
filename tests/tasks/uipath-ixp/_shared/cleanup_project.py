@@ -7,7 +7,9 @@ Post-run cleanup for IXP e2e/integration tasks. Two stages, both best-effort:
      {"project_name": "<ProjectName from `uip ixp projects create` output>"}
 
 2. Sweep STALE leftover test projects — ones a previous crashed run never
-   deleted. Scoped two ways so it can never touch a live/real project:
+   deleted. OPT-IN via IXP_CLEANUP_SWEEP=1 (only the e2e task sets it, so the
+   suite doesn't run N concurrent janitors conflicting on the same deletes).
+   Scoped two ways so it can never touch a live/real project:
      - name/title must start with a known test prefix (IXP_CLEANUP_PREFIXES,
        default "codereval-,e2e-test-,ixp-it-" — the last two are legacy
        prefixes, kept so pre-rename leftovers still get swept), and
@@ -20,7 +22,7 @@ idempotent (missing project == already clean) and ALWAYS exits 0: cleanup
 failures never fail the test. Locally without a tenant this is a no-op.
 
 Env knobs:
-  IXP_CLEANUP_SWEEP=0            disable stage 2 (default on)
+  IXP_CLEANUP_SWEEP=1            enable stage 2 sweep (default OFF; set only on e2e)
   IXP_CLEANUP_PREFIXES=a-,b-     comma-separated test-title prefixes to sweep
   IXP_CLEANUP_MAX_AGE_HOURS=6    only sweep projects older than this
 """
@@ -55,17 +57,15 @@ def delete_project(name):
         return
     out = (proc.stdout or proc.stderr or "").strip()
     low = out.lower()
-    benign = (
-        any(s in low for s in ("not found", "not_found", "does not exist",
-                               "already", "conflict"))
-        or "404" in out
-        or "409" in out
-    )
+    # ONLY a genuine "gone" response is benign. Do NOT treat 409/conflict/"already"
+    # as benign — those are real delete failures (e.g. a published model blocking
+    # delete, or a concurrent-modification conflict) and must surface as WARN, not
+    # be silently swallowed as "already gone".
+    gone = any(s in low for s in ("not found", "not_found", "does not exist")) or "404" in out
     if proc.returncode == 0:
         print(f"OK: deleted IXP project '{name}'")
-    elif benign:
-        # Already gone, or a concurrent run's sweep deleted it first / mid-flight.
-        print(f"SKIP: IXP project '{name}' already gone / being deleted concurrently")
+    elif gone:
+        print(f"SKIP: IXP project '{name}' not found (already deleted)")
     else:
         print(f"WARN: could not delete '{name}' (exit {proc.returncode}): {out[:200]}")
 
@@ -114,7 +114,11 @@ def cleanup_own_project():
 
 
 def sweep_stale(own_name):
-    if os.environ.get("IXP_CLEANUP_SWEEP", "1") == "0":
+    # Opt-IN: the backlog sweep runs ONLY when IXP_CLEANUP_SWEEP=1. Just ONE task
+    # (the e2e) enables it, so the whole suite doesn't run N concurrent janitors
+    # racing to delete the same projects (which caused 409 conflicts). Every other
+    # task only deletes its own project (stage 1).
+    if os.environ.get("IXP_CLEANUP_SWEEP", "0") != "1":
         return
     prefixes = tuple(
         p.strip()
