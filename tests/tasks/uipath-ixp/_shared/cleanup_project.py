@@ -17,9 +17,11 @@ Post-run cleanup for IXP e2e/integration tasks. Two stages, both best-effort:
        safely beyond the longest task_timeout (~50 min), so a concurrent run's
        freshly-created project is never in range.
 
-Delete is `uip ixp projects delete <name> -y --output json`. Everything is
-idempotent (missing project == already clean) and ALWAYS exits 0: cleanup
-failures never fail the test. Locally without a tenant this is a no-op.
+Delete is `uip ixp projects delete <name> -y --output json`. Best-effort and
+ALWAYS exits 0 (any delete failure is logged as WARN, never fails the test).
+NOTE: `delete` 404s on dataset-less (orphaned) project shells that `list` still
+returns — those are un-deletable via the current CLI and will WARN each run.
+Locally without a tenant this is a no-op.
 
 Env knobs:
   IXP_CLEANUP_SWEEP=1            enable stage 2 sweep (default OFF; set only on e2e)
@@ -56,16 +58,14 @@ def delete_project(name):
     if proc is None:
         return
     out = (proc.stdout or proc.stderr or "").strip()
-    low = out.lower()
-    # ONLY a genuine "gone" response is benign. Do NOT treat 409/conflict/"already"
-    # as benign — those are real delete failures (e.g. a published model blocking
-    # delete, or a concurrent-modification conflict) and must surface as WARN, not
-    # be silently swallowed as "already gone".
-    gone = any(s in low for s in ("not found", "not_found", "does not exist")) or "404" in out
+    # Only rc==0 is success. Do NOT treat any error — including 404 — as benign:
+    # `uip ixp projects delete <name>` 404s on projects that `projects list` still
+    # returns (the CLI's name->id resolution doesn't reach older/deep projects), so
+    # a 404 does NOT mean the project is gone. Masking it hid a real failure. With
+    # the e2e task as the sole sweeper there are no concurrent-delete races, so any
+    # non-zero exit is a genuine failure worth surfacing.
     if proc.returncode == 0:
         print(f"OK: deleted IXP project '{name}'")
-    elif gone:
-        print(f"SKIP: IXP project '{name}' not found (already deleted)")
     else:
         print(f"WARN: could not delete '{name}' (exit {proc.returncode}): {out[:200]}")
 
