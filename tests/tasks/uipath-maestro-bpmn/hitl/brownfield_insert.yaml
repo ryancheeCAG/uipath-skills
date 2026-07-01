@@ -22,9 +22,11 @@ initial_prompt: |
 
   `OrderTriage.bpmn` is an existing Maestro BPMN process. Insert a human-in-the-loop
   approval step named `Approve order` between `classifyOrder` and the `routeByRisk`
-  gateway, so an approver gates the routing. Model it with the skill's documented
-  `Actions.HITL` task. Use synthetic placeholder resource names only — no tenant
-  URLs, folder keys, connection IDs, or real user names.
+  gateway, so an approver gates the routing. Model the approval as a
+  `bpmn:userTask` using the documented `Actions.HITL` `uipath:activity` shell —
+  pull the template from the registry; do not hand-author the `uipath:*` payload.
+  Use synthetic placeholder resource names only — no tenant URLs, folder keys,
+  connection IDs, or real user names.
 
   Validate the file parses as well-formed XML before finishing, e.g.:
   `python3 -c "import xml.etree.ElementTree as ET; ET.parse('OrderTriage.bpmn')"`.

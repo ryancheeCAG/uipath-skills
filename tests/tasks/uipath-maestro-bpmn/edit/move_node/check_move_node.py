@@ -49,21 +49,26 @@ def main() -> None:
         fail(f"expected the original 3 script tasks, found {len(script_tasks)}")
 
     edges = {(attr(f, "sourceRef"), attr(f, "targetRef")) for f in elements(root, "sequenceFlow")}
+    # End targets are id-tolerant: the agent may keep the original end event or add
+    # a fresh one for the freed branch — either is a valid move.
+    end_ids = {attr(e, "id") for e in elements(root, "endEvent")}
+    if not end_ids:
+        fail("no end event")
 
-    # New position: autoApprove -> flagForReview -> end.
+    # New position: autoApprove -> flagForReview -> (an) end.
     if ("Activity_Approve", "Activity_Review") not in edges:
         fail("missing sequence flow autoApprove -> flagForReview (node not moved onto default branch)")
-    if ("Activity_Review", "Event_end") not in edges:
-        fail("missing sequence flow flagForReview -> end")
+    if not any(s == "Activity_Review" and t in end_ids for (s, t) in edges):
+        fail("flagForReview does not lead to an end event")
 
-    # Conditioned branch now routes the gateway straight to the end event.
-    if ("Gateway_Route", "Event_end") not in edges:
-        fail("conditioned branch was not rewired from the gateway to the end event")
+    # The freed high-risk branch: the gateway now routes straight to an end event.
+    if not any(s == "Gateway_Route" and t in end_ids for (s, t) in edges):
+        fail("the high-risk branch was not rerouted from the gateway to an end event")
 
     # Stale wiring must be gone.
     if ("Gateway_Route", "Activity_Review") in edges:
         fail("stale conditioned flow gateway -> flagForReview still present")
-    if ("Activity_Approve", "Event_end") in edges:
+    if any(s == "Activity_Approve" and t in end_ids for (s, t) in edges):
         fail("stale flow autoApprove -> end still present (should now pass through flagForReview)")
 
     # Diagram + reference integrity (importable on the canvas).

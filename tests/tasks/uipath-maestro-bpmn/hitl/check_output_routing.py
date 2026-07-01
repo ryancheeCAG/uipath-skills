@@ -44,14 +44,24 @@ def main() -> None:
     hitl_ids = {attr(t, "id") for t in hitl}
     gateways = elements(root, "exclusiveGateway")
 
-    # A gateway must sit immediately downstream of a HITL task.
-    routed = [
-        gw for gw in gateways
-        if any(attr(f, "sourceRef") in hitl_ids and attr(f, "targetRef") == attr(gw, "id")
-               for f in flows)
-    ]
+    # A gateway must sit downstream of a HITL task. Reachability, not a direct
+    # edge — the agent may legitimately insert an intermediate step (e.g. one that
+    # extracts the decision from the HITL output) between the HITL and the gateway.
+    adjacency: dict[str, list[str]] = {}
+    for f in flows:
+        adjacency.setdefault(attr(f, "sourceRef"), []).append(attr(f, "targetRef"))
+    reachable: set[str] = set()
+    stack = list(hitl_ids)
+    while stack:
+        node = stack.pop()
+        for nxt in adjacency.get(node, []):
+            if nxt not in reachable:
+                reachable.add(nxt)
+                stack.append(nxt)
+
+    routed = [gw for gw in gateways if attr(gw, "id") in reachable]
     if not routed:
-        fail("no exclusive gateway is wired downstream of the HITL task (HITL -> gateway)")
+        fail("no exclusive gateway is reachable downstream of the HITL task")
 
     gw = routed[0]
     gw_id = attr(gw, "id")
