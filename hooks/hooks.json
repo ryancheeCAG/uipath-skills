@@ -15,6 +15,11 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/suggest-permissions.sh\"",
             "timeout": 5,
             "once": true
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/send-telemetry.sh\"",
+            "async": true
           }
         ]
       }
@@ -22,6 +27,39 @@
     "PostToolUse": [
       {
         "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/send-telemetry.sh\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/send-telemetry.sh\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/send-telemetry.sh\"",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
         "hooks": [
           {
             "type": "command",

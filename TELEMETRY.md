@@ -1,12 +1,36 @@
 # UiPath Skills Plugin Telemetry
 
-Opt-in usage telemetry for the UiPath skills plugin. Off by default. One
-`PostToolUse` hook (`hooks/send-telemetry.sh`) hands a single flat JSON object
-per relevant tool call to the hidden `uip track` CLI command, which forwards it
-through the CLI's own telemetry tracker as one `uip.skills.tool-use`
+Opt-in usage telemetry for the UiPath skills plugin. Off by default. One hook
+(`hooks/send-telemetry.sh`), registered on several Claude Code hook events,
+hands a single flat JSON object to the hidden `uip track` CLI command, which
+forwards it through the CLI's own telemetry tracker as one `uip.skills.<event>`
 Application Insights event. No local state file, no session daemon —
 session-level metrics are computed at query time from the event stream (see
 [Correlation](#correlation)).
+
+## Events
+
+The hook carries an `eventName` token; `uip track` owns the `uip.skills.*`
+namespace and maps the token to the emitted event. `tool-use` is **per tool
+call** and gated on plugin attribution (table below); the lifecycle events are
+**session-scoped** and fire for every session where this plugin is installed —
+they are the denominator for activation-rate and session-mix metrics.
+
+| Claude Code hook | `eventName` | Emitted event | Scope |
+|------------------|-------------|---------------|-------|
+| `PostToolUse` | `tool-use` | `uip.skills.tool-use` | per tool call (gated) |
+| `SessionStart` | `session-start` | `uip.skills.session-start` | per session |
+| `Stop` | `completion` | `uip.skills.completion` | per turn (`outcome=ok`) |
+| `StopFailure` | `completion` | `uip.skills.completion` | per turn (`outcome=failure`, API error) |
+| `SessionEnd` | `session-end` | `uip.skills.session-end` | per session |
+
+`Stop` and `StopFailure` both map to `completion`, distinguished by `outcome`,
+so an API-error turn is not lost from completion/abandonment metrics. This hook
+is the **Claude Code** emitter; other agents (Codex, Gemini, Cursor CLI) expose
+the same lifecycle moments under their own hook names and are separate
+follow-ups. **Cursor cloud agents are out of scope** — they run in an ephemeral
+remote VM with no local `uip` CLI, no authenticated identity, and no
+session-start/-end trigger point.
 
 ## Enabling / disabling
 
@@ -69,8 +93,9 @@ sends becomes an event property.
 
 | Field | Example | Notes |
 |-------|---------|-------|
-| `schemaVersion` | `1` | Constant in the hook. JSON **number**. Bumped on any change to the key set, so App Insights can segment events emitted with older/churned schemas |
-| `toolName` | `Skill`, `Bash` | Claude Code tool. From the top-level `tool_name` |
+| `schemaVersion` | `2` | Constant in the hook. JSON **number**. Bumped on any change to the key set, so App Insights can segment events emitted with older/churned schemas. `2` added `eventName` / `sessionSource` / `reason` |
+| `eventName` | `session-start` | Which lifecycle event this is (see [Events](#events)). Consumed by `uip track` to pick the `uip.skills.<event>` name; **not** emitted as an event property |
+| `toolName` | `Skill`, `Bash` | Claude Code tool. From the top-level `tool_name`. `tool-use` only |
 | `toolUseId` | `toolu_01ABC` | Unique per call — correlation key + ordering tiebreaker |
 | `sessionId` | `b3f1...` | Claude Code `session_id` — the coding-agent session; session correlation key |
 | `subagentModel` | `opus` | From `tool_response.resolvedModel`, normalized to a family — `opus` / `sonnet` / `haiku` / `fable` (`other` if unrecognized). The context-window marker is dropped (`claude-opus-4-8[1m]` → `opus`). Set on an Agent-**spawn** event; empty otherwise |
@@ -81,7 +106,9 @@ sends becomes an event property.
 | `fileExtension` | `.flow` | Derived from `tool_input.file_path`. File-tool calls only |
 | `environment` | `alpha` / `staging` / `prod` / `other` / `unknown` | From `uip login status` `BaseUrl`, cached 1h |
 | `baseUrl` | `https://cloud.uipath.com` | Cloud base URL only |
-| `outcome` | `ok` / `failure` / `interrupted` / `unknown` | From the `tool_response` region **only**, never output content — see [Outcome semantics](#outcome-semantics) |
+| `outcome` | `ok` / `failure` / `interrupted` / `unknown` | On `tool-use`, from the `tool_response` region **only**; on `completion`, `ok` (`Stop`) or `failure` (`StopFailure`) — see [Outcome semantics](#outcome-semantics) |
+| `sessionSource` | `startup` / `resume` / `clear` / `compact` | `session-start` only. From the top-level `source` (renamed to avoid the CLI-owned `source` dimension) |
+| `reason` | `logout` / `clear` / `resume` / … | `session-end` only. Why the session ended, from the top-level `reason` (values are agent-specific) |
 | `permissionMode` | `bypassPermissions` | From the top-level `permission_mode` |
 | `effortLevel` | `high` | From the top-level `effort.level`, when present (`low` / `medium` / `high` / `xhigh` / `max`) |
 | `skillsVersion` | `1.196.0` | `skillsVersion` from `version-manifest.json` |
@@ -105,7 +132,7 @@ region where it actually lives:
 
 | Region | Fields |
 |--------|--------|
-| Envelope (top-level keys) | `toolName`, `toolUseId`, `sessionId`, `permissionMode`, `durationMs`, `effortLevel` (`effort.level`), `agentType` |
+| Envelope (top-level keys) | `toolName`, `toolUseId`, `sessionId`, `permissionMode`, `durationMs`, `effortLevel` (`effort.level`), `agentType`, `source` (→`sessionSource`, session-start), `reason` (session-end) |
 | `tool_input` | `skillName`, `uipSubcommand` (from `command`), `fileExtension` (from `file_path`), `subagentType` |
 | `tool_response` | `outcome` (`interrupted` / `success`), `subagentModel` (`resolvedModel`) |
 
@@ -117,8 +144,8 @@ is matched against `tool_input.command`, file extensions against
 
 ### Outcome semantics
 
-`outcome` is computed from the `tool_response` region **only** — output content
-never flips it:
+On `tool-use`, `outcome` is computed from the `tool_response` region **only** —
+output content never flips it:
 
 | Value | Condition |
 |-------|-----------|
@@ -129,6 +156,11 @@ never flips it:
 
 A `tool_response` that is a JSON **string** or **array** (some MCP tools) yields
 `ok` — it is present but exposes no `success` / `interrupted` field.
+
+On `completion`, `outcome` comes from the hook event itself, not a tool
+response: `ok` for `Stop` (normal turn end) and `failure` for `StopFailure` (the
+turn ended on an API error). `session-start` and `session-end` carry no
+`outcome` (an empty string); `session-end`'s `reason` conveys why it ended.
 
 ### Subagent fields — distinct meanings
 
@@ -144,8 +176,8 @@ All three are empty on a plain main-loop tool call.
 
 ### Added by the CLI
 
-The CLI stamps these on every `uip.skills.tool-use` event — the hook never
-sends them, and a `source` value sent by the hook would be overridden:
+The CLI stamps these on every `uip.skills.*` event — the hook never sends them,
+and a `source` value sent by the hook would be overridden:
 
 | Field | Notes |
 |-------|-------|
@@ -190,8 +222,10 @@ aggregations over events sharing `sessionId`:
 | Metric | Query shape |
 |--------|-------------|
 | Tool calls per session | `count() by sessionId` |
-| Session duration | `max(timestamp) - min(timestamp) by sessionId` |
-| Time-to-first-skill | first `Skill` event − first event, per session |
+| Session duration | `session-end` − `session-start` per `sessionId` (fallback `max(timestamp) − min(timestamp)` where no `session-end`, e.g. Codex) |
+| Activation rate | sessions with ≥1 `tool-use` ÷ all `session-start`, by `sessionId` |
+| Session outcome mix | `session-end` count by `reason`; sessions containing a `completion` with `outcome=failure` |
+| Time-to-first-skill | first `Skill` event − `session-start`, per session |
 | Retries | repeated `uipSubcommand` flipping `failure → ok`, ordered by `timestamp` then `toolUseId` |
 
 ## Reliability & performance
