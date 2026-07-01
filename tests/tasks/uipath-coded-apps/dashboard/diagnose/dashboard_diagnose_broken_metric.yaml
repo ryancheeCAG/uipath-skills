@@ -65,8 +65,8 @@ post_run:
 
 initial_prompt: |
   The UiPath dashboard project in ./agent-health does not build — its active
-  agents metric fails. Diagnose the failure, fix it, and get the
-  build to a clean pass.
+  agents metric fails. Use the uipath-coded-apps skill to diagnose the failure,
+  fix it, and get the build to a clean pass.
 
   This is a non-interactive automated test — there is NO user to consult. Work
   the failure through to completion in this same session: do NOT stop to ask a
