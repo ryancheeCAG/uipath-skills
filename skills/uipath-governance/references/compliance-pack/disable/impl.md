@@ -11,7 +11,9 @@ TENANT_ID=$(grep '^UIPATH_TENANT_ID=' ~/.uipath/.auth | cut -d'=' -f2-)
 uip gov compliance-packs state get tenant $TENANT_ID <packId> --output json
 ```
 
-If `Data.active == false` or 404: "ISO 42001 recommended settings are not currently configured on this tenant." Stop.
+Decide from the `state get` result:
+- **Confirmed inactive** — a successful response with `Data.active == false`, or a 404: reply "ISO 42001 recommended settings are not currently configured on this tenant." and stop (nothing to remove).
+- **State could not be read** — `state get` failed with an auth/connection error (401 / 5xx) so `active` is unknown: do NOT claim "not configured." Proceed to the disable step and report whatever error that call surfaces. (A **403** → preview gate: see [preview-gate.md](../preview-gate.md).)
 
 ## Confirmation
 

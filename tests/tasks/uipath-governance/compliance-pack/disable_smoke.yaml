@@ -11,7 +11,7 @@ sandbox:
   python: {}
 
 initial_prompt: |
-  Remove all ISO 42001 recommended settings from my tenant.
+  The ISO 42001 standard is currently applied on my tenant — remove all its recommended settings.
 
   Capture all command output to ./output.txt
   (use `> output.txt 2>&1` for the first command, `>> output.txt 2>&1` for the rest).
