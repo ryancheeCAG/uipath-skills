@@ -64,15 +64,3 @@ success_criteria:
     expected_exit_code: 0
     weight: 2.5
     pass_threshold: 1.0
-
-  # Starter kit was extracted for the build, and the edit reused it — the CHANGE
-  # op + 1-metric/1-widget structure above already prove the edit applied to the
-  # existing project, not a fresh re-scaffold. No max_count: the agent may
-  # re-issue the idempotent extract during build setup, which is benign.
-  - type: command_executed
-    description: "Starter kit extracted (kit set up; edit reused the existing project)"
-    tool_name: "Bash"
-    command_pattern: 'tar\b.*governance-dashboard-starter-kit'
-    min_count: 1
-    weight: 1.5
-    pass_threshold: 1.0

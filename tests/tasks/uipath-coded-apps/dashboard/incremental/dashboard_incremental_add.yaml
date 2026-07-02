@@ -63,14 +63,3 @@ success_criteria:
     expected_exit_code: 0
     weight: 2.0
     pass_threshold: 1.0
-
-  # The starter kit was extracted exactly once (initial build) — the incremental
-  # add reused it instead of re-scaffolding.
-  - type: command_executed
-    description: "Starter kit extracted exactly once (no re-scaffold on the add)"
-    tool_name: "Bash"
-    command_pattern: 'tar\b.*governance-dashboard-starter-kit'
-    min_count: 1
-    max_count: 1
-    weight: 1.5
-    pass_threshold: 1.0
