@@ -324,6 +324,23 @@ uip maestro flow format <ProjectName>.flow --output json
 
 ## Completion Output
 
+**First, open the flow so the user sees it.** Once `format` succeeds, open the
+`.flow` in the editor as your final action — a flow you generated otherwise sits
+closed and the user has to hunt for it:
+
+```bash
+code -r "<ProjectName>.flow"    # -r reuses the current editor window
+```
+
+- `.flow` opens directly in the visual Flow editor — it is the **default** editor
+  for `*.flow`, so no viewType or extra flags are needed.
+- Open the **file** you just generated, not its folder. Opening is idempotent: if
+  the file is already open, this just focuses its tab.
+- Editor-fork binaries differ: if `code` isn't on `PATH`, try `code-insiders`
+  (VS Code Insiders) or `cursor` (Cursor). If none resolve, skip this step and
+  just report the file path below — never fail the build over the open.
+- Skip entirely in non-interactive / headless runs (CI, no editor to open into).
+
 When you finish building the flow, report to the user:
 
 1. **File path** of the `.flow` file created
