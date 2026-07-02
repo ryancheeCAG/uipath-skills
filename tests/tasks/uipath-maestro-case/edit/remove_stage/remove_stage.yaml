@@ -8,7 +8,7 @@ description: >
   stage anywhere. Exercises deleting a whole node and reconnecting the chain
   (the case analog of removing a node from a flow and rejoining its edges) —
   distinct from remove_task, which deletes a leaf task inside a stage.
-tags: [uipath-maestro-case1, e2e, mode:build, lifecycle:edit, shape:multi-node, feature:stages, feature:conditions, feature:wait-for-timer]
+tags: [uipath-maestro-case, e2e, mode:build, lifecycle:edit, shape:multi-node, feature:stages, feature:conditions, feature:wait-for-timer]
 max_iterations: 1
 
 run_limits:

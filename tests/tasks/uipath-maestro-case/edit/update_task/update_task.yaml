@@ -8,7 +8,7 @@ description: >
   restructuring: no stage added or removed, no task added or removed, the stage
   chain and every other node left untouched (the case analog of updating a
   node's properties in place).
-tags: [uipath-maestro-case1, e2e, mode:build, lifecycle:edit, shape:multi-node, feature:stages, feature:conditions, feature:wait-for-timer]
+tags: [uipath-maestro-case, e2e, mode:build, lifecycle:edit, shape:multi-node, feature:stages, feature:conditions, feature:wait-for-timer]
 max_iterations: 1
 
 run_limits:
