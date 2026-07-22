@@ -123,6 +123,11 @@ For registry-evidence-only tasks, be command-first and time-boxed:
    by the HITL template's `<uipath:output ... var="...">` (for example
    `=vars.Var_HitlResult == "approve"`), not only a copied or derived script
    variable.
+   If a local-only prompt asks for `operate.json`, `entry-points.json`,
+   `bindings_v2.json`, or `package-descriptor.json`, follow the minimal local
+   metadata shape in
+   [references/shared/local-metadata-regeneration-guide.md](references/shared/local-metadata-regeneration-guide.md#minimal-local-metadata-shape).
+   Do not copy CLI scaffold metadata shapes into a synthetic local project.
 4. **Validate.** There is **no** `uip maestro bpmn validate` CLI command. Run the
    bundled validator — it reconstructs the canvas model and runs every
    PO.Frontend rule:
